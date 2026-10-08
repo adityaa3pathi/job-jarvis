@@ -1,0 +1,26 @@
+# One row per portal. Unknown portals are off. Defaults follow the research file (KTD3).
+global:
+  dry_run: true
+portals:
+  linkedin: {mode: "off", live: false, discover: false, notes: "High risk: terms ban bots, active lawsuits"}
+  indeed_india: {mode: "off", live: false, discover: false, notes: "High risk: bots on Indeed Apply banned"}
+  naukri: {mode: discover_only, live: false, discover: false, notes: "High: bot shield, terms unreadable"}
+  foundit: {mode: discover_only, live: false, discover: false, notes: "High: 403 to plain requests"}
+  wellfound: {mode: discover_only, live: false, discover: false, notes: "High: 410/blocked"}
+  instahyre: {mode: discover_only, live: false, discover: false, notes: "Medium"}
+  hirist: {mode: discover_only, live: false, discover: false, notes: "Medium"}
+  cutshort: {mode: discover_only, live: false, discover: false, notes: "Medium"}
+  peerlist: {mode: discover_only, live: false, discover: false, notes: "Medium, 403"}
+  workatastartup: {mode: discover_only, live: false, discover: false, notes: "Medium"}
+  uplers: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  jobleads: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  bebee: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  switchly: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  skillmeet: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  jobaaj: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  nxthiring: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  manual: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Owner-pasted links"}
+  greenhouse: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: public form, job list API"}
+  lever: {mode: discover_only, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: visible hCaptcha likely; apply-automatically only after two clean dry runs"}
+  ashby: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low: public job list API"}
+  workable: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 2, notes: "Weakest evidence; owner may set discover_only until two dry runs pass"}

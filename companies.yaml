@@ -1,0 +1,4 @@
+# Owner-maintained list. Fields: name, ats (greenhouse|lever|ashby|workable), token,
+# region (lever only: us|eu), careers_host (optional extra host the owner trusts).
+# Example: - {name: Acme, ats: greenhouse, token: acme}
+companies: []

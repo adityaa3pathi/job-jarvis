@@ -1,0 +1,205 @@
+# Example fact sheet with placeholder contact details. Copy to facts.yaml and put your own values there.
+# Fact sheet seeded from resume-ai-engineer.md and resume-full-stack.md only.
+# confirmed: false means the owner has not verified it yet; the agent will not use it.
+# Marked "(from your resume - confirm)" in the resumes => confirmed: false here.
+version: 1
+
+answers:
+  - {id: ans-name, key: full_name, question_patterns: ["full name", "your name", "name"], value: "Jane Doe", confirmed: false, source: "resume header"}
+  - {id: ans-email, key: email, question_patterns: ["email"], value: "jane.doe@example.com", confirmed: false, source: "resume header"}
+  - {id: ans-phone, key: phone, question_patterns: ["phone", "mobile"], value: "+91 9000000001", confirmed: false, source: "resume header"}
+  - {id: ans-github, key: github, question_patterns: ["github"], value: "janedoe", confirmed: false, source: "resume header"}
+  - {id: ans-website, key: website, question_patterns: ["website", "portfolio"], value: "example.com", confirmed: false, source: "resume header"}
+  - {id: ans-grad-year, key: graduation_year, question_patterns: ["graduation year", "year of passing"], value: "2026", allowed_values: ["2026"], confirmed: false, source: "resume education 2022 - 2026"}
+
+roles:
+  - id: role-docnow
+    employer: DocNow
+    descriptor: healthcare platform
+    titles: ["Software Engineer, AI and Backend", "Software Engineer"]
+    start: "2024-12"
+    end: present
+    location: Remote
+    source: "both resumes, Experience"
+    confirmed: true
+  - id: role-badaya
+    employer: Badaya Fitness Sports Pvt Ltd
+    titles: ["Full-Stack Web Developer Intern"]
+    start: "2024-06"
+    end: "2024-12"
+    location: Remote
+    source: "both resumes, Experience"
+    confirmed: true
+
+education:
+  - {id: edu-btech, degree: "B.Tech, Electrical Engineering", institution: "Example Institute of Technology", start_year: 2022, end_year: 2026, source: "both resumes, Education", confirmed: true}
+
+projects:
+  - {id: proj-email, names: ["Email Assistant, AI email SaaS", "Email Assistant, AI email client"], url: "github.com/janedoe/email-assistant", tech: [nextjs, typescript, python, fastapi, langgraph, pgvector, vllm, kubernetes, mcp, postgresql, inngest, trpc, prisma], source: "both resumes, Projects", confirmed: true}
+  - {id: proj-mobile, names: ["DocNow Mobile (React Native, Expo)"], url: "github.com/janedoe/docnow-mobile", tech: [react-native, expo], source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: proj-pigeon, names: ["Pigeon, real-time messaging"], url: "", tech: [nextjs, redis, pusher], source: "resume-full-stack.md, Projects (marked confirm)", confirmed: false}
+
+numbers:
+  - {id: n-patients, values: ["2500+"], meaning: "patients served", source: "both resume summaries", confirmed: true}
+  - {id: n-cities, values: ["50+"], meaning: "cities", source: "both resume summaries", confirmed: true}
+  - {id: n-tests-300, values: ["300+"], meaning: "automated tests", source: "both resumes", confirmed: true}
+  - {id: n-email-stepcap, values: ["5"], meaning: "step cap of the email assistant agent", source: "resume-ai-engineer.md, Projects", confirmed: true}
+  - {id: n-email-twophase, values: ["2"], meaning: "phases of the email sync", source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: n-catalog-1100, values: ["1100+"], meaning: "tests and packages in retrieval", source: "resume-ai-engineer.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: n-docnow-stepcap, values: ["5"], meaning: "DocNow agent loop cap", source: "resume-ai-engineer.md, DocNow bullet 2 (marked confirm)", confirmed: false}
+  - {id: n-golden-80, values: ["80"], meaning: "queries in the golden set", source: "resume-ai-engineer.md, DocNow bullet 3 (marked confirm)", confirmed: false}
+  - {id: n-faithfulness, values: ["55%", "82%"], meaning: "faithfulness before and after", source: "resume-ai-engineer.md, DocNow bullet 3 (marked confirm)", confirmed: false}
+  - {id: n-hallucination, values: ["9%", "2%"], meaning: "hallucination rate before and after", source: "resume-ai-engineer.md, DocNow bullet 3 (marked confirm)", confirmed: false}
+  - {id: n-apis-147, values: ["147"], meaning: "production APIs delivered", source: "both resumes, DocNow (marked confirm)", confirmed: false}
+  - {id: n-badaya-40, values: ["40%"], meaning: "faster after the Badaya work", source: "resume-ai-engineer.md, Badaya (marked confirm)", confirmed: false}
+  - {id: n-pages-50, values: ["50"], meaning: "Next.js pages", source: "resume-full-stack.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: n-nextjs-16, values: ["16"], meaning: "Next.js major version", source: "resume-full-stack.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: n-react-19, values: ["19"], meaning: "React major version", source: "resume-full-stack.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: n-settlement-5, values: ["5"], meaning: "settlement states", source: "resume-full-stack.md, DocNow bullet 5 (marked confirm)", confirmed: false}
+  - {id: n-dashboards-30, values: ["30"], meaning: "role-gated dashboard pages", source: "resume-full-stack.md, DocNow bullet 7 (marked confirm)", confirmed: false}
+  - {id: n-tables-26, values: ["26"], meaning: "tables in the PostgreSQL schema", source: "resume-full-stack.md, DocNow bullet 8 (marked confirm)", confirmed: false}
+  - {id: n-uptime-9999, values: ["99.99%"], meaning: "figure attached to the schema bullet", source: "resume-full-stack.md, DocNow bullet 8 (marked confirm)", confirmed: false}
+  - {id: n-uptime-999, values: ["99.9%"], meaning: "uptime", source: "resume-full-stack.md, DocNow bullet 9 (marked confirm)", confirmed: false}
+  - {id: n-pigeon-97, values: ["97%"], meaning: "faster first-load message time", source: "resume-full-stack.md, Pigeon (marked confirm)", confirmed: false}
+
+bullets:
+  # --- summaries ---
+  - {id: ai-summary, kind: summary, parent: null, text: "AI and backend engineer. Built an AI email assistant with hybrid retrieval, an agent with a step cap, a fine-tuned classifier and an MCP server. Also ships production healthcare software with payments, refunds and a mobile app, used by 2500+ patients across 50+ cities.", verbs: [built, ships], scope_words: [production], numbers: [n-patients, n-cities], source: "resume-ai-engineer.md, Summary", confirmed: true}
+  - {id: fs-summary, kind: summary, parent: null, text: "Full-stack engineer. Ships Next.js and React interfaces, Node.js backends and a React Native app. Built a healthcare platform with payments, refunds and doctor consultations, used by 2500+ patients across 50+ cities.", verbs: [ships, built], scope_words: [], numbers: [n-patients, n-cities], source: "resume-full-stack.md, Summary", confirmed: true}
+
+  # --- AI track, DocNow ---
+  - {id: ai-docnow-1, parent: role-docnow, text: "Designed and deployed an agentic booking assistant with LangGraph: a planner node, a retrieval node (hybrid BM25 + pgvector with reranking over 1100+ tests and packages), an action node that calls booking APIs, and a verifier node that abstains when not grounded.", verbs: [designed, deployed], scope_words: [], numbers: [n-catalog-1100], source: "resume-ai-engineer.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: ai-docnow-2, parent: role-docnow, text: "Added state and loop control: Redis-backed memory, per-turn context trimming, retry on low confidence, and a 5-step loop cap to bound latency and cost.", verbs: [added], scope_words: [], numbers: [n-docnow-stepcap], source: "resume-ai-engineer.md, DocNow bullet 2 (marked confirm)", confirmed: false}
+  - {id: ai-docnow-3, parent: role-docnow, text: "Built an 80-query golden-set eval with automated scoring for faithfulness, context precision and hallucination rate, run in CI on every deploy.", verbs: [built], scope_words: [], numbers: [n-golden-80, n-faithfulness, n-hallucination], source: "resume-ai-engineer.md, DocNow bullet 3 (marked confirm)", confirmed: false}
+  - {id: ai-docnow-4, parent: role-docnow, text: "Added Langfuse tracing per agent node, prompt versioning, and production sampling for drift checks.", verbs: [added], scope_words: [production], numbers: [], source: "resume-ai-engineer.md, DocNow bullet 4 (marked confirm)", confirmed: false}
+  - {id: ai-docnow-5, parent: role-docnow, text: "Built the doctor-consultation feature end to end: booking with a held slot, Razorpay payments confirmed on the server, tiered refunds, a staff review queue, and a background job that repairs stuck payments. 300+ automated tests across server, web and mobile.", verbs: [built], scope_words: [end_to_end], numbers: [n-tests-300], source: "resume-ai-engineer.md, DocNow bullet 5", confirmed: true}
+  - {id: ai-docnow-6, parent: role-docnow, text: "Delivered 147 production APIs (Node.js, Python FastAPI, PostgreSQL) with idempotent webhooks, retry queues and dead-letter recovery.", verbs: [delivered], scope_words: [production], numbers: [n-apis-147], source: "resume-ai-engineer.md, DocNow bullet 6 (marked confirm)", confirmed: false}
+  - {id: ai-badaya-1, parent: role-badaya, text: "Moved the app to the Next.js App Router. Built REST APIs and tuned PostgreSQL queries with connection pooling.", verbs: [moved, built, tuned], scope_words: [], numbers: [n-badaya-40], source: "resume-ai-engineer.md, Badaya (marked: 40% faster - confirm)", confirmed: false}
+  # --- AI track, Email Assistant ---
+  - {id: ai-email-1, parent: proj-email, text: "Hybrid retrieval: pgvector with an HNSW index plus BM25 full-text search, with reranking and metadata filters. Embeddings from Gemini.", verbs: [], scope_words: [], numbers: [], source: "resume-ai-engineer.md, Projects", confirmed: true}
+  - {id: ai-email-2, parent: proj-email, text: "Agent in Python with LangGraph and tools for search, calendar lookup and reply drafting, capped at 5 steps.", verbs: [], scope_words: [], numbers: [n-email-stepcap], source: "resume-ai-engineer.md, Projects", confirmed: true}
+  - {id: ai-email-3, parent: proj-email, text: "Fine-tuning pipeline for an email classifier with QLoRA on Mistral, served with vLLM, with a router that picks between the fine-tuned model and Gemini 2.0 Flash Lite.", verbs: [], scope_words: [], numbers: [], source: "resume-ai-engineer.md, Projects", confirmed: true}
+  - {id: ai-email-4, parent: proj-email, text: "MCP server that exposes email search, calendar and drafting as tools to any MCP client.", verbs: [], scope_words: [], numbers: [], source: "resume-ai-engineer.md, Projects", confirmed: true}
+  - {id: ai-email-5, parent: proj-email, text: "Background ingestion with Inngest step functions and per-account concurrency limits. Deployed with Kubernetes manifests and autoscaling.", verbs: [deployed], scope_words: [], numbers: [], source: "resume-ai-engineer.md, Projects", confirmed: true}
+
+  # --- full stack track, DocNow ---
+  - {id: fs-docnow-1, parent: role-docnow, text: "Shipped features end to end across customer, manager and super-admin interfaces: 147 production APIs and 50 Next.js 16 / React 19 pages.", verbs: [shipped], scope_words: [end_to_end, production], numbers: [n-apis-147, n-pages-50, n-nextjs-16, n-react-19], source: "resume-full-stack.md, DocNow bullet 1 (marked confirm)", confirmed: false}
+  - {id: fs-docnow-2, parent: role-docnow, text: "Built doctor consultations on web and mobile: doctor sign-up and approval, weekly hours and leave, slot booking with a held slot, Razorpay checkout with server-confirmed payment state, tiered refunds, and an admin review queue.", verbs: [built], scope_words: [], numbers: [], source: "resume-full-stack.md, DocNow bullet 2", confirmed: true}
+  - {id: fs-docnow-3, parent: role-docnow, text: "Made payments safe: idempotent webhooks, a repair job for stuck payments and refunds, and screens that never show \"failed\" while money may have moved.", verbs: [made], scope_words: [], numbers: [], source: "resume-full-stack.md, DocNow bullet 3", confirmed: true}
+  - {id: fs-docnow-4, parent: role-docnow, text: "Wrote 300+ automated tests across server (real PostgreSQL), web and mobile.", verbs: [wrote], scope_words: [], numbers: [n-tests-300], source: "resume-full-stack.md, DocNow bullet 4", confirmed: true}
+  - {id: fs-docnow-5, parent: role-docnow, text: "Built a multi-step checkout with multi-patient assignment, timed slot locking and Razorpay orchestration across 5 settlement states.", verbs: [built], scope_words: [], numbers: [n-settlement-5], source: "resume-full-stack.md, DocNow bullet 5 (marked confirm)", confirmed: false}
+  - {id: fs-docnow-6, parent: role-docnow, text: "Built an Axios client with silent JWT refresh, request deduplication and CSRF handling.", verbs: [built], scope_words: [], numbers: [], source: "resume-full-stack.md, DocNow bullet 6 (marked confirm)", confirmed: false}
+  - {id: fs-docnow-7, parent: role-docnow, text: "Built 30 role-gated dashboard pages with order tracking, CSV bulk import and authenticated S3 report streaming.", verbs: [built], scope_words: [], numbers: [n-dashboards-30], source: "resume-full-stack.md, DocNow bullet 7 (marked confirm)", confirmed: false}
+  - {id: fs-docnow-8, parent: role-docnow, text: "Designed a 26-table PostgreSQL schema with idempotent webhooks, lease-based locking, retry queues and dead-letter recovery.", verbs: [designed], scope_words: [], numbers: [n-tables-26, n-uptime-9999], source: "resume-full-stack.md, DocNow bullet 8 (marked: 99.99% - confirm)", confirmed: false}
+  - {id: fs-docnow-9, parent: role-docnow, text: "Integrated Razorpay, Healthians, WhatsApp and AWS S3. Deployed on AWS EC2 with Nginx, PM2 and Cloudflare.", verbs: [integrated, deployed], scope_words: [], numbers: [n-uptime-999], source: "resume-full-stack.md, DocNow bullet 9 (marked: 99.9% uptime - confirm)", confirmed: false}
+  - {id: fs-badaya-1, parent: role-badaya, text: "Led the move to the Next.js App Router. Built secure APIs and tuned Prisma and PostgreSQL queries.", verbs: [led, built, tuned], scope_words: [lead], numbers: [], source: "resume-full-stack.md, Badaya", confirmed: true}
+  # --- full stack track, projects ---
+  - {id: fs-mobile-1, parent: proj-mobile, text: "Patient booking and payment screens, My consultations with cancel and refund preview, and a doctor area for hours, leave and booked consultations. Razorpay native checkout.", verbs: [], scope_words: [], numbers: [], source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: fs-email-1, parent: proj-email, text: "Two-phase email sync with durable step functions and per-account concurrency limits.", verbs: [], scope_words: [], numbers: [n-email-twophase], source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: fs-email-2, parent: proj-email, text: "Vector search with pgvector and an HNSW index, plus BM25 hybrid retrieval.", verbs: [], scope_words: [], numbers: [], source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: fs-email-3, parent: proj-email, text: "LLM agent with a step cap and tools, and streaming autocomplete in a Tiptap editor.", verbs: [], scope_words: [], numbers: [], source: "resume-full-stack.md, Projects", confirmed: true}
+  - {id: fs-pigeon-1, parent: proj-pigeon, text: "Typing indicators and live delivery. Redis caching cut first-load message time by 97%.", verbs: [cut], scope_words: [], numbers: [n-pigeon-97], source: "resume-full-stack.md, Pigeon (project marked confirm)", confirmed: false}
+
+skills:
+  # Confirmed skills cite the resume Skills line or a confirmed bullet as evidence.
+  - {id: python, canonical: Python, aliases: [Python], evidence: ["resume:resume-ai-engineer.md#Skills.Languages", "ai-email-2"], confirmed: true}
+  - {id: fastapi, canonical: FastAPI, aliases: [FastAPI], evidence: ["resume:resume-ai-engineer.md#Skills.Languages", "resume:resume-full-stack.md#Skills.Backend"], confirmed: true}
+  - {id: typescript, canonical: TypeScript, aliases: [TypeScript], evidence: ["resume:resume-ai-engineer.md#Skills.Languages"], confirmed: true}
+  - {id: javascript, canonical: JavaScript, aliases: [JavaScript], evidence: ["resume:resume-ai-engineer.md#Skills.Languages"], confirmed: true}
+  - {id: java, canonical: Java, aliases: [Java], evidence: ["resume:resume-ai-engineer.md#Skills.Languages"], confirmed: true}
+  - {id: langgraph, canonical: LangGraph, aliases: [LangGraph], evidence: ["resume:resume-ai-engineer.md#Skills.LLM", "ai-email-2"], confirmed: true}
+  - {id: langchain, canonical: LangChain, aliases: [LangChain], evidence: ["resume:resume-ai-engineer.md#Skills.LLM"], confirmed: true}
+  - {id: mcp, canonical: "MCP servers", aliases: ["MCP servers", "MCP server", "MCP client", "MCP", "Model Context Protocol"], evidence: ["resume:resume-ai-engineer.md#Skills.LLM", "ai-email-4"], confirmed: true}
+  - {id: tool-calling, canonical: "tool calling", aliases: ["tool calling"], evidence: ["resume:resume-ai-engineer.md#Skills.LLM", "resume:resume-full-stack.md#Skills.AI"], confirmed: true}
+  - {id: structured-outputs, canonical: "structured outputs", aliases: ["structured outputs"], evidence: ["resume:resume-ai-engineer.md#Skills.LLM"], confirmed: true}
+  - {id: model-routing, canonical: "model routing", aliases: ["model routing"], evidence: ["resume:resume-ai-engineer.md#Skills.LLM", "ai-email-3"], confirmed: true}
+  - {id: llm-agents, canonical: "LLM agents", aliases: ["LLM agents", "LLM agent"], evidence: ["resume:resume-full-stack.md#Skills.AI", "fs-email-3"], confirmed: true}
+  - {id: hybrid-retrieval, canonical: "hybrid retrieval", aliases: ["hybrid retrieval", "hybrid BM25 + vector search"], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: bm25, canonical: BM25, aliases: [BM25], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: pgvector, canonical: pgvector, aliases: [pgvector], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: hnsw, canonical: HNSW, aliases: [HNSW], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: embeddings, canonical: embeddings, aliases: [embeddings], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: reranking, canonical: reranking, aliases: [reranking, re-ranking], evidence: ["resume:resume-ai-engineer.md#Skills.Retrieval", "ai-email-1"], confirmed: true}
+  - {id: qlora, canonical: QLoRA, aliases: [QLoRA], evidence: ["resume:resume-ai-engineer.md#Skills.Fine-tuning", "ai-email-3"], confirmed: true}
+  - {id: peft, canonical: PEFT, aliases: [PEFT], evidence: ["resume:resume-ai-engineer.md#Skills.Fine-tuning"], confirmed: true}
+  - {id: pytorch, canonical: PyTorch, aliases: [PyTorch], evidence: ["resume:resume-ai-engineer.md#Skills.Fine-tuning"], confirmed: true}
+  - {id: vllm, canonical: vLLM, aliases: [vLLM], evidence: ["resume:resume-ai-engineer.md#Skills.Fine-tuning", "ai-email-3"], confirmed: true}
+  - {id: mistral, canonical: Mistral, aliases: [Mistral], evidence: ["ai-email-3"], confirmed: true}
+  - {id: golden-set-evals, canonical: "golden-set evals", aliases: ["golden-set evals", "golden-set eval", "golden set evals"], evidence: ["resume:resume-ai-engineer.md#Skills.Evals"], confirmed: true}
+  - {id: llm-as-judge, canonical: "LLM-as-judge", aliases: ["LLM-as-judge", "LLM as judge"], evidence: ["resume:resume-ai-engineer.md#Skills.Evals"], confirmed: true}
+  - {id: langfuse, canonical: Langfuse, aliases: [Langfuse], evidence: ["resume:resume-ai-engineer.md#Skills.Evals"], confirmed: true}
+  - {id: gemini, canonical: Gemini, aliases: ["Gemini 2.0 Flash Lite", Gemini], evidence: ["resume:resume-full-stack.md#Skills.AI", "ai-email-1", "ai-email-3"], confirmed: true}
+  - {id: nodejs, canonical: Node.js, aliases: [Node.js, NodeJS, Node], evidence: ["resume:resume-ai-engineer.md#Skills.Backend", "resume:resume-full-stack.md#Skills.Backend"], confirmed: true}
+  - {id: express, canonical: Express, aliases: [Express], case_sensitive: true, evidence: ["resume:resume-ai-engineer.md#Skills.Backend"], confirmed: true}
+  - {id: postgresql, canonical: PostgreSQL, aliases: [PostgreSQL, Postgres], evidence: ["resume:resume-ai-engineer.md#Skills.Backend", "fs-docnow-4"], confirmed: true}
+  - {id: prisma, canonical: Prisma, aliases: [Prisma], evidence: ["resume:resume-ai-engineer.md#Skills.Backend", "fs-badaya-1"], confirmed: true}
+  - {id: redis, canonical: Redis, aliases: [Redis], evidence: ["resume:resume-ai-engineer.md#Skills.Backend", "resume:resume-full-stack.md#Skills.Databases"], confirmed: true}
+  - {id: docker, canonical: Docker, aliases: [Docker], evidence: ["resume:resume-ai-engineer.md#Skills.Backend"], confirmed: true}
+  - {id: kubernetes, canonical: Kubernetes, aliases: [Kubernetes, K8s], evidence: ["resume:resume-ai-engineer.md#Skills.Backend", "ai-email-5"], confirmed: true}
+  - {id: aws, canonical: AWS, aliases: [AWS], evidence: ["resume:resume-ai-engineer.md#Skills.Backend"], confirmed: true}
+  - {id: aws-ec2, canonical: "AWS EC2", aliases: ["AWS EC2"], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: github-actions, canonical: "GitHub Actions", aliases: ["GitHub Actions"], evidence: ["resume:resume-ai-engineer.md#Skills.Backend"], confirmed: true}
+  - {id: nextjs, canonical: Next.js, aliases: [Next.js, NextJS], evidence: ["resume:resume-ai-engineer.md#Skills.Frontend", "fs-badaya-1"], confirmed: true}
+  - {id: react, canonical: React, aliases: [React.js, ReactJS, React], evidence: ["resume:resume-ai-engineer.md#Skills.Frontend"], confirmed: true}
+  - {id: react-native, canonical: React Native, aliases: ["React Native"], evidence: ["resume:resume-ai-engineer.md#Skills.Frontend", "fs-mobile-1"], confirmed: true}
+  - {id: expo, canonical: Expo, aliases: [Expo], evidence: ["resume:resume-ai-engineer.md#Skills.Frontend", "proj-mobile"], confirmed: true}
+  - {id: tailwind, canonical: Tailwind CSS, aliases: ["Tailwind CSS", Tailwind], evidence: ["resume:resume-full-stack.md#Skills.Frontend"], confirmed: true}
+  - {id: radix-ui, canonical: Radix UI, aliases: ["Radix UI"], evidence: ["resume:resume-full-stack.md#Skills.Frontend"], confirmed: true}
+  - {id: react-hook-form, canonical: React Hook Form, aliases: ["React Hook Form"], evidence: ["resume:resume-full-stack.md#Skills.Frontend"], confirmed: true}
+  - {id: zod, canonical: Zod, aliases: [Zod], evidence: ["resume:resume-full-stack.md#Skills.Frontend"], confirmed: true}
+  - {id: rest, canonical: REST, aliases: ["REST APIs", REST], case_sensitive: true, evidence: ["resume:resume-full-stack.md#Skills.Backend", "ai-badaya-1"], confirmed: true}
+  - {id: webhooks, canonical: webhooks, aliases: [webhooks, webhook], evidence: ["resume:resume-full-stack.md#Skills.Backend", "fs-docnow-3"], confirmed: true}
+  - {id: jwt, canonical: JWT, aliases: [JWT], evidence: ["resume:resume-full-stack.md#Skills.Backend"], confirmed: true}
+  - {id: rbac, canonical: RBAC, aliases: [RBAC], evidence: ["resume:resume-full-stack.md#Skills.Backend"], confirmed: true}
+  - {id: mongodb, canonical: MongoDB, aliases: [MongoDB], evidence: ["resume:resume-full-stack.md#Skills.Databases"], confirmed: true}
+  - {id: nginx, canonical: Nginx, aliases: [Nginx], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: pm2, canonical: PM2, aliases: [PM2], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: cloudflare, canonical: Cloudflare, aliases: [Cloudflare], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: vitest, canonical: Vitest, aliases: [Vitest], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: jest, canonical: Jest, aliases: [Jest], evidence: ["resume:resume-full-stack.md#Skills.Infra"], confirmed: true}
+  - {id: razorpay, canonical: Razorpay, aliases: [Razorpay], evidence: ["ai-docnow-5", "fs-docnow-2", "fs-mobile-1"], confirmed: true}
+  - {id: inngest, canonical: Inngest, aliases: [Inngest], evidence: ["ai-email-5", "fs-email-1"], confirmed: true}
+  - {id: trpc, canonical: tRPC, aliases: [tRPC], evidence: ["proj-email"], confirmed: true}
+  - {id: tiptap, canonical: Tiptap, aliases: [Tiptap], evidence: ["fs-email-3"], confirmed: true}
+  # Skills whose only evidence is an unconfirmed bullet start unconfirmed.
+  - {id: axios, canonical: Axios, aliases: [Axios], evidence: ["fs-docnow-6"], confirmed: false}
+  - {id: csrf, canonical: CSRF, aliases: [CSRF], evidence: ["fs-docnow-6"], confirmed: false}
+  - {id: aws-s3, canonical: "AWS S3", aliases: ["AWS S3", S3], evidence: ["fs-docnow-7", "fs-docnow-9"], confirmed: false}
+  - {id: healthians, canonical: Healthians, aliases: [Healthians], evidence: ["fs-docnow-9"], confirmed: false}
+  - {id: whatsapp, canonical: WhatsApp, aliases: [WhatsApp], evidence: ["fs-docnow-9"], confirmed: false}
+  - {id: pusher, canonical: Pusher, aliases: [Pusher], evidence: ["proj-pigeon"], confirmed: false}
+
+base_resumes:
+  ai:
+    summary: ai-summary
+    experience:
+      - {role: role-docnow, title: "Software Engineer, AI and Backend", bullets: [ai-docnow-1, ai-docnow-2, ai-docnow-3, ai-docnow-4, ai-docnow-5, ai-docnow-6]}
+      - {role: role-badaya, title: "Full-Stack Web Developer Intern", bullets: [ai-badaya-1]}
+    projects:
+      - {project: proj-email, name: "Email Assistant, AI email SaaS", bullets: [ai-email-1, ai-email-2, ai-email-3, ai-email-4, ai-email-5]}
+    skills:
+      - {label: Languages, skills: [python, fastapi, typescript, javascript, java]}
+      - {label: "LLM and agents", skills: [langgraph, langchain, mcp, tool-calling, structured-outputs, model-routing]}
+      - {label: Retrieval, skills: [hybrid-retrieval, pgvector, hnsw, embeddings, reranking]}
+      - {label: "Fine-tuning and serving", skills: [qlora, peft, pytorch, vllm]}
+      - {label: "Evals and tracing", skills: [golden-set-evals, llm-as-judge, langfuse]}
+      - {label: "Backend and infra", skills: [nodejs, express, fastapi, postgresql, prisma, redis, docker, kubernetes, aws, github-actions]}
+      - {label: "Frontend and mobile", skills: [nextjs, react, react-native, expo]}
+    education: [edu-btech]
+  full_stack:
+    summary: fs-summary
+    experience:
+      - {role: role-docnow, title: "Software Engineer", bullets: [fs-docnow-1, fs-docnow-2, fs-docnow-3, fs-docnow-4, fs-docnow-5, fs-docnow-6, fs-docnow-7, fs-docnow-8, fs-docnow-9]}
+      - {role: role-badaya, title: "Full-Stack Web Developer Intern", bullets: [fs-badaya-1]}
+    projects:
+      - {project: proj-mobile, name: "DocNow Mobile (React Native, Expo)", bullets: [fs-mobile-1]}
+      - {project: proj-email, name: "Email Assistant, AI email client", bullets: [fs-email-1, fs-email-2, fs-email-3]}
+      - {project: proj-pigeon, name: "Pigeon, real-time messaging", bullets: [fs-pigeon-1]}
+    skills:
+      - {label: Languages, skills: [typescript, javascript, python, java]}
+      - {label: Frontend, skills: [nextjs, react, react-native, expo, tailwind, radix-ui, react-hook-form, zod]}
+      - {label: Backend, skills: [nodejs, express, fastapi, rest, webhooks, jwt, rbac]}
+      - {label: Databases, skills: [postgresql, prisma, redis, mongodb]}
+      - {label: "Infra and tests", skills: [aws-ec2, nginx, pm2, docker, cloudflare, github-actions, vitest, jest]}
+      - {label: AI, skills: [gemini, llm-agents, tool-calling, pgvector, hybrid-retrieval]}
+    education: [edu-btech]

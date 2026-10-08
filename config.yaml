@@ -1,0 +1,15 @@
+# Plan "Outstanding Questions" defaults. All are proposals the owner has not yet confirmed.
+daily_cap: 5
+per_portal_limit: 3
+min_pause_s: 20
+follow_up_days: 7
+retention_days: 90
+years_rounding: down
+fit_bar: 4
+max_years_asked: 5
+freetext_questions: pause_all
+llm:
+  provider: gemini
+  model: gemini-2.0-flash
+  timeout_s: 30
+  send_contact_details: false

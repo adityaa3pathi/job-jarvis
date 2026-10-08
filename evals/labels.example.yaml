@@ -1,0 +1,8 @@
+# Synthetic rows that only exercise the eval code. They are not the owner's judgements.
+labels:
+  - {id: ex-01, company: Alpha, title: AI Engineer, location: Bengaluru, experience_text: 2-3 yrs, stack_words: [Python, FastAPI, LangGraph, LangChain, pgvector], label: apply}
+  - {id: ex-02, company: Beta, title: Full Stack Developer, location: Pune, experience_text: 1-3 yrs, stack_words: [Next.js, React, Node.js, Prisma, TypeScript], label: apply}
+  - {id: ex-03, company: Gamma, title: Data Platform Engineer, location: Hyderabad, experience_text: 2-4 yrs, stack_words: [Spark, Kafka, Airflow, Scala], label: skip}
+  - {id: ex-04, company: Delta, title: Senior AI Engineer, location: Mumbai, experience_text: 6+ years, stack_words: [Python, LangGraph], label: skip}
+  - {id: ex-05, company: Epsilon, title: AI Engineer, location: Remote - US, experience_text: 2 yrs, stack_words: [Python, LangGraph], label: skip}
+  - {id: ex-06, company: Zeta, title: GenAI Engineer, location: Chennai, experience_text: 1-2 yrs, stack_words: [Python, FastAPI, LangChain, MCP], label: apply}

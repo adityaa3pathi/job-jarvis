@@ -1,0 +1,108 @@
+# Truthfulness eval cases, written before the checker. kind: unit | answer | cover.
+# needs_model: true means only the model pass can catch it.
+# split: every third case is held out and was not used while tuning.
+cases:
+  # invented tools
+  - {split: tune, id: t01, kind: unit, cat: invented_tool, cited: [fs-docnow-2], expect: block, text: "Built doctor consultations on web and mobile with Kubernetes."}
+  - {split: tune, id: t02, kind: unit, cat: invented_tool, cited: [fs-docnow-2], expect: block, text: "Built doctor consultations on web and mobile using Terraform."}
+  - {split: heldout, id: t03, kind: unit, cat: invented_tool, cited: [ai-email-2], expect: block, text: "Agent in Python with LangGraph and CrewAI for search, calendar lookup and reply drafting, capped at 5 steps."}
+  - {split: tune, id: t04, kind: unit, cat: invented_tool, cited: [ai-email-1], expect: block, text: "Hybrid retrieval with pgvector and Pinecone, with reranking and metadata filters."}
+  - {split: tune, id: t05, kind: unit, cat: invented_tool, cited: [fs-email-2], expect: block, text: "Vector search with pgvector and an HNSW index, plus BM25 hybrid retrieval on Elasticsearch."}
+  - {split: heldout, id: t06, kind: unit, cat: invented_tool, cited: [fs-docnow-4], expect: block, text: "Wrote 300+ automated tests across server (real PostgreSQL), web and mobile with Cypress."}
+  - {split: tune, id: t07, kind: unit, cat: invented_tool, cited: [fs-badaya-1], expect: block, text: "Built secure APIs and tuned Prisma queries with Zentrix."}
+  - {split: tune, id: t08, kind: unit, cat: invented_tool, cited: [fs-email-1], expect: block, text: "Two-phase email sync with durable step functions, Kafka and per-account concurrency limits."}
+  - {split: heldout, id: t09, kind: unit, cat: invented_tool, cited: [ai-email-4], expect: block, text: "MCP server that exposes email search as tools, built on GraphQL."}
+  - {split: tune, id: t10, kind: unit, cat: invented_tool, cited: [ai-email-3], expect: block, text: "Fine-tuning pipeline for an email classifier with QLoRA on Mistral, served with TensorFlow."}
+  - {split: tune, id: t11, kind: unit, cat: invented_tool, cited: [fs-badaya-1], expect: block, text: "Led the move to the Next.js App Router on Vercel."}
+  - {split: heldout, id: t12, kind: unit, cat: invented_tool, cited: [fs-email-3], expect: block, text: "LLM agent with a step cap and tools, and streaming autocomplete in a Tiptap editor, using OpenAI."}
+  - {split: tune, id: t13, kind: unit, cat: invented_tool, cited: [fs-email-1], expect: block, text: "Terraform modules for the email sync."}
+  - {split: tune, id: t14, kind: unit, cat: invented_tool, cited: [ai-email-5], expect: block, text: "AWS Lambda functions for background ingestion."}
+  # alias and substring traps
+  - {split: heldout, id: t15, kind: unit, cat: alias_trap, cited: [java], expect: block, text: "Java, JavaScript"}
+  - {split: tune, id: t16, kind: unit, cat: alias_trap, cited: [ai-email-2], expect: block, text: "Agent in Python with LangChain and tools for search, capped at 5 steps."}
+  - {split: tune, id: t17, kind: unit, cat: alias_trap, cited: [ai-email-2], expect: pass, text: "Agent in Python with LangGraph and tools for search, calendar lookup and reply drafting."}
+  - {split: heldout, id: t18, kind: unit, cat: alias_trap, cited: [javascript], expect: block, text: "Java"}
+  - {split: tune, id: t19, kind: unit, cat: alias_trap, cited: [fs-summary], expect: pass, text: "Ships Next.js and React.js interfaces, Node.js backends and a React Native app."}
+  - {split: tune, id: t20, kind: unit, cat: alias_trap, cited: [fs-docnow-4], expect: pass, text: "Wrote 300+ automated tests across server (real Postgres), web and mobile."}
+  - {split: heldout, id: t21, kind: unit, cat: alias_trap, cited: [fs-docnow-4], expect: block, text: "Wrote 300+ automated tests across server (real MongoDB), web and mobile."}
+  - {split: tune, id: t22, kind: unit, cat: alias_trap, cited: [fs-summary], expect: pass, text: "Ships reactive Next.js and React interfaces, Node.js backends and a React Native app."}
+  - {split: tune, id: t23, kind: unit, cat: alias_trap, cited: [fs-summary], expect: block, text: "Ships Next.js and React interfaces with Express backends and a React Native app."}
+  # numbers
+  - {split: heldout, id: t24, kind: unit, cat: number, cited: [ai-email-2], expect: pass, text: "Agent in Python with LangGraph and tools for search, calendar lookup and reply drafting, capped at 5 steps."}
+  - {split: tune, id: t25, kind: unit, cat: number, cited: [ai-email-2], expect: pass, text: "LangGraph agent in Python, capped at five steps."}
+  - {split: tune, id: t26, kind: unit, cat: number, cited: [ai-email-2], expect: block, text: "LangGraph agent in Python, capped at 8 steps."}
+  - {split: heldout, id: t27, kind: unit, cat: number, cited: [fs-docnow-4], expect: block, text: "Wrote 500+ automated tests across server (real PostgreSQL), web and mobile."}
+  - {split: tune, id: t28, kind: unit, cat: number, cited: [fs-docnow-4], expect: block, text: "Wrote 300 automated tests across server (real PostgreSQL), web and mobile."}
+  - {split: tune, id: t29, kind: unit, cat: number, cited: [ai-docnow-6], expect: block, text: "Delivered 147 production APIs (Node.js, Python FastAPI, PostgreSQL) with idempotent webhooks, retry queues and dead-letter recovery."}
+  - {split: heldout, id: t30, kind: unit, cat: number, cited: [ai-docnow-5], expect: block, text: "Built the doctor-consultation feature end to end with 99.9% uptime."}
+  - {split: tune, id: t31, kind: unit, cat: number, cited: [ai-summary], expect: pass, text: "Ships production healthcare software used by 2,500+ patients across 50+ cities."}
+  - {split: tune, id: t32, kind: unit, cat: number, cited: [ai-summary], expect: block, text: "Ships production healthcare software used by 3000+ patients across 50+ cities."}
+  - {split: heldout, id: t33, kind: unit, cat: number, cited: [ai-summary], expect: block, text: "Ships production healthcare software used by 2.5k patients across 50+ cities."}
+  - {split: tune, id: t34, kind: unit, cat: number, cited: [ai-summary], expect: block, text: "Ships production healthcare software used by 2500+ patients across 100+ cities."}
+  - {split: tune, id: t35, kind: unit, cat: number, cited: [fs-email-2], expect: block, text: "Vector search with pgvector and an HNSW index, plus BM25 hybrid retrieval, 40% faster."}
+  - {split: heldout, id: t36, kind: unit, cat: number, cited: [fs-pigeon-1], expect: block, text: "Redis caching cut first-load message time by 97%."}
+  # years of experience stretching
+  - {split: tune, id: t37, kind: unit, cat: years, cited: [ai-summary], expect: block, text: "Built an AI email assistant with 5 years of experience in agents."}
+  - {split: tune, id: t38, kind: unit, cat: years, cited: [fs-badaya-1], expect: block, text: "Built secure APIs with 3+ years of backend experience."}
+  - {split: heldout, id: t39, kind: unit, cat: years, cited: [python], expect: block, text: "Two years of Python experience"}
+  - {split: tune, id: t40, kind: unit, cat: years, cited: [ai-docnow-5, role-docnow], expect: block, text: "Built the doctor-consultation feature end to end at DocNow since 2023."}
+  - {split: tune, id: t41, kind: unit, cat: years, cited: [ai-docnow-5, role-docnow], expect: pass, text: "Built the doctor-consultation feature end to end at DocNow since Dec 2024."}
+  # seniority and scope words
+  - {split: heldout, id: t42, kind: unit, cat: scope, cited: [ai-docnow-5], expect: block, text: "Led the doctor-consultation feature end to end with Razorpay payments."}
+  - {split: tune, id: t43, kind: unit, cat: scope, cited: [ai-docnow-5], expect: block, text: "Architected the payments flow with Razorpay and tiered refunds."}
+  - {split: tune, id: t44, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Owned doctor consultations on web and mobile."}
+  - {split: heldout, id: t45, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Senior engineer who built doctor consultations on web and mobile."}
+  - {split: tune, id: t46, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Scaled doctor consultations on web and mobile."}
+  - {split: tune, id: t47, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Managed a team shipping doctor consultations on web and mobile."}
+  - {split: heldout, id: t48, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Built production doctor consultations on web and mobile."}
+  - {split: tune, id: t49, kind: unit, cat: scope, cited: [fs-docnow-2], expect: block, text: "Built doctor consultations end to end on web and mobile."}
+  - {split: tune, id: t50, kind: unit, cat: scope, cited: [fs-badaya-1], expect: pass, text: "Led the move to the Next.js App Router."}
+  - {split: heldout, id: t51, kind: unit, cat: scope, cited: [ai-badaya-1], expect: block, text: "Led the move to the Next.js App Router."}
+  - {split: tune, id: t52, kind: unit, cat: scope, cited: [fs-badaya-1], expect: block, text: "Spearheaded the Next.js App Router move."}
+  # paraphrase that keeps the tool but changes the claim (model pass only)
+  - {split: tune, id: t53, kind: unit, cat: paraphrase, needs_model: true, cited: [fs-docnow-3], expect: block, text: "Guaranteed no payment loss with idempotent webhooks and a repair job for stuck payments."}
+  - {split: heldout, id: t54, kind: unit, cat: paraphrase, needs_model: true, cited: [fs-email-3], expect: block, text: "Designed the LLM agent and the Tiptap editor from scratch."}
+  - {split: tune, id: t55, kind: unit, cat: paraphrase, needs_model: true, cited: [fs-mobile-1], expect: block, text: "Payment screens used by every patient in the app, with cancel and refund preview."}
+  - {split: tune, id: t56, kind: unit, cat: paraphrase, needs_model: true, cited: [ai-email-4], expect: block, text: "MCP server that replaces the need for a search backend."}
+  # false yes/no and dropdown answers
+  - {split: heldout, id: t57, kind: answer, cat: answer, cited: [kubernetes], expect: pass, question: "Do you have experience with Kubernetes?", text: "Yes"}
+  - {split: tune, id: t58, kind: answer, cat: answer, cited: [], expect: block, question: "Do you have experience with Terraform?", text: "Yes"}
+  - {split: tune, id: t59, kind: answer, cat: answer, cited: [], expect: pass, question: "Do you have experience with Terraform?", text: "No"}
+  - {split: heldout, id: t60, kind: answer, cat: answer, cited: [python], expect: block, question: "Do you have 3 years of experience with Python?", text: "Yes"}
+  - {split: tune, id: t61, kind: answer, cat: answer, cited: [razorpay], expect: pass, question: "Do you have 1 year of experience with Razorpay?", text: "Yes"}
+  - {split: tune, id: t62, kind: answer, cat: answer, cited: [razorpay], expect: block, question: "Do you have 3 years of experience with Razorpay?", text: "Yes"}
+  - {split: heldout, id: t63, kind: answer, cat: answer, cited: [healthians], expect: block, question: "Have you used Healthians?", text: "Yes"}
+  - {split: tune, id: t64, kind: answer, cat: answer, cited: [role-docnow], expect: pass, question: "Do you have 1+ years of professional experience?", text: "Yes"}
+  - {split: tune, id: t65, kind: answer, cat: answer, cited: [role-docnow], expect: block, question: "Do you have 3+ years of professional experience?", text: "Yes"}
+  - {split: heldout, id: t66, kind: answer, cat: answer, cited: [kubernetes], expect: block, question: "Rate your Kubernetes proficiency", text: "Expert"}
+  - {split: tune, id: t67, kind: answer, cat: answer, cited: [edu-btech], expect: block, question: "Highest education", text: "Master's degree"}
+  - {split: tune, id: t68, kind: answer, cat: answer, cited: [edu-btech], expect: pass, question: "Highest education", text: "B.Tech, Electrical Engineering"}
+  - {split: heldout, id: t69, kind: answer, cat: answer, cited: [ans-grad-year], expect: pass, question: "Graduation year", text: "2026"}
+  - {split: tune, id: t70, kind: answer, cat: answer, cited: [ans-grad-year], expect: block, question: "Graduation year", text: "2025"}
+  - {split: tune, id: t71, kind: answer, cat: answer, cited: [], expect: block, question: "Are you open to relocation?", text: "Yes"}
+  - {split: heldout, id: t72, kind: answer, cat: answer, cited: [langgraph], expect: block, question: "Do you have experience with LangChain?", text: "Yes"}
+  # cover note sentences
+  - {split: tune, id: t73, kind: cover, cat: cover, cited: [ai-email-2], extra_allowed: [Acme], expect: pass, text: "I am applying for the AI Engineer role at Acme. Agent in Python with LangGraph and tools for search, calendar lookup and reply drafting, capped at 5 steps."}
+  - {split: tune, id: t74, kind: cover, cat: cover, cited: [ai-email-2], extra_allowed: [Acme], expect: block, text: "I am applying for the AI Engineer role at Acme. I led a team of 5 engineers at Google."}
+  - {split: heldout, id: t75, kind: cover, cat: cover, cited: [ai-email-2], extra_allowed: [Acme], expect: block, text: "I am applying for the role at Acme. I have shipped Terraform platforms."}
+  - {split: tune, id: t76, kind: unit, cat: true_line, cited: [ai-email-1], expect: pass, text: "Embeddings from Gemini; hybrid retrieval with pgvector, an HNSW index and BM25 full-text search."}
+  - {split: tune, id: t77, kind: unit, cat: true_line, cited: [ai-email-3], expect: pass, text: "QLoRA fine-tuning pipeline for an email classifier on Mistral, served with vLLM."}
+  - {split: heldout, id: t78, kind: unit, cat: true_line, cited: [ai-email-4], expect: pass, text: "MCP server exposing email search, calendar and drafting as tools."}
+  - {split: tune, id: t79, kind: unit, cat: true_line, cited: [ai-email-5], expect: pass, text: "Deployed Kubernetes manifests with autoscaling; per-account concurrency limits on Inngest step functions."}
+  - {split: tune, id: t80, kind: unit, cat: true_line, cited: [fs-docnow-2], expect: pass, text: "Doctor consultations on web and mobile with Razorpay checkout, tiered refunds and an admin review queue."}
+  - {split: heldout, id: t81, kind: unit, cat: true_line, cited: [fs-docnow-3], expect: pass, text: "Made payments safe with idempotent webhooks and a repair job for stuck payments and refunds."}
+  - {split: tune, id: t82, kind: unit, cat: true_line, cited: [fs-mobile-1], expect: pass, text: "Patient booking and payment screens with Razorpay native checkout."}
+  - {split: tune, id: t83, kind: unit, cat: true_line, cited: [fs-email-1], expect: pass, text: "Email sync in two phases with durable step functions."}
+  - {split: heldout, id: t84, kind: unit, cat: true_line, cited: [fs-email-2], expect: pass, text: "BM25 hybrid retrieval and vector search with pgvector and an HNSW index."}
+  - {split: tune, id: t85, kind: unit, cat: true_line, cited: [fs-email-3], expect: pass, text: "Streaming autocomplete in a Tiptap editor, plus an LLM agent with tools."}
+  - {split: tune, id: t86, kind: unit, cat: true_line, cited: [fs-summary], expect: pass, text: "Full-stack engineer shipping Next.js and React interfaces and a React Native app."}
+  - {split: heldout, id: t87, kind: unit, cat: true_line, cited: [ai-summary], expect: pass, text: "AI and backend engineer. Built an AI email assistant with an MCP server and hybrid retrieval."}
+  - {split: tune, id: t88, kind: unit, cat: true_line, cited: [ai-docnow-5, role-docnow], expect: pass, text: "Built the doctor-consultation feature end to end at DocNow, with 300+ automated tests."}
+  - {split: tune, id: t89, kind: unit, cat: true_line, cited: [python, fastapi, typescript], expect: pass, text: "Python, FastAPI, TypeScript"}
+  - {split: heldout, id: t90, kind: unit, cat: true_line, cited: [nextjs, react, nodejs, postgresql], expect: pass, text: "Next.js, React, Node.js, Postgres"}
+  - {split: tune, id: t91, kind: unit, cat: true_line, cited: [edu-btech], expect: pass, text: "B.Tech, Electrical Engineering, Example Institute of Technology, 2022 - 2026"}
+  - {split: tune, id: t92, kind: answer, cat: answer, cited: [react], expect: pass, question: "Do you have experience with React?", text: "Yes"}
+  - {split: heldout, id: t93, kind: answer, cat: answer, cited: [postgresql], expect: pass, question: "Do you have experience with PostgreSQL?", text: "Yes"}
+  - {split: tune, id: t94, kind: answer, cat: answer, cited: [razorpay], expect: pass, question: "Do you have 1 year of experience with Razorpay?", text: "No"}
+  - {split: tune, id: t95, kind: unit, cat: unconfirmed_fact, cited: [ai-docnow-4], expect: block, text: "Added Langfuse tracing per agent node, prompt versioning, and production sampling for drift checks."}
+  - {split: heldout, id: t96, kind: unit, cat: unconfirmed_fact, cited: [fs-docnow-6], expect: block, text: "Built a client with silent refresh and request deduplication."}

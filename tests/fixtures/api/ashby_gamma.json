@@ -1,0 +1,8 @@
+{"jobs": [
+ {"id": "a1", "title": "GenAI Engineer", "location": "Hyderabad", "isListed": true, "isRemote": false,
+  "publishedAt": "2026-10-03T00:00:00.000+00:00",
+  "jobUrl": "https://jobs.ashbyhq.com/gamma/a1", "applyUrl": "https://jobs.ashbyhq.com/gamma/a1/application",
+  "descriptionPlain": "RAG with pgvector, Python. 2+ years."},
+ {"id": "a2", "title": "Internal Tools", "location": "Remote", "isListed": false, "isRemote": true,
+  "jobUrl": "https://jobs.ashbyhq.com/gamma/a2", "descriptionPlain": "hidden listing"}
+]}

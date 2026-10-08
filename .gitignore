@@ -1,0 +1,17 @@
+# secrets, local data and browser profiles never enter the repo
+.env
+*.env
+secrets.env
+data/
+browser-profile/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+STOP
+
+# personal data stays local; copy the *.example.yaml files to start
+facts.yaml
+evals/labels.yaml

@@ -1,0 +1,120 @@
+"""Portal policy table: the one place that decides whether an action may run (KTD3, KTD12)."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, field_validator
+
+Mode = Literal["apply_automatically", "discover_only", "off"]
+Action = Literal["discover", "apply", "submit"]
+
+
+class PortalRule(BaseModel):
+    mode: Mode = "off"
+    live: bool = False
+    discover: bool = False
+    per_run_limit: int = 0
+    min_pause_s: float = 20.0
+    discover_pause_s: float = 1.0
+    notes: str = ""
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _yaml_off(cls, value: object) -> object:
+        # An unquoted `off` in YAML parses as False; read it as the intended "off".
+        return "off" if value is False else value
+
+
+@dataclass(frozen=True)
+class Decision:
+    allowed: bool
+    reason: str
+
+
+class PolicyDenied(Exception):
+    pass
+
+
+def engage_kill_switch(stop_file: Path) -> None:
+    stop_file.parent.mkdir(parents=True, exist_ok=True)
+    stop_file.touch(mode=0o600)
+
+
+def clear_kill_switch(stop_file: Path) -> None:
+    stop_file.unlink(missing_ok=True)
+
+
+@dataclass
+class Policy:
+    portals: dict[str, PortalRule]
+    stop_file: Path
+    dry_run: bool = True
+    clock: Callable[[], float] = time.monotonic
+    sleep: Callable[[float], None] = time.sleep
+    _last: dict[tuple[str, str], float] = field(default_factory=dict)
+    _applied: dict[str, int] = field(default_factory=dict)
+
+    @classmethod
+    def load(cls, path: Path, stop_file: Path, **kwargs: object) -> Policy:
+        raw = yaml.safe_load(path.read_text()) or {}
+        rows = {name.lower(): PortalRule.model_validate(v) for name, v in raw["portals"].items()}
+        dry = bool(raw.get("global", {}).get("dry_run", True))
+        return cls(portals=rows, stop_file=stop_file, dry_run=dry, **kwargs)  # type: ignore[arg-type]
+
+    def rule(self, portal: str) -> PortalRule:
+        return self.portals.get(portal.lower(), PortalRule())
+
+    def stopped(self) -> bool:
+        return self.stop_file.exists()
+
+    def authorize(self, portal: str, action: Action, *, live: bool = False) -> Decision:
+        """Pure check. Call again right before the Submit click, STOP may appear in between."""
+        if self.stopped():
+            return Decision(False, "kill switch (STOP file) is on")
+        rule = self.rule(portal)
+        if portal.lower() not in self.portals or rule.mode == "off":
+            return Decision(False, f"portal {portal!r} is off")
+        if action == "discover":
+            if not rule.discover:
+                return Decision(False, f"discovery is not enabled for {portal!r}")
+            return Decision(True, "discovery allowed")
+        if rule.mode != "apply_automatically":
+            return Decision(False, f"portal {portal!r} is {rule.mode}, not apply_automatically")
+        if action == "apply":
+            return Decision(True, "dry-run apply allowed")
+        if self.dry_run or not live or not rule.live:
+            return Decision(False, "live submit needs global live, --live and portal live: true")
+        return Decision(True, "live submit allowed")
+
+    def begin(self, portal: str, action: Action, *, live: bool = False) -> Decision:
+        """Authorize, enforce the per-run limit and pause, then check STOP again."""
+        decision = self.authorize(portal, action, live=live)
+        if not decision.allowed:
+            return decision
+        key = portal.lower()
+        rule = self.rule(key)
+        if action != "discover" and self._applied.get(key, 0) >= rule.per_run_limit:
+            return Decision(False, f"per-run limit {rule.per_run_limit} reached for {portal!r}")
+        pause = rule.discover_pause_s if action == "discover" else rule.min_pause_s
+        last = self._last.get((key, action))
+        if last is not None:
+            wait = last + pause - self.clock()
+            if wait > 0:
+                self.sleep(wait)
+        if self.stopped():
+            return Decision(False, "kill switch (STOP file) is on")
+        self._last[(key, action)] = self.clock()
+        if action == "apply":
+            self._applied[key] = self._applied.get(key, 0) + 1
+        return decision
+
+    def require(self, portal: str, action: Action, *, live: bool = False) -> None:
+        decision = self.begin(portal, action, live=live)
+        if not decision.allowed:
+            raise PolicyDenied(decision.reason)
