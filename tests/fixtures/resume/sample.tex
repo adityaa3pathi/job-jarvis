@@ -1,0 +1,147 @@
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\input{glyphtounicode}
+\usepackage[default]{sourcesanspro}
+\usepackage[T1]{fontenc}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\addtolength{\oddsidemargin}{-0.55in}
+\addtolength{\evensidemargin}{-0.55in}
+\addtolength{\textwidth}{1.1in}
+\addtolength{\topmargin}{-.72in}
+\addtolength{\textheight}{1.5in}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\linespread{0.98}
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large
+}{}{0em}{}[\titlerule \vspace{-1pt}]
+
+\pdfgentounicode=1
+
+\newcommand{\resumeItem}[1]{
+  \item\small{{#1 \vspace{-2pt}}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+  \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+    \textbf{#1} & #2 \\
+    \textit{\small #3} & \textit{\small #4} \\
+  \end{tabular*}\vspace{-6pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \small #1 & #2 \\
+    \end{tabular*}\vspace{-2pt}
+}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.2in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-4pt}}
+
+\begin{document}
+
+% HEADER
+\begin{center}
+    {\Huge \textbf{Jane Doe}} \\ \vspace{4pt}
+    \small
+    +91 9000000001 $|$
+    \href{mailto:jane.doe@example.com}{jane.doe@example.com} $|$
+    \href{https://www.linkedin.com/in/jane-doe-example/}{LinkedIn} $|$
+    \href{https://github.com/janedoe}{GitHub} $|$
+    \href{https://example.com}{example.com}
+\end{center}
+
+\vspace{1pt}
+\small{
+AI engineer who took a multi-agent agentic system from prototype to production for \textbf{2500+ healthcare users} ---
+LangGraph orchestrated planner-executor-verifier architecture with hybrid RAG, eval harnesses gating CI, and Langfuse
+observability. Fine-tuned Mistral-7B with QLoRA, served via vLLM on Kubernetes.
+Eval improved answer quality \textbf{55\% $\rightarrow$ 82\%}, cut wrong responses \textbf{9\% $\rightarrow$ 2\%}.
+}
+
+% EXPERIENCE
+\section{Experience}
+\resumeSubHeadingListStart
+
+\resumeSubheading
+{Software Engineer --- AI \& Backend}{June 2024 -- Present}
+{DocNow --- AI-powered healthcare scheduling platform}{Remote}
+\resumeItemListStart
+\resumeItem{Designed and deployed a \textbf{production agentic system using LangGraph} --- ReAct-style planner node classifies intent via structured outputs, retrieval node runs hybrid BM25 + pgvector search with reranking over 1100+ tests/packages, action node calls booking APIs via tool calling, verifier node enforces grounded abstention and escalates to a human, eliminating hallucinated booking confirmations.}
+\resumeItem{Engineered \textbf{state management, memory, and dynamic loop control} --- Redis-backed memory persistence, per-turn context trimming, conditional edges for retry-on-low-confidence, and a hard 5-step loop cap to bound latency and cost.}
+\resumeItem{Built a \textbf{comprehensive eval framework} with an 80-query golden set --- RAGAS-style automated scoring (faithfulness, context precision, answer relevance, hallucination rate) gated in CI on every deploy; improved context precision \textbf{55\% $\rightarrow$ 82\%}, cut confident-wrong responses \textbf{9\% $\rightarrow$ 2\%} through chunking strategy and reranker tuning.}
+\resumeItem{Established \textbf{production observability with Langfuse} --- span annotations per agent node, prompt versioning and A/B testing, failure dashboards, prompt injection defence, guardrails on tool outputs, 10\% production sampling for drift detection; diagnosable from trace data alone.}
+\resumeItem{Delivered \textbf{147 production APIs} (Python + FastAPI microservice, Node.js, PostgreSQL, 26-table schema) serving \textbf{2500+ patients} across \textbf{50+ cities}; \textbf{99.99\% webhook reliability} via idempotent processing, retry queues, and dead-letter recovery.}
+\resumeItemListEnd
+
+\resumeSubheading
+{Full-Stack Web Developer Intern}{sept 2024 -- june 2024}
+{Badaya Fitness Sports Pvt Ltd}{Remote}
+\resumeItemListStart
+\resumeItem{Migrated the app to the \textbf{Next.js App Router} and rebuilt its REST APIs over nested PostgreSQL data with query optimisation, connection pooling and async error handling; \textbf{cut average API response time by 40\%}.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+% PROJECTS
+\section{Projects}
+\resumeSubHeadingListStart
+
+\resumeProjectHeading
+{\textbf{Email Assistant --- AI Email SaaS} $|$ \emph{Next.js 15, Gemini 2.0, Python, FastAPI, pgvector, vLLM, Kubernetes, Vertex AI, MCP}}{}
+\resumeItemListStart
+\resumeItem{\textbf{Engineered RAG pipeline from scratch} --- text-embedding-004, pgvector (HNSW), hybrid retrieval (BM25 + cosine), cross-encoder reranking, metadata filtering; sub-200ms semantic search across \textbf{1000+ emails} per account.}
+\resumeItem{\textbf{Fine-tuned Mistral-7B with QLoRA} for email classification and reply-tone matching --- benchmarked against prompted Gemini 2.0 (92\% accuracy, \textbf{4x lower inference cost}); served via \textbf{vLLM} with continuous batching; implemented \textbf{Vertex AI model routing} (Gemini for simple replies, fine-tuned model for classification).}
+\resumeItem{Built an \textbf{autonomous agentic workflow} using LangChain with Gemini 2.0 --- structured tool calling (RAG retrieval, Google Calendar lookup, reply drafting), citation-verified grounded generation, capped at 5 steps to bound cost; authored an \textbf{MCP server} exposing email search, calendar, and drafting as standardized tools for any MCP-compatible client.}
+\resumeItem{Architected an \textbf{event-driven async ingestion engine} using Inngest step functions --- per-account concurrency locks, batched ingestion (50 emails/batch); shipped \textbf{streaming AI autocomplete} (Cmd+J) via Vercel AI SDK; deployed on \textbf{Kubernetes} (GKE) with HPA auto-scaling and health checks.}
+\resumeItemListEnd
+
+\resumeSubHeadingListEnd
+
+% TECHNICAL SKILLS
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+\small{\item{
+
+\textbf{Languages \& Backend:} Python, TypeScript, FastAPI, Node.js \\
+
+\textbf{AI \& Retrieval:} LangChain, RAG (hybrid retrieval), pgvector, MCP, QLoRA, vLLM \\
+
+\textbf{Eval \& Observability:} RAGAS, Langfuse \\
+
+\textbf{Data, Infra \& Frontend:} PostgreSQL, Kubernetes, Next.js
+
+}}
+\end{itemize}
+
+% EDUCATION
+\section{Education}
+\resumeSubHeadingListStart
+\resumeSubheading
+{Example Institute of Technology}{City, State}
+{B.Tech in Electrical Engineering $|$ \small{Relevant: Data Structures, Algorithms, ML, Databases, Computer Networks}}{2022 -- 2026}
+\resumeSubHeadingListEnd
+
+\end{document}

@@ -15,6 +15,9 @@ pdf = ["fpdf2>=2.7", "pypdf>=4.0"]
 browser = [
     "playwright>=1.45",
 ]
+agent = [
+    "langgraph>=0.2",
+]
 
 [project.scripts]
 job-agent = "jobagent.cli:main"
