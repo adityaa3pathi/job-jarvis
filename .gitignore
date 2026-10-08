@@ -15,3 +15,6 @@ STOP
 # personal data stays local; copy the *.example.yaml files to start
 facts.yaml
 evals/labels.yaml
+
+# working docs stay local until the owner says to push them
+docs/
