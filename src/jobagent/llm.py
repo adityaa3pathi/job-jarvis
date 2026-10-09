@@ -77,8 +77,10 @@ class GeminiLLM:
         api_key: str | None = None,
         timeout_s: float = 30.0,
         transport: httpx.BaseTransport | None = None,
+        temperature: float = 0.0,
     ) -> None:
         self.model = model
+        self.temperature = temperature
         self._key = api_key or os.environ.get("GEMINI_API_KEY", "")
         self._client = httpx.Client(timeout=timeout_s, transport=transport)
 
@@ -91,7 +93,10 @@ class GeminiLLM:
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": self.temperature,
+            },
         }
         # The key goes in a header, not the URL, so it never reaches logs.
         response = self._client.post(url, json=body, headers={"x-goog-api-key": self._key})

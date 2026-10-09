@@ -162,3 +162,23 @@ def parse(text: str) -> Resume:
     if pos < len(body):
         add(Raw(body[pos:]))
     return Resume(text[:begin], head, sections, text[end:])
+
+
+_UNESCAPE = {r"\&": "&", r"\%": "%", r"\$": "$", r"\#": "#", r"\_": "_", r"\{": "{", r"\}": "}"}
+_ARROW = r"$\rightarrow$"
+
+
+def to_plain(arg: str) -> str | None:
+    """Plain text for a model, with **bold** markers. None when other LaTeX commands remain."""
+    text = arg.replace(_ARROW, "→")
+    text = re.sub(r"\\textbf\{([^{}]*)\}", r"**\1**", text)
+    text = re.sub(r"\\(?:emph|textit)\{([^{}]*)\}", r"\1", text)
+    for tex, plain in _UNESCAPE.items():
+        text = text.replace(tex, plain)
+    return None if "\\" in text else " ".join(text.split())
+
+
+def from_plain(text: str) -> str:
+    """Inverse of to_plain: escape the text, then turn **bold** and arrows back into LaTeX."""
+    out = escape_latex(text).replace("→", _ARROW)
+    return re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", out)

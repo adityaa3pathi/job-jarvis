@@ -18,3 +18,6 @@ evals/labels.yaml
 
 # working docs stay local until the owner says to push them
 docs/
+
+# tailored resumes hold personal details
+output/

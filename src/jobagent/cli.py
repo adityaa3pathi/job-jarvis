@@ -1,4 +1,4 @@
-"""Command line entry point. Only status and the kill switch exist so far."""
+"""Command line entry point: status, the kill switch and the resume tailor."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sys
 
 from jobagent.config import load_settings
 from jobagent.policy import clear_kill_switch, engage_kill_switch
+from jobagent.resume import cli_tailor
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -14,7 +15,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("status", "stop", "resume"):
         sub.add_parser(name)
+    cli_tailor.add_arguments(sub.add_parser("tailor"))
     args = parser.parse_args(argv)
+    if args.command == "tailor":
+        return cli_tailor.run(args)
     settings = load_settings()
     if args.command == "stop":
         engage_kill_switch(settings.stop_file)
