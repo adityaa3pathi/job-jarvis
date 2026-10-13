@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import time
 from typing import Any
 
@@ -9,7 +10,7 @@ from fastapi.testclient import TestClient
 from jobagent.config import Settings
 from jobagent.discovery.base import FetchResult
 from jobagent.llm import FailingLLM, StubLLM
-from jobagent.web.app import WebConfig, create_app
+from jobagent.web.app import WebConfig, compile_pdf, create_app
 from jobagent.web.auth import hash_password, make_token, token_valid
 from tests.test_discovery import FIX, FakeFetcher
 from tests.test_tailor_cli import EXTRACT, SAMPLE
@@ -226,3 +227,9 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
 def test_cron_trigger_is_off_without_a_token(settings: Settings) -> None:
     c = client_for(settings)
     assert c.post("/api/cron/discover", headers={"Authorization": "Bearer "}).status_code == 401
+
+
+@pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic not installed")
+def test_pdftex_template_compiles_under_tectonic() -> None:
+    pdf = compile_pdf(SAMPLE)
+    assert pdf.startswith(b"%PDF")

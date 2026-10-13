@@ -471,6 +471,13 @@ def create_app(cfg: WebConfig) -> FastAPI:
     return app
 
 
+# Tectonic runs XeTeX; common resume templates call these pdfTeX-only commands.
+XETEX_SHIM = (
+    "\\providecommand{\\pdfglyphtounicode}[2]{}\n"
+    "\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi\n"
+)
+
+
 def compile_pdf(tex: str) -> bytes:
     """Tectonic in untrusted mode: no shell escape, so resume text cannot run commands."""
     binary = shutil.which("tectonic")
@@ -478,7 +485,7 @@ def compile_pdf(tex: str) -> bytes:
         raise HTTPException(503, "PDF builder (tectonic) is not installed here; download .tex")
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "resume.tex"
-        src.write_text(tex)
+        src.write_text(XETEX_SHIM + tex)
         try:
             done = subprocess.run(
                 [binary, "--untrusted", "--outdir", tmp, str(src)],

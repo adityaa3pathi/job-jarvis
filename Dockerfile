@@ -23,7 +23,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     JOBAGENT_CONFIG_DIR=/tmp/jobagent/config
 # Download the LaTeX packages once at build time, so the first PDF is not slow.
 COPY --chown=app tests/fixtures/resume/sample.tex /tmp/warm/resume.tex
-RUN tectonic --untrusted /tmp/warm/resume.tex && rm -rf /tmp/warm
+RUN python -c "from pathlib import Path; from jobagent.web.app import compile_pdf; \
+compile_pdf(Path('/tmp/warm/resume.tex').read_text())" && rm -rf /tmp/warm
 
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
