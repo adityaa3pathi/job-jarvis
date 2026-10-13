@@ -1,0 +1,11 @@
+terraform ansible jenkins gitlab azure gcp kafka rabbitmq spark hadoop airflow dbt snowflake
+databricks elasticsearch opensearch mysql sqlite cassandra dynamodb graphql grpc spring django
+flask rails ruby golang rust scala kotlin swift php laravel angular vue svelte nuxt remix
+tensorflow keras sklearn scikit-learn pandas numpy huggingface transformers llamaindex crewai
+autogen haystack pinecone weaviate milvus faiss chroma qdrant openai anthropic claude gpt llama
+bedrock sagemaker vertex helm istio prometheus grafana datadog sentry circleci cypress
+playwright selenium pytest junit mocha storybook webpack vite babel eslint redux mobx sass
+bootstrap mui chakra shadcn supabase firebase vercel netlify heroku digitalocean celery sqs sns
+lambda langsmith tigergraph neo4j graphrag mlflow kubeflow ray dask onnx triton cuda opencv rag
+oracle mssql sap salesforce servicenow tableau powerbi hive flink airbyte fivetran temporal
+nestjs koa hapi deno bun docker-compose jira confluence linux bash ec2 s3 gke eks aks

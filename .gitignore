@@ -2,7 +2,7 @@
 .env
 *.env
 secrets.env
-data/
+/data/
 browser-profile/
 .venv/
 __pycache__/
