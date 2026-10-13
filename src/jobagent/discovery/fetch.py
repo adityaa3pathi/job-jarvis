@@ -18,6 +18,12 @@ KNOWN_ATS_HOSTS = frozenset(
         "api.ashbyhq.com", "jobs.ashbyhq.com", "apply.workable.com", "jobs.workable.com",
     }
 )  # fmt: skip
+KNOWN_BOARD_HOSTS = frozenset(
+    {
+        "jobgether.com", "gladiator.hirist.tech", "www.hirist.tech", "cutshort.io",
+        "bebee.com", "www.switchly.in", "www.jobleads.com",
+    }
+)  # fmt: skip
 MAX_REDIRECTS = 3
 MAX_BYTES = 2_000_000
 Resolver = Callable[[str, int], list[str]]
@@ -71,7 +77,7 @@ def guard_url(url: str, allowed_hosts: Iterable[str], resolve: Resolver) -> str:
 class HttpFetcher:
     def __init__(
         self,
-        allowed_hosts: Iterable[str] = KNOWN_ATS_HOSTS,
+        allowed_hosts: Iterable[str] = KNOWN_ATS_HOSTS | KNOWN_BOARD_HOSTS,
         resolver: Resolver = system_resolver,
         transport: httpx.BaseTransport | None = None,
         timeout_s: float = 15.0,

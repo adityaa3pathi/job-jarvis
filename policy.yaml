@@ -8,16 +8,17 @@ portals:
   foundit: {mode: discover_only, live: false, discover: false, notes: "High: 403 to plain requests"}
   wellfound: {mode: discover_only, live: false, discover: false, notes: "High: 410/blocked"}
   instahyre: {mode: discover_only, live: false, discover: false, notes: "Medium"}
-  hirist: {mode: discover_only, live: false, discover: false, notes: "Medium"}
-  cutshort: {mode: discover_only, live: false, discover: false, notes: "Medium"}
-  peerlist: {mode: discover_only, live: false, discover: false, notes: "Medium, 403"}
+  hirist: {mode: discover_only, live: false, discover: true, discover_pause_s: 10, notes: "Medium; reads the site's own search JSON, robots.txt Crawl-delay 10"}
+  cutshort: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; role pages only, robots.txt bans free-text search"}
+  peerlist: {mode: discover_only, live: false, discover: false, notes: "Medium; Cloudflare bot check on every page"}
   workatastartup: {mode: discover_only, live: false, discover: false, notes: "Medium"}
-  uplers: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
-  jobleads: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
-  bebee: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
-  switchly: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
-  skillmeet: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
-  jobaaj: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  uplers: {mode: discover_only, live: false, discover: false, notes: "No public search; only a 5 MB sitemap plus one request per job"}
+  jobleads: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; 25 jobs per search, loose matching, /api/ banned"}
+  bebee: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; first role page only, robots.txt bans query strings"}
+  switchly: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; public role pages show ~3 jobs, /api/ banned"}
+  jobgether: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public API built for agents, robots.txt Crawl-delay 2"}
+  skillmeet: {mode: "off", live: false, discover: false, notes: "Not a job board: local services directory"}
+  jobaaj: {mode: "off", live: false, discover: false, notes: "robots.txt disallows all generic bots"}
   nxthiring: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
   manual: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Owner-pasted links"}
   greenhouse: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: public form, job list API"}

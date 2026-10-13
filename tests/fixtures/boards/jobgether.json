@@ -1,0 +1,39 @@
+{
+ "jobs": [
+  {
+   "id": "6acc386849c73d7b996f0f55",
+   "title": "Senior Full Stack Developer (React + Node.js) #2692",
+   "company": "Aimprosoft",
+   "url": "https://jobgether.com/offer/6acc386849c73d7b996f0f55-senior-full-stack-developer-react-node.js-2692",
+   "location": "Anywhere",
+   "remote": "Full Remote",
+   "contractType": "Full time",
+   "experience": "Senior (5-10 years)",
+   "jobFunctions": [
+    "Full Stack Developer"
+   ],
+   "postedAt": "2026-10-12T01:31:20.979Z"
+  },
+  {
+   "id": "6ac9bfa649c73d7b996675bc",
+   "title": "Sr. Full Stack Developer",
+   "company": "Spatial Front, Inc",
+   "url": "https://jobgether.com/offer/6ac9bfa649c73d7b996675bc-sr.-full-stack-developer",
+   "location": "Anywhere",
+   "remote": "Full Remote",
+   "contractType": "Full time",
+   "experience": "Senior (5-10 years)",
+   "jobFunctions": [
+    "Full Stack Developer"
+   ],
+   "postedAt": "2026-10-10T04:31:34.794Z"
+  }
+ ],
+ "pagination": {
+  "page": 1,
+  "limit": 25,
+  "hasMore": true
+ },
+ "browseOnSiteUrl": "https://jobgether.com/search-offers?keyword=full+stack+developer&limit=25&locations=india&page=1&sort=date",
+ "docs": "/astroapi/ai/jobs/docs"
+}

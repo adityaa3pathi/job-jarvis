@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup, Tag
 from jobagent.discovery.base import Company, Fetcher, blocked_reason
 from jobagent.discovery.fetch import (
     KNOWN_ATS_HOSTS,
+    KNOWN_BOARD_HOSTS,
     FetchRefused,
     Resolver,
     check_scheme,
@@ -31,7 +32,7 @@ class ManualResult:
 
 
 def trusted_hosts(companies: list[Company], confirmed: set[str] | None = None) -> set[str]:
-    hosts = set(KNOWN_ATS_HOSTS) | {h.lower() for h in (confirmed or set())}
+    hosts = set(KNOWN_ATS_HOSTS | KNOWN_BOARD_HOSTS) | {h.lower() for h in (confirmed or set())}
     hosts |= {c.careers_host.lower() for c in companies if c.careers_host}
     return hosts
 

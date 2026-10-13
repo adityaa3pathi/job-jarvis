@@ -8,7 +8,7 @@ from jobagent.discovery.base import Adapter, Company
 from jobagent.models import Posting
 
 
-class WorkableAdapter(Adapter):
+class WorkableAdapter(Adapter[Company]):
     portal = "workable"
     expect_json = False
 

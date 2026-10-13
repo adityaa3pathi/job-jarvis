@@ -1,0 +1,15 @@
+# Job-board searches. jobgether, hirist and jobleads take free keywords; cutshort, bebee and
+# switchly take the board's role slug (spaces become hyphens), e.g. cutshort writes "fullstack".
+searches:
+  - {board: jobgether, term: full stack developer}
+  - {board: jobgether, term: ai engineer}
+  - {board: hirist, term: full stack developer}
+  - {board: hirist, term: ai engineer}
+  - {board: cutshort, term: fullstack developer}
+  - {board: cutshort, term: artificial intelligence ai}
+  - {board: bebee, term: full stack developer}
+  - {board: bebee, term: ai engineer}
+  - {board: switchly, term: full stack developer}
+  - {board: switchly, term: ai engineer}
+  - {board: jobleads, term: full stack developer}
+  - {board: jobleads, term: ai engineer}

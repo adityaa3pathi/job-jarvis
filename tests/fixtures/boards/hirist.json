@@ -1,0 +1,161 @@
+{
+ "data": [
+  {
+   "id": 1677117,
+   "title": "Capgemini - .Net Full Stack Developer",
+   "jobdesignation": ".Net Full Stack Developer",
+   "min": 6,
+   "max": 9,
+   "jobDetailUrl": "https://www.hirist.tech/j/capgemini-net-full-stack-developer-1677117",
+   "createdTimeMs": 1791354913183,
+   "locations": [
+    {
+     "id": 7,
+     "name": "Pune"
+    },
+    {
+     "id": 3,
+     "name": "Bangalore"
+    },
+    {
+     "id": 4,
+     "name": "Hyderabad"
+    }
+   ],
+   "workFromHome": 0,
+   "companyData": {
+    "companyName": "Capgemini Technology Services"
+   },
+   "tags": [
+    {
+     "id": 7,
+     "name": ".Net",
+     "isMandatory": true
+    },
+    {
+     "id": 1612,
+     "name": "Full Stack",
+     "isMandatory": true
+    },
+    {
+     "id": 1372,
+     "name": "AngularJS",
+     "isMandatory": true
+    },
+    {
+     "id": 2043,
+     "name": "React.js",
+     "isMandatory": true
+    },
+    {
+     "id": 206,
+     "name": "C#",
+     "isMandatory": true
+    },
+    {
+     "id": 5265,
+     "name": ".Net Core",
+     "isMandatory": true
+    },
+    {
+     "id": 2419,
+     "name": "WebAPI",
+     "isMandatory": false
+    },
+    {
+     "id": 2349,
+     "name": "Microservices Architecture",
+     "isMandatory": true
+    },
+    {
+     "id": 387,
+     "name": "SQL Server",
+     "isMandatory": false
+    },
+    {
+     "id": 91,
+     "name": "ASP",
+     "isMandatory": true
+    },
+    {
+     "id": 579,
+     "name": "MVC",
+     "isMandatory": true
+    }
+   ]
+  },
+  {
+   "id": 1675719,
+   "title": "Senior Full Stack Developer",
+   "jobdesignation": "Senior Full Stack Developer",
+   "min": 5,
+   "max": 7,
+   "jobDetailUrl": "https://www.hirist.tech/j/senior-full-stack-developer-1675719",
+   "createdTimeMs": 1790740381571,
+   "locations": [
+    {
+     "id": 4,
+     "name": "Hyderabad"
+    }
+   ],
+   "workFromHome": 0,
+   "companyData": {
+    "companyName": "Simplify Healthcare"
+   },
+   "tags": [
+    {
+     "id": 1756,
+     "name": "Golang",
+     "isMandatory": true
+    },
+    {
+     "id": 434,
+     "name": "Node.js",
+     "isMandatory": true
+    },
+    {
+     "id": 9,
+     "name": "Python",
+     "isMandatory": true
+    },
+    {
+     "id": 1612,
+     "name": "Full Stack",
+     "isMandatory": true
+    },
+    {
+     "id": 2267,
+     "name": "Distributed Systems",
+     "isMandatory": true
+    },
+    {
+     "id": 58,
+     "name": "AWS",
+     "isMandatory": false
+    },
+    {
+     "id": 2276,
+     "name": "Kafka",
+     "isMandatory": false
+    },
+    {
+     "id": 2774,
+     "name": "SQS",
+     "isMandatory": false
+    },
+    {
+     "id": 2671,
+     "name": "Polyglot",
+     "isMandatory": true
+    }
+   ]
+  }
+ ],
+ "page": "0",
+ "limit": 20,
+ "count": 20,
+ "totalJobs": 1997,
+ "count1Year": 20427,
+ "totalPages": 99,
+ "hasMore": true
+}

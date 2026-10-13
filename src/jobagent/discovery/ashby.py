@@ -7,7 +7,7 @@ from jobagent.discovery.greenhouse import parse_date
 from jobagent.models import Posting
 
 
-class AshbyAdapter(Adapter):
+class AshbyAdapter(Adapter[Company]):
     portal = "ashby"
 
     def url_for(self, company: Company) -> str:

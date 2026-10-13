@@ -8,7 +8,7 @@ from jobagent.discovery.base import Adapter, Company, parse_json
 from jobagent.models import Posting
 
 
-class LeverAdapter(Adapter):
+class LeverAdapter(Adapter[Company]):
     portal = "lever"
 
     def url_for(self, company: Company) -> str:

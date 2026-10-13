@@ -18,7 +18,7 @@ def parse_date(value: object) -> date | None:
         return None
 
 
-class GreenhouseAdapter(Adapter):
+class GreenhouseAdapter(Adapter[Company]):
     portal = "greenhouse"
 
     def url_for(self, company: Company) -> str:

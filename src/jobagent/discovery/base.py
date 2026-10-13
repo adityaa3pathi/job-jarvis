@@ -41,6 +41,37 @@ def load_companies(path: Path) -> list[Company]:
     return [Company.model_validate(c) for c in raw.get("companies") or []]
 
 
+Board = Literal["jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads"]
+_TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+-]{0,59}$")
+
+
+class BoardSearch(BaseModel):
+    """One search on a job board. `term` is a keyword or the board's role slug."""
+
+    board: Board
+    term: str
+
+    @field_validator("term")
+    @classmethod
+    def _safe_term(cls, value: str) -> str:
+        if not _TERM.match(value):
+            raise ValueError(f"unsafe search term: {value!r}")
+        return value.strip()
+
+    @property
+    def name(self) -> str:
+        return f"{self.board}: {self.term}"
+
+    @property
+    def slug(self) -> str:
+        return re.sub(r"[ .+]+", "-", self.term.lower()).strip("-")
+
+
+def load_searches(path: Path) -> list[BoardSearch]:
+    raw = yaml.safe_load(path.read_text()) or {}
+    return [BoardSearch.model_validate(s) for s in raw.get("searches") or []]
+
+
 @dataclass(frozen=True)
 class FetchResult:
     status: int
@@ -89,36 +120,43 @@ def blocked_reason(result: FetchResult, *, expect_json: bool) -> str | None:
     return None
 
 
-class Adapter:
+class Target(Protocol):
+    @property
+    def name(self) -> str: ...
+
+
+class Adapter[T: Target]:
+    """Reads one target: a company's ATS board or a search on a job board."""
+
     portal: str = ""
     expect_json: bool = True
 
-    def url_for(self, company: Company) -> str:
+    def url_for(self, target: T) -> str:
         raise NotImplementedError
 
-    def parse(self, text: str, company: Company) -> list[Posting]:
+    def parse(self, text: str, target: T) -> list[Posting]:
         raise NotImplementedError
 
-    def discover(self, company: Company, fetcher: Fetcher, policy: Policy) -> DiscoveryResult:
+    def discover(self, target: T, fetcher: Fetcher, policy: Policy) -> DiscoveryResult:
         out = DiscoveryResult()
         decision = policy.begin(self.portal, "discover")
         if not decision.allowed:
-            out.skipped_by_policy.append(f"{company.name}: {decision.reason}")
+            out.skipped_by_policy.append(f"{target.name}: {decision.reason}")
             return out
-        url = self.url_for(company)
+        url = self.url_for(target)
         try:
             result = fetcher.get(url)
         except Exception as exc:  # network and guard errors must not stop the run
-            out.unreachable.append(Unreachable(company.name, url, f"{type(exc).__name__}: {exc}"))
+            out.unreachable.append(Unreachable(target.name, url, f"{type(exc).__name__}: {exc}"))
             return out
         reason = blocked_reason(result, expect_json=self.expect_json)
         if reason:
-            out.unreachable.append(Unreachable(company.name, url, reason))
+            out.unreachable.append(Unreachable(target.name, url, reason))
             return out
         try:
-            out.postings = self.parse(result.text, company)
+            out.postings = self.parse(result.text, target)
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
-            out.unreachable.append(Unreachable(company.name, url, f"unparseable: {exc}"))
+            out.unreachable.append(Unreachable(target.name, url, f"unparseable: {exc}"))
         return out
 
 
