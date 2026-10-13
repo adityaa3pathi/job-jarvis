@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +17,7 @@ from jobagent.dedupe import (
 )
 from jobagent.models import JobStatus, Posting
 from jobagent.rules import check_hard_rules
+from jobagent.sqlconn import connect
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -66,16 +66,7 @@ def _now() -> str:
 
 class Database:
     def __init__(self, path: Path | str, max_years_asked: int = 5) -> None:
-        if str(path) != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
-            os.close(fd)
-        # Web requests may open and use a connection on different worker threads, never at once.
-        self.conn = sqlite3.connect(str(path), timeout=10, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        # WAL lets `job-agent review` read while a pass writes.
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout=10000")
+        self.conn = connect(path)
         self.conn.executescript(SCHEMA)
         self.max_years_asked = max_years_asked
 

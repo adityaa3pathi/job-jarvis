@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -11,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from jobagent.resume.jd import JDProfile, SkillNeed
+from jobagent.sqlconn import connect
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS profile (
@@ -54,13 +54,7 @@ def profile_from_json(raw: str) -> JDProfile:
 
 class Store:
     def __init__(self, path: Path | str) -> None:
-        if str(path) != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            os.close(os.open(path, os.O_CREAT | os.O_RDWR, 0o600))
-        # Web requests may open and use a connection on different worker threads, never at once.
-        self.conn = sqlite3.connect(str(path), timeout=10, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA busy_timeout=10000")
+        self.conn = connect(path)
         self.conn.executescript(SCHEMA)
 
     def close(self) -> None:

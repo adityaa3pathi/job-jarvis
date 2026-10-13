@@ -23,6 +23,9 @@ browser = [
 agent = [
     "langgraph>=0.2",
 ]
+turso = [
+    "libsql>=0.1",
+]
 
 [project.scripts]
 job-agent = "jobagent.cli:main"
@@ -36,6 +39,7 @@ dev = [
   "types-beautifulsoup4",
   "fpdf2>=2.7",
   "pypdf>=4.0",
+  "libsql>=0.1",
 ]
 
 [build-system]
@@ -62,3 +66,7 @@ python_version = "3.12"
 strict = true
 files = ["src"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["libsql"]
+ignore_missing_imports = true
