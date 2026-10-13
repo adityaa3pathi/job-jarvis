@@ -90,9 +90,11 @@ def run_tailor(
     writer_llm: LLM | None = None,
     add_gaps: bool = True,
     years_have: float | None = None,
+    profile: JDProfile | None = None,
 ) -> Outcome:
+    """Pass `profile` when the JD was already analysed, to skip a second model round."""
     resume = parse(latex_text)
-    profile = analyze_jd(jd_text, llm)
+    profile = profile or analyze_jd(jd_text, llm)
     coverage = match_profile(profile, cards)
     tailored = tailor_resume(resume, cards, profile, coverage, writer_llm or llm, add_gaps)
     explicit = profile.skills

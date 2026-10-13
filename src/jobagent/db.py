@@ -70,7 +70,8 @@ class Database:
             Path(path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
             os.close(fd)
-        self.conn = sqlite3.connect(str(path), timeout=10)
+        # Web requests may open and use a connection on different worker threads, never at once.
+        self.conn = sqlite3.connect(str(path), timeout=10, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         # WAL lets `job-agent review` read while a pass writes.
         self.conn.execute("PRAGMA journal_mode=WAL")
@@ -178,6 +179,24 @@ class Database:
     def get_job(self, job_id: int) -> sqlite3.Row:
         row: sqlite3.Row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return row
+
+    def list_jobs(
+        self, *, status: str | None = None, source: str | None = None, limit: int = 200
+    ) -> list[sqlite3.Row]:
+        """Newest first, with the first link for each job."""
+        sql = (
+            "SELECT j.id, j.company, j.title, j.location, j.experience_text, j.posted_date,"
+            " j.seen_date, j.source, j.status, j.drop_reason, j.score, j.rank_reason,"
+            " (SELECT url FROM job_links l WHERE l.job_id=j.id ORDER BY rowid LIMIT 1) AS url"
+            " FROM jobs j WHERE 1=1"
+        )
+        args: list[object] = []
+        if status:
+            sql, args = sql + " AND j.status=?", [*args, status]
+        if source:
+            sql, args = sql + " AND j.source=?", [*args, source]
+        sql += " ORDER BY COALESCE(j.posted_date, j.seen_date) DESC, j.id DESC LIMIT ?"
+        return self.conn.execute(sql, (*args, limit)).fetchall()
 
     def links(self, job_id: int) -> list[sqlite3.Row]:
         return self.conn.execute(
