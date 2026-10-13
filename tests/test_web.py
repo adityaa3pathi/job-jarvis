@@ -198,3 +198,31 @@ def test_owner_can_mark_a_job(web: TestClient, settings: Settings) -> None:
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "applied"}).status_code == 200
     assert web.get("/api/jobs?status=applied").json()[0]["id"] == job_id
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "hacked"}).status_code == 422
+
+
+def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[bool] = []
+
+    class FakeThread:
+        def __init__(self, **kw: Any) -> None:
+            pass
+
+        def start(self) -> None:
+            started.append(True)
+
+    monkeypatch.setattr("jobagent.web.app.threading.Thread", FakeThread)
+    llm = StubLLM(fake)
+    app = create_app(
+        WebConfig(settings, hash_password(PASSWORD), "s3cret", lambda: llm, lambda: llm,
+                  cron_token="cron-123")
+    )  # fmt: skip
+    c = TestClient(app)
+    assert c.post("/api/cron/discover").status_code == 401
+    assert c.post("/api/cron/discover", headers={"Authorization": "Bearer nope"}).status_code == 401
+    ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
+    assert ok.json()["started"] is True and started == [True]
+
+
+def test_cron_trigger_is_off_without_a_token(settings: Settings) -> None:
+    c = client_for(settings)
+    assert c.post("/api/cron/discover", headers={"Authorization": "Bearer "}).status_code == 401

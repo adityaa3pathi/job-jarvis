@@ -1,0 +1,16 @@
+# Only code and public config go into the image; personal data never does.
+.git
+.venv
+.env
+*.env
+data/
+output/
+docs/
+facts.yaml
+evals/labels.yaml
+web/
+browser-profile/
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import secrets
@@ -57,6 +58,7 @@ class WebConfig:
     fetcher: Fetcher = field(default_factory=HttpFetcher)
     resolver: Resolver = system_resolver
     cookie_secure: bool = True
+    cron_token: str = ""
 
 
 @dataclass
@@ -226,6 +228,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
             discover_state.running = True
         threading.Thread(target=_discover, daemon=True).start()
         return {"started": True, "running": True}
+
+    @app.post("/api/cron/discover")
+    def cron_discover(request: Request) -> dict[str, Any]:
+        """Daily trigger from a scheduler that holds a token instead of a login."""
+        given = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if not cfg.cron_token or not hmac.compare_digest(given, cfg.cron_token):
+            raise HTTPException(401, "bad cron token")
+        return start_discover()
 
     @app.get("/api/discover", dependencies=[Owner])
     def discover_status() -> dict[str, Any]:
@@ -498,5 +508,6 @@ def app_from_env() -> FastAPI:
             thinker=lambda: GeminiLLM(model, temperature=0.0),
             writer=lambda: GeminiLLM(model, temperature=0.5),
             cookie_secure=os.environ.get("JOBAGENT_COOKIE_SECURE", "1") != "0",
+            cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
         )
     )

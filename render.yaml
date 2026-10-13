@@ -1,0 +1,21 @@
+# Render blueprint for the API. Secrets marked sync: false are typed into the Render dashboard.
+services:
+  - type: web
+    name: job-agent-api
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: JOBAGENT_OWNER_HASH
+        sync: false
+      - key: JOBAGENT_SESSION_SECRET
+        generateValue: true
+      - key: JOBAGENT_CRON_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
