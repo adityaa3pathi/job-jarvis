@@ -478,7 +478,7 @@ XETEX_SHIM = (
 )
 
 
-def compile_pdf(tex: str) -> bytes:
+def compile_pdf(tex: str, timeout: float = PDF_TIMEOUT_S) -> bytes:
     """Tectonic in untrusted mode: no shell escape, so resume text cannot run commands."""
     binary = shutil.which("tectonic")
     if not binary:
@@ -489,7 +489,7 @@ def compile_pdf(tex: str) -> bytes:
         try:
             done = subprocess.run(
                 [binary, "--untrusted", "--outdir", tmp, str(src)],
-                capture_output=True, timeout=PDF_TIMEOUT_S, check=False,
+                capture_output=True, timeout=timeout, check=False,
             )  # fmt: skip
         except subprocess.TimeoutExpired as exc:
             raise HTTPException(504, "PDF build timed out") from exc

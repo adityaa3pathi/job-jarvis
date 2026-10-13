@@ -22,9 +22,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     JOBAGENT_DATA_DIR=/tmp/jobagent/data \
     JOBAGENT_CONFIG_DIR=/tmp/jobagent/config
 # Download the LaTeX packages once at build time, so the first PDF is not slow.
+# The first run fetches the whole bundle, so it gets a longer timeout.
 COPY --chown=app tests/fixtures/resume/sample.tex /tmp/warm/resume.tex
 RUN python -c "from pathlib import Path; from jobagent.web.app import compile_pdf; \
-compile_pdf(Path('/tmp/warm/resume.tex').read_text())" && rm -rf /tmp/warm
+compile_pdf(Path('/tmp/warm/resume.tex').read_text(), timeout=1200)" && rm -rf /tmp/warm
 
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
