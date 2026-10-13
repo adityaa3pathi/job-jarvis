@@ -10,6 +10,6 @@ max_years_asked: 5
 freetext_questions: pause_all
 llm:
   provider: gemini
-  model: gemini-2.0-flash
+  model: gemini-3.5-flash-lite
   timeout_s: 30
   send_contact_details: false

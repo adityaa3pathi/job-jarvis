@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -68,6 +70,16 @@ class FailingLLM:
         raise self.error
 
 
+MAX_RATE_RETRIES = 4
+MAX_WAIT_S = 70.0
+
+
+def _retry_delay(response: httpx.Response) -> float:
+    """Seconds the API asks us to wait after a 429."""
+    found = re.search(r"retry in ([\d.]+)s", response.text)
+    return float(found.group(1)) + 1 if found else 15.0
+
+
 class GeminiLLM:
     """Google Gemini over REST. The model id comes from config and is unconfirmed."""
 
@@ -78,7 +90,9 @@ class GeminiLLM:
         timeout_s: float = 30.0,
         transport: httpx.BaseTransport | None = None,
         temperature: float = 0.0,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        self._sleep = sleep
         self.model = model
         self.temperature = temperature
         self._key = api_key or os.environ.get("GEMINI_API_KEY", "")
@@ -99,7 +113,14 @@ class GeminiLLM:
             },
         }
         # The key goes in a header, not the URL, so it never reaches logs.
-        response = self._client.post(url, json=body, headers={"x-goog-api-key": self._key})
+        for attempt in range(MAX_RATE_RETRIES + 1):
+            response = self._client.post(url, json=body, headers={"x-goog-api-key": self._key})
+            if response.status_code != 429 or attempt == MAX_RATE_RETRIES:
+                break
+            delay = _retry_delay(response)
+            if delay > MAX_WAIT_S:
+                break  # a daily quota will not clear within this run
+            self._sleep(delay)
         response.raise_for_status()
         data = response.json()
         return str(data["candidates"][0]["content"]["parts"][0]["text"])

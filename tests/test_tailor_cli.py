@@ -96,3 +96,21 @@ def test_cli_reports_a_broken_latex_file(
     )
     assert code == 1
     assert "LatexError" in capsys.readouterr().err
+
+
+def test_gemini_waits_and_retries_after_rate_limit() -> None:
+    import httpx
+
+    from jobagent.llm import GeminiLLM
+
+    replies = [
+        httpx.Response(429, text="quota. Please retry in 2.5s."),
+        httpx.Response(
+            200, json={"candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]}
+        ),
+    ]
+    waits: list[float] = []
+    transport = httpx.MockTransport(lambda request: replies.pop(0))
+    llm = GeminiLLM("m", api_key="k", transport=transport, sleep=waits.append)
+    assert llm.complete_json(system="s", user="u") == '{"ok": true}'
+    assert waits == [3.5]

@@ -20,7 +20,7 @@ class ConfigError(Exception):
 
 class LLMSettings(BaseModel):
     provider: str = "gemini"
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 30.0
     send_contact_details: bool = False
 
