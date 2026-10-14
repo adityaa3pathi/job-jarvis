@@ -21,3 +21,6 @@ docs/
 
 # tailored resumes hold personal details
 output/
+
+# local skill scratch space
+.context/

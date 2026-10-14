@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+
 from jobagent.discovery.ashby import AshbyAdapter
 from jobagent.discovery.base import (
     Adapter,
@@ -41,9 +45,27 @@ def discover_all(
     policy: Policy,
     searches: list[BoardSearch] | None = None,
 ) -> DiscoveryResult:
-    result = DiscoveryResult()
+    """Each portal runs in its own thread, so one site's pauses never hold up another's."""
+    jobs: dict[str, list[Callable[[], DiscoveryResult]]] = {}
     for company in companies:
-        result.extend(ADAPTERS[company.ats].discover(company, fetcher, policy))
+        adapter = ADAPTERS[company.ats]
+        jobs.setdefault(adapter.portal, []).append(
+            partial(adapter.discover, company, fetcher, policy)
+        )
     for search in searches or []:
-        result.extend(BOARD_ADAPTERS[search.board].discover(search, fetcher, policy))
+        board = BOARD_ADAPTERS[search.board]
+        jobs.setdefault(board.portal, []).append(partial(board.discover, search, fetcher, policy))
+
+    def run_portal(tasks: list[Callable[[], DiscoveryResult]]) -> DiscoveryResult:
+        out = DiscoveryResult()
+        for task in tasks:
+            out.extend(task())
+        return out
+
+    result = DiscoveryResult()
+    if not jobs:
+        return result
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        for part in pool.map(run_portal, jobs.values()):
+            result.extend(part)
     return result
