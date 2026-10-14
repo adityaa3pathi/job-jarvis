@@ -91,6 +91,7 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
         ({"experience_text": "6-9 yrs"}, "too_senior"),
         ({"title": "Senior AI Engineer", "experience_text": ""}, "too_senior"),
         ({"description": "Unpaid internship, no stipend."}, "unpaid"),
+        ({"description": "This is a volunteer role for a student club."}, "unpaid"),
         ({"description": "Pay a registration fee to apply"}, "spam"),
         ({"closed": True}, "closed"),
     ],
@@ -106,6 +107,9 @@ def test_hard_rules(kw: dict[str, object], reason: str) -> None:
         {"location": "Remote (India)"},
         {"location": ""},
         {"experience_text": "0-1 yr"},
+        {"description": "Everyone gets 5 paid days off to volunteer."},
+        {"description": "Track unpaid invoices and chase payments."},
+        {"description": "Paid parental leave, plus unpaid leave when you need it."},
     ],
 )
 def test_hard_rules_keep(kw: dict[str, object]) -> None:

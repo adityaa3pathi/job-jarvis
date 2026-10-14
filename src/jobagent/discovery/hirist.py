@@ -8,13 +8,18 @@ from urllib.parse import urlencode
 from jobagent.discovery.base import Adapter, BoardSearch, parse_json
 from jobagent.models import Posting
 
+MAX_PAGES = 3  # 50 jobs a page; robots.txt asks for 10 s between requests
+
 
 class HiristAdapter(Adapter[BoardSearch]):
     portal = "hirist"
 
-    def url_for(self, search: BoardSearch) -> str:
-        query = urlencode({"query": search.term, "page": 0, "size": 20})
+    def url_for(self, search: BoardSearch, page: int = 0) -> str:
+        query = urlencode({"query": search.term, "page": page, "size": 50})
         return f"https://gladiator.hirist.tech/job/search?{query}"
+
+    def page_urls(self, search: BoardSearch) -> list[str]:
+        return [self.url_for(search, page) for page in range(MAX_PAGES)]
 
     def parse(self, text: str, search: BoardSearch) -> list[Posting]:
         postings = []

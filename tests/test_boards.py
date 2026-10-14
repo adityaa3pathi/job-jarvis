@@ -106,3 +106,72 @@ def test_jobleads_unpacks_nuxt_state(policy: Policy) -> None:
     assert first.url.startswith("https://www.jobleads.com/in/job/full-stack-developer--")
     assert first.posted_date == date(2026, 6, 8)
     assert second.title == "Full Stack Developer (AWS)"
+
+
+def test_wellfound_reads_apollo_state_and_maps_company(policy: Policy) -> None:
+    first, second = run("wellfound", "software engineer", "wellfound.html", policy)
+    assert first.url == "https://wellfound.com/jobs/4824775-software-engineer"
+    assert (first.title, first.company) == ("Software Engineer", "Insight Consultants")
+    assert first.location == "Bangalore Urban, Remote"
+    assert first.experience_text == "1+ years"
+    assert first.posted_date == date(2026, 10, 12)
+    assert second.description == "Build APIs & agents."
+
+
+def test_yc_reads_public_job_board_page(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["yc"].url_for(BoardSearch(board="yc", term="india"))
+    assert url == "https://www.ycombinator.com/jobs/role/software-engineer/india"
+    first, second = run("yc", "india", "yc.html", policy)
+    assert (first.title, first.company, first.location) == (
+        "QA / Hardware Test Engineer", "Human Archive", "IN",
+    )  # fmt: skip
+    assert first.url.startswith("https://www.ycombinator.com/companies/human-archive/jobs/")
+    assert second.experience_text == "3+ years"
+
+
+def test_boards_read_past_the_first_page_until_one_adds_nothing(policy: Policy) -> None:
+    search = BoardSearch(board="hirist", term="full stack developer")
+    adapter = BOARD_ADAPTERS["hirist"]
+    page = (FIX / "boards" / "hirist.json").read_text()
+    empty = '{"data": []}'
+    urls = adapter.page_urls(search)
+    f = FakeFetcher(
+        {urls[0]: FetchResult(200, page, urls[0]), urls[1]: FetchResult(200, empty, urls[1])}
+    )
+    res = discover_all([], f, policy, [search])
+    assert f.calls == urls[:2] and len(res.postings) == 2 and res.unreachable == []
+
+
+def test_cutshort_city_pages_are_all_read_even_when_one_adds_nothing(policy: Policy) -> None:
+    search = BoardSearch(board="cutshort", term="fullstack developer")
+    urls = BOARD_ADAPTERS["cutshort"].page_urls(search)
+    page = (FIX / "boards" / "cutshort.html").read_text()
+    f = FakeFetcher({url: FetchResult(200, page, url) for url in urls})  # all pages repeat
+    discover_all([], f, policy, [search])
+    assert f.calls == urls
+
+
+def test_missing_later_pages_are_skipped_not_reported(policy: Policy) -> None:
+    search = BoardSearch(board="cutshort", term="fullstack developer")
+    urls = BOARD_ADAPTERS["cutshort"].page_urls(search)
+    page = (FIX / "boards" / "cutshort.html").read_text()
+    f = FakeFetcher({urls[0]: FetchResult(200, page, urls[0])})  # every city page 404s
+    res = discover_all([], f, policy, [search])
+    assert f.calls == urls and len(res.postings) == 2 and res.unreachable == []
+
+
+def test_captcha_word_in_page_css_is_not_taken_for_a_bot_wall(policy: Policy) -> None:
+    page = (FIX / "boards" / "cutshort.html").read_text()
+    page = "<style>.grecaptcha-badge{display:none;}</style>" + page
+    search = BoardSearch(board="cutshort", term="fullstack developer")
+    url = BOARD_ADAPTERS["cutshort"].url_for(search)
+    res = discover_all([], FakeFetcher({url: FetchResult(200, page, url)}), policy, [search])
+    assert len(res.postings) == 2 and res.unreachable == []
+
+
+def test_a_real_wall_page_is_still_reported(policy: Policy) -> None:
+    search = BoardSearch(board="cutshort", term="fullstack developer")
+    url = BOARD_ADAPTERS["cutshort"].url_for(search)
+    wall = FetchResult(200, "<html><title>Just a moment...</title></html>", url)
+    res = discover_all([], FakeFetcher({url: wall}), policy, [search])
+    assert [u.reason for u in res.unreachable] == ["bot wall or captcha page"]

@@ -8,7 +8,7 @@ import pytest
 
 from jobagent.discovery import ADAPTERS, discover_all
 from jobagent.discovery.base import Company, FetchResult, load_companies
-from jobagent.discovery.fetch import FetchRefused, HttpFetcher, guard_url
+from jobagent.discovery.fetch import MAX_BYTES, FetchRefused, HttpFetcher, guard_url
 from jobagent.discovery.manual import fetch_posting
 from jobagent.policy import Policy
 from jobagent.sanitize import clean_posting_text, strip_hidden_html
@@ -118,7 +118,8 @@ def test_companies_file_loads_and_rejects_unsafe_token(tmp_path: Path) -> None:
     path.write_text("companies:\n  - {name: A, ats: lever, token: 'a/../x'}\n")
     with pytest.raises(ValueError):
         load_companies(path)
-    assert load_companies(Path(__file__).parents[1] / "companies.yaml") == []
+    companies = load_companies(Path(__file__).parents[1] / "companies.yaml")
+    assert companies and len({(c.ats, c.token) for c in companies}) == len(companies)
 
 
 # --- manual links and the address guard ---
@@ -212,7 +213,7 @@ def test_redirect_limit_and_size_cap() -> None:
         _fetcher(loop).get("https://jobs.lever.co/a")
 
     def big(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"x" * 3_000_000)
+        return httpx.Response(200, content=b"x" * (MAX_BYTES + 1))
 
     with pytest.raises(FetchRefused, match="large"):
         _fetcher(big).get("https://jobs.lever.co/a")

@@ -21,11 +21,11 @@ KNOWN_ATS_HOSTS = frozenset(
 KNOWN_BOARD_HOSTS = frozenset(
     {
         "jobgether.com", "gladiator.hirist.tech", "www.hirist.tech", "cutshort.io",
-        "bebee.com", "www.switchly.in", "www.jobleads.com",
+        "bebee.com", "www.switchly.in", "www.jobleads.com", "wellfound.com", "www.ycombinator.com",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3
-MAX_BYTES = 2_000_000
+MAX_BYTES = 16_000_000  # the biggest Greenhouse boards with full job text reach ~12 MB
 Resolver = Callable[[str, int], list[str]]
 
 

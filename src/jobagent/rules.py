@@ -24,11 +24,12 @@ SPAM_PATTERNS = (
     r"earn \S+ ?(?:per|a) (?:day|week)", r"no experience required.{0,40}earn",
     r"data entry.{0,40}(?:per|/)\s*(?:day|hour)", r"guaranteed (?:job|placement)",
 )  # fmt: skip
+# Match the role itself, not benefits text like "unpaid leave" or "paid days off to volunteer".
 UNPAID_PATTERNS = (
-    r"\bunpaid\b",
+    r"\bunpaid (?:intern|internship|role|position|job|opportunity|work)\b",
     r"no stipend",
     r"without (?:any )?(?:pay|stipend)",
-    r"\bvolunteer\b",
+    r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
 SENIOR_TITLE = re.compile(
     r"\b(senior|sr\.?|lead|principal|staff|head|architect|manager|director|vp)\b", re.IGNORECASE

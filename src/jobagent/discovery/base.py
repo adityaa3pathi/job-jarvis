@@ -17,7 +17,7 @@ from jobagent.policy import Policy
 _TOKEN = re.compile(r"^[A-Za-z0-9_.-]+$")
 _BLOCK_MARKERS = (
     "just a moment", "attention required", "access denied", "verify you are human",
-    "captcha", "are you a robot", "unusual traffic",
+    "complete the captcha", "are you a robot", "unusual traffic",
 )  # fmt: skip
 
 
@@ -41,7 +41,9 @@ def load_companies(path: Path) -> list[Company]:
     return [Company.model_validate(c) for c in raw.get("companies") or []]
 
 
-Board = Literal["jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads"]
+Board = Literal[
+    "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc"
+]
 _TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+-]{0,59}$")
 
 
@@ -102,12 +104,14 @@ class DiscoveryResult:
         self.skipped_by_policy += other.skipped_by_policy
 
 
+def http_error(result: FetchResult) -> str | None:
+    return f"http {result.status}" if result.status >= 400 else None
+
+
 def blocked_reason(result: FetchResult, *, expect_json: bool) -> str | None:
     """A bot wall or error page is recorded, never worked around (KTD4)."""
-    if result.status in (401, 403, 429, 503):
-        return f"http {result.status}"
-    if result.status >= 400:
-        return f"http {result.status}"
+    if error := http_error(result):
+        return error
     if expect_json:
         try:
             json.loads(result.text)
@@ -130,9 +134,15 @@ class Adapter[T: Target]:
 
     portal: str = ""
     expect_json: bool = True
+    # False when page_urls are separate lists (e.g. city pages), not one list split into pages.
+    paged: bool = True
 
     def url_for(self, target: T) -> str:
         raise NotImplementedError
+
+    def page_urls(self, target: T) -> list[str]:
+        """Pages to read in order. Later 404s are skipped; if `paged`, an empty page ends it."""
+        return [self.url_for(target)]
 
     def parse(self, text: str, target: T) -> list[Posting]:
         raise NotImplementedError
@@ -143,20 +153,41 @@ class Adapter[T: Target]:
         if not decision.allowed:
             out.skipped_by_policy.append(f"{target.name}: {decision.reason}")
             return out
-        url = self.url_for(target)
-        try:
-            result = fetcher.get(url)
-        except Exception as exc:  # network and guard errors must not stop the run
-            out.unreachable.append(Unreachable(target.name, url, f"{type(exc).__name__}: {exc}"))
-            return out
-        reason = blocked_reason(result, expect_json=self.expect_json)
-        if reason:
-            out.unreachable.append(Unreachable(target.name, url, reason))
-            return out
-        try:
-            out.postings = self.parse(result.text, target)
-        except (ValueError, KeyError, TypeError, AttributeError) as exc:
-            out.unreachable.append(Unreachable(target.name, url, f"unparseable: {exc}"))
+        seen: set[str] = set()
+        for page, url in enumerate(self.page_urls(target)):
+            if page and not policy.begin(self.portal, "discover").allowed:
+                break
+            try:
+                result = fetcher.get(url)
+            except Exception as exc:  # network and guard errors must not stop the run
+                out.unreachable.append(
+                    Unreachable(target.name, url, f"{type(exc).__name__}: {exc}")
+                )
+                break
+            if page and result.status == 404:
+                continue
+            if error := http_error(result):
+                out.unreachable.append(Unreachable(target.name, url, error))
+                break
+            # Wall markers count only on pages with no jobs; real pages may say "captcha" in CSS.
+            try:
+                parsed = self.parse(result.text, target)
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                reason = blocked_reason(result, expect_json=self.expect_json)
+                out.unreachable.append(
+                    Unreachable(target.name, url, reason or f"unparseable: {exc}")
+                )
+                break
+            if not parsed and (reason := blocked_reason(result, expect_json=self.expect_json)):
+                out.unreachable.append(Unreachable(target.name, url, reason))
+                break
+            fresh = [p for p in parsed if p.url not in seen]
+            if not fresh:
+                if self.paged:
+                    break  # past the last page of results
+                continue
+            seen.update(p.url for p in fresh)
+            out.postings += fresh
         return out
 
 
