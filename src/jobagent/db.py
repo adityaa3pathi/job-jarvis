@@ -81,7 +81,7 @@ class Database:
         ).fetchone()
         if row:
             return self._update_existing(row, posting, seen)
-        key = dedupe_key(posting.company, posting.title, posting.location)
+        key = dedupe_key(posting.company, posting.title, posting.location, url=posting.url)
         row = self.conn.execute("SELECT * FROM jobs WHERE key=? LIMIT 1", (key,)).fetchone()
         if row:
             with self.conn:

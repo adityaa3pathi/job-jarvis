@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from jobagent.db import Database
-from jobagent.dedupe import normalize_city, normalize_company, normalize_url
+from jobagent.dedupe import dedupe_key, normalize_city, normalize_company, normalize_url
 from jobagent.models import Posting
 from jobagent.rules import check_hard_rules, parse_years
 
@@ -31,7 +31,11 @@ def posting(**kw: object) -> Posting:
 def test_same_job_from_two_sources_merges(db: Database) -> None:
     first = db.upsert_posting(posting(source="linkedin", url="https://linkedin.com/jobs/view/9"))
     second = db.upsert_posting(
-        posting(company="ACME", location="Bangalore, India", title="AI Engineer (Remote)")
+        posting(
+            company="ACME Technologies Private Limited",
+            location="Bangalore, India",
+            title="AI Engineer (Remote)",
+        )
     )
     assert second.outcome == "merged"
     assert second.job_id == first.job_id
@@ -127,7 +131,7 @@ def test_normalisers() -> None:
     assert (
         normalize_url("HTTPS://Jobs.Lever.co/Acme/x/?utm=1#top") == "https://jobs.lever.co/Acme/x"
     )
-    assert normalize_company("Acme Technologies Pvt. Ltd.") == "acme"
+    assert normalize_company("Acme Technologies Pvt. Ltd.") == "acme technologies"
     assert normalize_city("Bangalore, India") == "bengaluru"
 
 
@@ -135,3 +139,68 @@ def test_status_change_recorded(db: Database) -> None:
     res = db.upsert_posting(posting())
     db.set_status(res.job_id, "ranked", "score 4")
     assert [e["new_status"] for e in db.events(res.job_id)] == ["found", "ranked"]
+
+
+def test_parenthesised_title_text_keeps_jobs_apart(db: Database) -> None:
+    backend = db.upsert_posting(posting(title="Software Engineer (Backend)"))
+    frontend = db.upsert_posting(
+        posting(
+            url="https://boards.greenhouse.io/acme/jobs/2", title="Software Engineer (Frontend)"
+        )
+    )
+    assert frontend.outcome == "new"
+    assert backend.job_id != frontend.job_id
+    assert dedupe_key("Acme", "AI Engineer (Hybrid)", "Pune") == dedupe_key(
+        "Acme", "AI Engineer", "Pune"
+    )
+
+
+def test_companyless_postings_never_key_merge(db: Database) -> None:
+    a = posting(company="", url="https://wellfound.com/jobs/1", location="Bangalore Urban")
+    b = posting(company="", url="https://wellfound.com/jobs/2", location="Bangalore Urban")
+    assert dedupe_key(a.company, a.title, a.location, url=a.url) != dedupe_key(
+        b.company, b.title, b.location, url=b.url
+    )
+    assert db.upsert_posting(a).job_id != db.upsert_posting(b).job_id
+
+
+def test_company_suffixes_do_not_join_different_companies() -> None:
+    assert normalize_company("Acme Technologies") != normalize_company("Acme Solutions")
+    assert normalize_company("Acme Pvt Ltd") == normalize_company("Acme Inc.")
+    assert normalize_company("Acme Private Limited") == "acme"
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "Bangalore Urban",
+        "Bengaluru, Karnataka, India",
+        "Bangalore",
+        "Bengaluru",
+        "Hybrid - Bangalore",
+    ],
+)
+def test_city_aliases_fold_to_one_value(location: str) -> None:
+    assert normalize_city(location) == "bengaluru"
+    assert dedupe_key("Razorpay", "SDE", location) == dedupe_key("Razorpay", "SDE", "Bengaluru")
+
+
+def test_city_suffixes_and_remote_variants() -> None:
+    assert normalize_city("Chennai District") == "chennai"
+    assert normalize_city("Gurgaon, Haryana") == normalize_city("Gurugram") == "gurugram"
+    remote = {normalize_city(x) for x in ("Remote", "Remote - India", "Remote (India)", "WFH")}
+    assert remote == {"remote"}
+
+
+def test_normalize_url_keeps_id_params_and_drops_tracking() -> None:
+    first = normalize_url("https://www.acme.com/careers/job?gh_jid=111")
+    assert first != normalize_url("https://www.acme.com/careers/job?gh_jid=222")
+    assert first == "https://acme.com/careers/job?gh_jid=111"
+    assert (
+        normalize_url("http://www.Acme.com/Careers/Job/?utm_source=x&id=7&ref=li&jobId=9")
+        == "https://acme.com/Careers/Job?id=7&jobId=9"
+    )
+    assert normalize_url("https://acme.com/job?utm_source=x") == "https://acme.com/job"
+    assert normalize_url("https://acme.com/job?gh_src=a&lever-source=b&trk=c&source=d") == (
+        "https://acme.com/job"
+    )
