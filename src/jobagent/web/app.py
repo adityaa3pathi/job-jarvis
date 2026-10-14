@@ -222,12 +222,13 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.post("/api/discover", dependencies=[Owner])
     def start_discover() -> dict[str, Any]:
+        # Same shape as GET /api/discover, which the page reads.
         with discover_state.guard:
             if discover_state.running:
-                return {"started": False, "running": True}
+                return {"started": False, "running": True, "last": discover_state.last}
             discover_state.running = True
         threading.Thread(target=_discover, daemon=True).start()
-        return {"started": True, "running": True}
+        return {"started": True, "running": True, "last": discover_state.last}
 
     @app.post("/api/cron/discover")
     def cron_discover(request: Request) -> dict[str, Any]:

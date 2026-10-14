@@ -221,7 +221,7 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
     assert c.post("/api/cron/discover").status_code == 401
     assert c.post("/api/cron/discover", headers={"Authorization": "Bearer nope"}).status_code == 401
     ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
-    assert ok.json()["started"] is True and started == [True]
+    assert ok.json() == {"started": True, "running": True, "last": {}} and started == [True]
 
 
 def test_cron_trigger_is_off_without_a_token(settings: Settings) -> None:

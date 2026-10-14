@@ -30,9 +30,13 @@ export default function JobsPage() {
   useEffect(() => {
     if (!discover?.running) return;
     const t = setInterval(async () => {
-      const s = await api<DiscoverState>("/discover");
-      setDiscover(s);
-      if (!s.running) load();
+      try {
+        const s = await api<DiscoverState>("/discover");
+        setDiscover(s);
+        if (!s.running) load();
+      } catch (e) {
+        setError((e as Error).message);
+      }
     }, 4000);
     return () => clearInterval(t);
   }, [discover?.running, load]);
@@ -58,7 +62,14 @@ export default function JobsPage() {
         </select>
         <Button
           disabled={discover?.running}
-          onClick={async () => setDiscover(await post<DiscoverState>("/discover"))}
+          onClick={async () => {
+            setError(null);
+            try {
+              setDiscover(await post<DiscoverState>("/discover"));
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
         >
           {discover?.running ? "Searching boards…" : "Find new jobs"}
         </Button>
@@ -69,7 +80,7 @@ export default function JobsPage() {
           {discover.last.unreachable?.length ? ` Could not reach: ${discover.last.unreachable.join(", ")}` : ""}
         </p>
       )}
-      <ErrorNote message={error ?? discover?.last.error ?? null} />
+      <ErrorNote message={error ?? discover?.last?.error ?? null} />
       {jobs === null ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : jobs.length === 0 ? (
