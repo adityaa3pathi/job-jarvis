@@ -82,6 +82,9 @@ _Job = dict[str, Any]  # a jobs row read up front, kept current as the batch wri
 CHUNK = 500  # stays under SQLite's limit on `?` marks in one statement
 
 
+FULL_LIST_SOURCES = frozenset({"greenhouse", "lever", "ashby", "workable"})
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -267,6 +270,8 @@ class Database:
     def close_vanished(self, postings: Sequence[Posting], *, clean: bool, after_runs: int) -> int:
         """Close found jobs that a portal's clean reads missed `after_runs` times in a row (R8).
         Upserts reset the count; an errored or empty read proves nothing, so counts for none."""
+        # Only company boards list every open job; a search board shows a window of results.
+        postings = [p for p in postings if p.source in FULL_LIST_SOURCES]
         if not clean or not postings:
             return 0
         seen = {normalize_url(p.url) for p in postings}

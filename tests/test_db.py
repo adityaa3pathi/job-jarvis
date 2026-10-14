@@ -159,13 +159,17 @@ def run(db: Database, seen: list[Posting], *, clean: bool = True) -> int:
     return db.close_vanished(seen, clean=clean, after_runs=3)
 
 
+def ats(i: int) -> Posting:
+    return posting(i, source="greenhouse", url=f"https://job-boards.greenhouse.io/acme/jobs/{i}")
+
+
 def test_job_missing_from_three_clean_runs_is_closed() -> None:
     db = Database(":memory:")
-    stays, goes = db.upsert_many([posting(1), posting(2)])
+    stays, goes = db.upsert_many([ats(1), ats(2)])
     for _ in range(2):
-        assert run(db, [posting(1)]) == 0
+        assert run(db, [ats(1)]) == 0
     assert db.get_job(goes.job_id)["status"] == "found"
-    assert run(db, [posting(1)]) == 1
+    assert run(db, [ats(1)]) == 1
     assert db.get_job(goes.job_id)["status"] == "closed"
     assert db.get_job(stays.job_id)["status"] == "found"
     assert db.events(goes.job_id)[-1]["new_status"] == "closed"
@@ -173,14 +177,14 @@ def test_job_missing_from_three_clean_runs_is_closed() -> None:
 
 def test_errored_runs_and_reappearing_jobs_do_not_close() -> None:
     db = Database(":memory:")
-    _, goes = db.upsert_many([posting(1), posting(2)])
+    _, goes = db.upsert_many([ats(1), ats(2)])
     for _ in range(5):
-        run(db, [posting(1)], clean=False)
-    run(db, [posting(1)])
-    run(db, [posting(1)])
-    run(db, [posting(1), posting(2)])  # back again: the count starts over
-    run(db, [posting(1)])
-    run(db, [posting(1)])
+        run(db, [ats(1)], clean=False)
+    run(db, [ats(1)])
+    run(db, [ats(1)])
+    run(db, [ats(1), ats(2)])  # back again: the count starts over
+    run(db, [ats(1)])
+    run(db, [ats(1)])
     assert db.get_job(goes.job_id)["status"] == "found"
 
 
@@ -188,7 +192,7 @@ def test_other_portals_jobs_are_left_alone() -> None:
     db = Database(":memory:")
     other = db.upsert_posting(posting(9, source="cutshort", url="https://cutshort.io/job/9"))
     for _ in range(4):
-        run(db, [posting(1)])
+        run(db, [ats(1)])
     assert db.get_job(other.job_id)["status"] == "found"
 
 
@@ -225,3 +229,13 @@ def test_cli_recheck_prints_a_summary(settings: Settings, capsys: Any) -> None:
     db = Database(settings.db_path)
     assert db.get_job(saved.job_id)["status"] == "found"
     db.close()
+
+
+def test_search_board_jobs_are_never_auto_closed() -> None:
+    # A search shows only a window of results; missing from it does not mean closed.
+    db = Database(":memory:")
+    board = [posting(i, source="hirist", url=f"https://www.hirist.tech/j/{i}") for i in (1, 2)]
+    _, goes = db.upsert_many(board)
+    for _ in range(4):
+        assert run(db, board[:1]) == 0
+    assert db.get_job(goes.job_id)["status"] == "found"
