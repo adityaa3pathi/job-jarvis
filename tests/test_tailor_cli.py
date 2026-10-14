@@ -114,3 +114,37 @@ def test_gemini_waits_and_retries_after_rate_limit() -> None:
     llm = GeminiLLM("m", api_key="k", transport=transport, sleep=waits.append)
     assert llm.complete_json(system="s", user="u") == '{"ok": true}'
     assert waits == [3.5]
+
+
+def test_report_lists_skills_removed_from_the_resume() -> None:
+    out = run_tailor(JD, SAMPLE, CARDS, StubLLM(fake))
+    assert "## Removed from your Skills" in out.report
+    assert "Kubernetes" in out.tailored.dropped_skills
+    for name in out.tailored.dropped_skills:
+        assert f"- {name}" in out.report
+
+
+def test_report_says_when_bullet_rewrites_failed() -> None:
+    def broken_writer(system: str, user: str) -> Any:
+        if "Rewrite one resume bullet" in system:
+            raise TimeoutError("stubbed timeout")
+        return fake(system, user)
+
+    out = run_tailor(JD, SAMPLE, CARDS, StubLLM(fake), writer_llm=StubLLM(broken_writer))
+    assert "bullets kept unchanged: model error" in out.report
+    assert "TimeoutError" in out.report
+
+
+def test_report_says_when_job_analysis_calls_failed() -> None:
+    seen: list[int] = []
+
+    def flaky(system: str, user: str) -> Any:
+        if "List what it asks for" in system:
+            seen.append(1)
+            if len(seen) == 1:
+                raise TimeoutError("stubbed timeout")
+        return fake(system, user)
+
+    out = run_tailor(JD, SAMPLE, CARDS, StubLLM(flaky))
+    assert "1 of" in out.report and "job-analysis model calls failed" in out.report
+    assert "TimeoutError" in out.report

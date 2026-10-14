@@ -139,3 +139,27 @@ def test_tailored_resume_has_a_rebuilt_skills_section_and_a_gap_report() -> None
     assert result.added_gap_skills == ["Terraform"]
     assert result.latex.count("\\begin{document}") == 1
     assert parse(result.latex).emit() == result.latex
+
+
+def test_model_failure_is_recorded_with_its_cause() -> None:
+    result = run(llm=FailingLLM())
+    assert result.failed
+    assert all("TimeoutError" in cause for _, cause in result.failed)
+
+
+def test_skills_left_out_of_the_new_section_are_listed() -> None:
+    result = run()
+    kept = parse(result.latex).section("Technical Skills").emit()
+    assert "Kubernetes" not in kept and "TypeScript" not in kept
+    assert {"Kubernetes", "TypeScript"} <= set(result.dropped_skills)
+    assert "Python" not in result.dropped_skills
+
+
+def test_skills_cut_by_the_cap_are_listed() -> None:
+    many = [make_card("skill", f"Tool{i}", "owner", True) for i in range(30)]
+    coverage = match_profile(PROFILE, many)
+    kept, _ = build_skills(many, coverage)
+    result = tailor_resume(parse(SAMPLE), many, PROFILE, coverage, FailingLLM())
+    cut = [f"Tool{i}" for i in range(30) if f"Tool{i}" not in kept]
+    assert len(cut) >= 15
+    assert set(cut) <= set(result.dropped_skills)

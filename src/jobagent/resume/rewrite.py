@@ -57,6 +57,8 @@ class TailorResult:
     changes: list[Change] = field(default_factory=list)
     added_gap_skills: list[str] = field(default_factory=list)
     rejected: list[tuple[str, str]] = field(default_factory=list)
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (bullet, model error)
+    dropped_skills: list[str] = field(default_factory=list)
 
 
 def check_rewrite(original: str, new: str, allowed: set[str]) -> str | None:
@@ -135,7 +137,8 @@ def _rewrite_one(
     user = data_block("bullet", plain) + data_block("job_title", profile.role_title)
     try:
         new = ask(llm, _Rewrite, system=SYSTEM.format(terms=terms or "none"), user=user).text
-    except LLMError:
+    except LLMError as exc:
+        out.failed.append((plain, str(exc)))
         return
     new = " ".join(new.split())
     if new == plain:
@@ -173,6 +176,35 @@ def build_skills(
     return kept, [g for g in gaps if g in kept]
 
 
+def _listed_skills(section_tex: str) -> list[str]:
+    """Skill names in a 'Label: a, b (c, d)' style Skills section."""
+    names: list[str] = []
+    for line in re.findall(r"\\textbf\{[^}]*:\}([^\n]*)", section_tex):
+        line = line.replace("\\\\", "").strip()
+        plain = to_plain(line) or re.sub(r"\\[a-zA-Z]+|[{}]", "", line)
+        depth, part = 0, ""
+        for ch in plain + ",":
+            depth += (ch == "(") - (ch == ")")
+            if ch == "," and depth == 0:
+                names.append(part.strip())
+                part = ""
+            else:
+                part += ch
+    return [n for n in names if n]
+
+
+def _dropped(before: list[str], cards: list[EvidenceCard], kept: list[str]) -> list[str]:
+    """Owner skills (old section or evidence) that are not in the new section."""
+    have = {canonical(s) for s in kept}
+    owned = [*before, *(c.text for c in cards if c.kind == "skill")]
+    out: dict[str, str] = {}
+    for name in owned:
+        key = canonical(name)
+        if key not in have:
+            out.setdefault(key, name)
+    return list(out.values())
+
+
 def _skills_block(skills: list[str]) -> str:
     groups: dict[str, list[str]] = {}
     for skill in skills:
@@ -206,6 +238,7 @@ def tailor_resume(
         before = "".join(n.emit() for n in section.nodes)
         section.nodes[:] = [Raw(_skills_block(skills))]
         out.added_gap_skills = added
+        out.dropped_skills = _dropped(_listed_skills(before), cards, skills)
         out.changes.append(
             Change("skills", before.strip(), ", ".join(skills), "ordered for this job")
         )
