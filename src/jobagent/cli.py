@@ -34,6 +34,10 @@ def discover(settings: Settings) -> int:
                     out.write(
                         f"NEW  {p.source:9} {p.title} | {p.company} | {p.location} | {p.url}\n"
                     )
+            clean = not (part.unreachable or part.skipped_by_policy)
+            db.close_vanished(
+                part.postings, clean=clean, after_runs=settings.close_after_clean_runs
+            )
 
         try:
             result = discover_all(
@@ -52,10 +56,34 @@ def discover(settings: Settings) -> int:
     return 0
 
 
+def recheck(settings: Settings) -> int:
+    """Re-run the hard rules and today's dedupe on every stored job (U4, U7)."""
+    lock = RunLock(settings.lock_file)
+    try:
+        lock.acquire()
+    except LockHeldError as exc:
+        sys.stdout.write(f"not started: {exc}\n")
+        return 1
+    try:
+        ensure_data_dir(settings)
+        db = Database(settings.db_path, settings.max_years_asked)
+        try:
+            s = db.recheck()
+        finally:
+            db.close()
+    finally:
+        lock.release()
+    sys.stdout.write(
+        f"rechecked {s.rechecked}, undropped {s.undropped}, dropped {s.dropped},"
+        f" merged {s.merged}\n"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="job-agent")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "stop", "resume", "discover", "hash-password"):
+    for name in ("status", "stop", "resume", "discover", "recheck", "hash-password"):
         sub.add_parser(name)
     cli_tailor.add_arguments(sub.add_parser("tailor"))
     args = parser.parse_args(argv)
@@ -71,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     if args.command == "discover":
         return discover(settings)
+    if args.command == "recheck":
+        return recheck(settings)
     if args.command == "stop":
         engage_kill_switch(settings.stop_file)
     elif args.command == "resume":

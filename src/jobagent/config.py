@@ -31,6 +31,7 @@ class Settings(BaseModel):
     min_pause_s: float = 20.0
     follow_up_days: int = 7
     retention_days: int = 90
+    close_after_clean_runs: int = Field(default=3, ge=1)  # misses before a found job is closed
     years_rounding: Literal["down", "nearest", "up"] = "down"
     fit_bar: int = Field(default=4, ge=1, le=5)
     max_years_asked: int = 5

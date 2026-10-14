@@ -243,3 +243,143 @@ def test_normalize_url_keeps_id_params_and_drops_tracking() -> None:
     assert normalize_url("https://acme.com/job?gh_src=a&lever-source=b&trk=c&source=d") == (
         "https://acme.com/job"
     )
+
+
+HIRIST = {"source": "hirist", "url": "https://www.hirist.tech/j/ai-1", "experience_text": ""}
+
+
+def test_merge_fills_description_and_reruns_rules(db: Database) -> None:
+    first = db.upsert_posting(posting(**HIRIST))
+    rich = posting(experience_text="", description="You bring 7+ years experience in Python.")
+    merged = db.upsert_posting(rich)
+    assert (merged.outcome, merged.job_id) == ("merged", first.job_id)
+    assert (merged.status, merged.drop_reason) == ("dropped", "too_senior")
+    assert db.get_job(first.job_id)["description"] == rich.description
+
+
+def test_merge_honours_closed(db: Database) -> None:
+    first = db.upsert_posting(posting(**HIRIST))
+    rich = posting(experience_text="", description="7+ years experience needed.", closed=True)
+    db.upsert_posting(rich)
+    job = db.get_job(first.job_id)
+    assert (job["status"], job["drop_reason"]) == ("closed", "too_senior")
+    assert job["description"] == "7+ years experience needed."
+    assert [e["new_status"] for e in db.events(first.job_id)] == ["found", "dropped", "closed"]
+
+
+def drop(db: Database, job_id: int, reason: str | None, version: int = 1) -> None:
+    with db.conn:
+        db.conn.execute(
+            "UPDATE jobs SET status='dropped', drop_reason=?, rules_version=? WHERE id=?",
+            (reason, version, job_id),
+        )
+
+
+def test_old_rule_drop_seen_again_with_clean_text_comes_back(db: Database) -> None:
+    clean = posting(description="Benefits include unpaid leave and health cover.")
+    saved = db.upsert_posting(clean)
+    drop(db, saved.job_id, "unpaid")  # the old unpaid rule matched benefits text
+    again = db.upsert_posting(clean)
+    assert (again.status, again.drop_reason) == ("found", None)
+    job = db.get_job(saved.job_id)
+    assert (job["status"], job["drop_reason"], job["rules_version"]) == (
+        "found", None, RULES_VERSION,
+    )  # fmt: skip
+    assert db.events(saved.job_id)[-1]["new_status"] == "found"
+
+
+def test_current_and_owner_drops_are_not_rechecked_on_resee(db: Database) -> None:
+    a = db.upsert_posting(posting())
+    b = db.upsert_posting(posting(url="https://boards.greenhouse.io/acme/jobs/2", location="Pune"))
+    drop(db, a.job_id, "unpaid", RULES_VERSION)
+    db.set_status(b.job_id, "dropped", "owner")
+    assert db.upsert_posting(posting()).status == "dropped"
+    resee = posting(url="https://boards.greenhouse.io/acme/jobs/2", location="Pune")
+    assert db.upsert_posting(resee).status == "dropped"
+
+
+def test_dropped_rows_keep_their_description(db: Database) -> None:
+    res = db.upsert_posting(posting(title="Senior AI Engineer", description="Build agents."))
+    assert db.get_job(res.job_id)["description"] == "Build agents."
+
+
+def stale_pair(db: Database) -> tuple[int, int]:
+    """Two rows that the old normalisers kept apart; the current ones see one job."""
+    a = db.upsert_posting(posting(**HIRIST))
+    b = db.upsert_posting(
+        posting(url="https://boards.greenhouse.io/acme/jobs/1?gh_jid=7", location="Pune",
+                description="Build RAG pipelines.")
+    )  # fmt: skip
+    with db.conn:
+        db.conn.execute(
+            "UPDATE jobs SET location='Bangalore Urban', key='acme|ai engineer|bangalore urban'"
+            " WHERE id=?", (b.job_id,),
+        )  # fmt: skip
+        db.conn.execute(
+            "UPDATE job_links SET norm_url='https://boards.greenhouse.io/acme/jobs/1'"
+            " WHERE job_id=?", (b.job_id,),
+        )  # fmt: skip
+    app = db.create_application(b.job_id)
+    with db.conn:
+        db.conn.execute(
+            "UPDATE applications SET norm_title='old' WHERE id=?", (app.application_id,)
+        )
+    return a.job_id, b.job_id
+
+
+def test_recheck_merges_colliding_rows_and_keeps_both_links(db: Database) -> None:
+    a, b = stale_pair(db)
+    summary = db.recheck()
+    assert summary.merged == 1
+    gh = "https://boards.greenhouse.io/acme/jobs/1?gh_jid=7"
+    assert [r["url"] for r in db.links(a)] == [HIRIST["url"], gh]
+    assert db.conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 1
+    assert db.get_job(a)["description"] == "Build RAG pipelines."
+    assert {e["job_id"] for e in db.events(a)} == {a} and len(db.events(a)) >= 2
+    app = db.conn.execute("SELECT job_id, norm_title FROM applications").fetchone()
+    assert tuple(app) == (a, "ai engineer")
+    norm = db.conn.execute("SELECT norm_url FROM job_links WHERE url=?", (gh,)).fetchone()[0]
+    assert norm == normalize_url(gh)
+    # Seen again after the migration, the old row is found, not copied.
+    assert db.upsert_posting(posting(url=gh, location="Bangalore Urban")).outcome == "duplicate"
+    assert db.conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 1
+
+
+def test_recheck_reruns_rules_on_found_and_rule_dropped_rows(db: Database) -> None:
+    unpaid = db.upsert_posting(posting(description="Unpaid leave is available."))
+    senior = db.upsert_posting(posting(url="https://x.example/2", company="Beta"))
+    owner = db.upsert_posting(posting(url="https://x.example/3", company="Gamma"))
+    closed = db.upsert_posting(posting(url="https://x.example/4", company="Delta"))
+    drop(db, unpaid.job_id, "unpaid")
+    drop(db, closed.job_id, "closed")
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET title='Senior AI Engineer' WHERE id=?", (senior.job_id,))
+    db.set_status(owner.job_id, "dropped", "owner")
+    summary = db.recheck()
+    assert (summary.undropped, summary.dropped, summary.merged) == (1, 1, 0)
+    status = lambda i: db.get_job(i)["status"]  # noqa: E731
+    assert status(unpaid.job_id) == "found"
+    assert (status(senior.job_id), db.get_job(senior.job_id)["drop_reason"]) == (
+        "dropped", "too_senior",
+    )  # fmt: skip
+    assert status(owner.job_id) == status(closed.job_id) == "dropped"
+
+
+def test_recheck_twice_changes_nothing_the_second_time(db: Database) -> None:
+    stale_pair(db)
+    old = db.upsert_posting(posting(url="https://x.example/9", company="Zeta",
+                                    description="Unpaid leave."))  # fmt: skip
+    drop(db, old.job_id, "unpaid")
+    first = db.recheck()
+    assert first.merged == 1 and first.undropped == 1
+
+    def snapshot() -> list[list[tuple[object, ...]]]:
+        return [
+            [tuple(r) for r in db.conn.execute(f"SELECT * FROM {t} ORDER BY rowid").fetchall()]
+            for t in ("jobs", "job_links", "applications", "events")
+        ]
+
+    before = snapshot()
+    second = db.recheck()
+    assert (second.undropped, second.dropped, second.merged) == (0, 0, 0)
+    assert snapshot() == before

@@ -234,6 +234,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
                     saved = db.upsert_many(part.postings)
                     counts["read"] += len(saved)
                     counts["new"] += sum(r.outcome == "new" and r.status == "found" for r in saved)
+                    clean = not (part.unreachable or part.skipped_by_policy)
+                    db.close_vanished(
+                        part.postings, clean=clean, after_runs=settings.close_after_clean_runs
+                    )
 
                 result = discover_all(
                     load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher, policy,

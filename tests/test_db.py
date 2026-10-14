@@ -10,6 +10,8 @@ from typing import Any
 
 import pytest
 
+from jobagent import cli
+from jobagent.config import Settings, ensure_data_dir
 from jobagent.db import Database
 from jobagent.models import Posting
 
@@ -32,6 +34,9 @@ class CountingConn:
     def executescript(self, script: str) -> None:
         self.calls["executescript"] += 1
         self._conn.executescript(script)
+
+    def commit(self) -> None:
+        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -146,3 +151,77 @@ def test_two_handles_saving_one_url_leave_one_job_and_one_link(
     assert (count("jobs"), count("job_links"), count("events")) == (1, 1, 1)
     a.close()
     b.close()
+
+
+def run(db: Database, seen: list[Posting], *, clean: bool = True) -> int:
+    """One portal finishing: save what it read, then sweep what it did not."""
+    db.upsert_many(seen)
+    return db.close_vanished(seen, clean=clean, after_runs=3)
+
+
+def test_job_missing_from_three_clean_runs_is_closed() -> None:
+    db = Database(":memory:")
+    stays, goes = db.upsert_many([posting(1), posting(2)])
+    for _ in range(2):
+        assert run(db, [posting(1)]) == 0
+    assert db.get_job(goes.job_id)["status"] == "found"
+    assert run(db, [posting(1)]) == 1
+    assert db.get_job(goes.job_id)["status"] == "closed"
+    assert db.get_job(stays.job_id)["status"] == "found"
+    assert db.events(goes.job_id)[-1]["new_status"] == "closed"
+
+
+def test_errored_runs_and_reappearing_jobs_do_not_close() -> None:
+    db = Database(":memory:")
+    _, goes = db.upsert_many([posting(1), posting(2)])
+    for _ in range(5):
+        run(db, [posting(1)], clean=False)
+    run(db, [posting(1)])
+    run(db, [posting(1)])
+    run(db, [posting(1), posting(2)])  # back again: the count starts over
+    run(db, [posting(1)])
+    run(db, [posting(1)])
+    assert db.get_job(goes.job_id)["status"] == "found"
+
+
+def test_other_portals_jobs_are_left_alone() -> None:
+    db = Database(":memory:")
+    other = db.upsert_posting(posting(9, source="cutshort", url="https://cutshort.io/job/9"))
+    for _ in range(4):
+        run(db, [posting(1)])
+    assert db.get_job(other.job_id)["status"] == "found"
+
+
+def test_old_database_gains_the_new_columns(tmp_path: Path) -> None:
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE jobs (id INTEGER PRIMARY KEY, key TEXT NOT NULL, company TEXT NOT NULL,"
+        " title TEXT NOT NULL, location TEXT NOT NULL, experience_text TEXT NOT NULL,"
+        " stack_words TEXT NOT NULL, description TEXT NOT NULL, posted_date TEXT,"
+        " seen_date TEXT NOT NULL, source TEXT NOT NULL, track TEXT, status TEXT NOT NULL,"
+        " drop_reason TEXT, score INTEGER, rank_reason TEXT);"
+        "INSERT INTO jobs VALUES (1,'k','Co','T','L','','[]','','',''"
+        ",'hirist',NULL,'dropped','unpaid',NULL,NULL);"
+    )
+    old.commit()
+    old.close()
+    Database(path).close()
+    db = Database(path)  # a second open must tolerate the columns already being there
+    job = db.get_job(1)
+    assert (job["rules_version"], job["missed_runs"]) == (1, 0)
+    db.close()
+
+
+def test_cli_recheck_prints_a_summary(settings: Settings, capsys: Any) -> None:
+    ensure_data_dir(settings)
+    db = Database(settings.db_path)
+    saved = db.upsert_posting(posting(description="Unpaid leave on request."))
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET status='dropped', drop_reason='unpaid', rules_version=1")
+    db.close()
+    assert cli.recheck(settings) == 0
+    assert capsys.readouterr().out == "rechecked 1, undropped 1, dropped 0, merged 0\n"
+    db = Database(settings.db_path)
+    assert db.get_job(saved.job_id)["status"] == "found"
+    db.close()
