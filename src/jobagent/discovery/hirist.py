@@ -14,6 +14,7 @@ MAX_PAGES = 1  # one 200-job page per term; the policy keeps 10 s between reques
 
 class HiristAdapter(Adapter[BoardSearch]):
     portal = "hirist"
+    page_size = 200
 
     def url_for(self, search: BoardSearch, page: int = 0) -> str:
         query = urlencode({"query": search.term, "page": page, "size": 200})

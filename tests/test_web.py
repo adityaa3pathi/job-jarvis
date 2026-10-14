@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import threading
 import time
 from typing import Any
 
@@ -8,10 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from jobagent.config import Settings
-from jobagent.discovery.base import DiscoveryResult, FetchResult
+from jobagent.discovery.base import DiscoveryResult, FetchResult, Unreachable
 from jobagent.llm import FailingLLM, StubLLM
 from jobagent.models import Posting
-from jobagent.web.app import WebConfig, compile_pdf, create_app
+from jobagent.web.app import WebConfig, compile_pdf, create_app, keep_awake
 from jobagent.web.auth import hash_password, make_token, token_valid
 from tests.test_discovery import FIX, FakeFetcher
 from tests.test_tailor_cli import EXTRACT, SAMPLE
@@ -222,7 +223,8 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
     assert c.post("/api/cron/discover").status_code == 401
     assert c.post("/api/cron/discover", headers={"Authorization": "Bearer nope"}).status_code == 401
     ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
-    assert ok.json() == {"started": True, "running": True, "last": {}} and started == [True]
+    assert ok.json()["started"] and ok.json()["running"] and started == [True]
+    assert ok.json()["last"] == {}
 
 
 def wait_discover(c: TestClient) -> dict[str, Any]:
@@ -262,6 +264,126 @@ def test_discover_saves_each_portal_and_keeps_them_after_a_crash(
     else:
         assert (last["read"], last["new"]) == (3, 3)
     assert {j["source"] for j in web.get("/api/jobs").json()} == {"hirist", "greenhouse"}
+
+
+def logged_in(settings: Settings) -> TestClient:
+    c = client_for(settings)
+    assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
+    return c
+
+
+def test_last_run_is_kept_in_the_db_and_shown_after_a_restart(
+    web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    senior = Posting(
+        source="hirist", url="https://hirist.example/s", company="Zed",
+        title="AI Engineer", location="Bengaluru", experience_text="12+ years",
+    )  # fmt: skip
+
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        part = portal("hirist", 2)
+        part.postings.append(senior)
+        part.portal, part.notes = "hirist", ["hirist: ai: truncated at 1 pages"]
+        on_portal_done(part)
+        gh = portal("greenhouse", 1)
+        gh.unreachable = [Unreachable("Acme", "u", "http 403")]
+        on_portal_done(gh)
+        return DiscoveryResult()
+
+    monkeypatch.setattr("jobagent.web.app.discover_all", fake_discover_all)
+    assert web.post("/api/discover").json()["started"]
+    wait_discover(web)
+    state = logged_in(settings).get("/api/discover").json()  # a fresh app, as after a restart
+    last = state["last"]
+    assert state["running"] is False and state["current"] is None
+    assert (last["status"], last["error"], last["read"], last["new"]) == ("done", "", 4, 3)
+    assert last["portals"]["hirist"] == {"read": 3, "new": 2, "saved": 3}
+    assert last["drop_reasons"] == {"too_senior": 1}
+    assert last["unreachable"] == ["Acme: http 403"]
+    assert last["notes"] == ["hirist: ai: truncated at 1 pages"]
+    assert last["started_at"] and last["finished_at"]
+
+
+def test_a_lock_that_raises_an_unexpected_error_still_ends_the_run(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(self: Any) -> None:
+        raise OSError("data dir is read-only")
+
+    monkeypatch.setattr("jobagent.web.app.RunLock.acquire", broken)
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran"))
+    assert web.post("/api/discover").json()["started"]
+    state = wait_discover(web)
+    assert state["last"]["status"] == "failed"
+    assert "OSError: data dir is read-only" in state["last"]["error"]
+    assert web.post("/api/discover").json()["started"]  # not stuck
+
+
+def test_a_run_left_running_too_long_reads_as_failed(web: TestClient, settings: Settings) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    st.start_run(started_at=time.time() - 31 * 60)
+    st.close()
+    state = web.get("/api/discover").json()
+    assert state["running"] is False and state["current"] is None
+    assert state["last"]["status"] == "failed" and "did not finish" in state["last"]["error"]
+
+
+def test_a_recent_run_from_another_process_shows_as_running(
+    web: TestClient, settings: Settings
+) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    st.start_run()
+    st.close()
+    state = web.get("/api/discover").json()
+    assert state["running"] is True and state["current"]["status"] == "running"
+
+
+def test_kill_switch_survives_a_restart_and_reaches_the_run(
+    web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[bool] = []
+
+    def fake_discover_all(_c: Any, _f: Any, policy: Any, *_: Any, **__: Any) -> DiscoveryResult:
+        seen.append(policy.stopped())
+        return DiscoveryResult()
+
+    assert web.post("/api/kill-switch/on").json() == {"kill_switch": True}
+    assert not settings.stop_file.exists()
+    again = logged_in(settings)  # a fresh app with the same DB
+    assert again.get("/api/me").json()["kill_switch"] is True
+    monkeypatch.setattr("jobagent.web.app.discover_all", fake_discover_all)
+    again.post("/api/discover")
+    wait_discover(again)
+    assert seen == [True]
+    again.post("/api/kill-switch/off")
+    assert web.get("/api/me").json()["kill_switch"] is False
+
+
+def test_self_ping_uses_the_public_url_while_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    pinged: list[str] = []
+    got_two = threading.Event()
+
+    def ping(url: str) -> None:
+        pinged.append(url)
+        if len(pinged) >= 2:
+            got_two.set()
+
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://job-jarvis.onrender.com/")
+    stop = threading.Event()
+    thread = keep_awake(stop, ping, every_s=0.01)
+    assert thread is not None and got_two.wait(2)
+    stop.set()
+    thread.join(2)
+    assert set(pinged) == {"https://job-jarvis.onrender.com/api/health"}
+
+
+def test_self_ping_is_skipped_without_a_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RENDER_EXTERNAL_URL", raising=False)
+    assert keep_awake(threading.Event(), lambda url: pytest.fail("pinged"), every_s=0.01) is None
 
 
 def test_schema_runs_once_and_connections_are_reused(

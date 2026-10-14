@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any, TextIO
 
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir, load_settings
 from jobagent.db import Database
@@ -11,8 +12,9 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher
 from jobagent.lock import LockHeldError, RunLock
-from jobagent.policy import Policy, clear_kill_switch, engage_kill_switch
+from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume import cli_tailor
+from jobagent.web.store import RunTally, Store, kill_switch_check
 
 
 def discover(settings: Settings) -> int:
@@ -24,13 +26,19 @@ def discover(settings: Settings) -> int:
         out.write(f"not started: {exc}\n")
         return 1
     try:
-        policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
         ensure_data_dir(settings)
-        db = Database(settings.db_path, settings.max_years_asked)
+        db, st = Database(settings.db_path, settings.max_years_asked), Store(settings.db_path)
+        policy = Policy.load(
+            REPO_ROOT / "policy.yaml", settings.stop_file,
+            stop_check=kill_switch_check(settings.db_path),
+        )  # fmt: skip
+        tally, run_id = RunTally(), st.start_run()
 
         def save(part: DiscoveryResult) -> None:
-            for p, saved in zip(part.postings, db.upsert_many(part.postings), strict=True):
-                if saved.outcome == "new" and saved.status == "found":
+            saved = tally.save(part, db.upsert_many)
+            st.update_run(run_id, tally.as_dict())
+            for p, r in zip(part.postings, saved or [], strict=False):
+                if r.outcome == "new" and r.status == "found":
                     out.write(
                         f"NEW  {p.source:9} {p.title} | {p.company} | {p.location} | {p.url}\n"
                     )
@@ -40,19 +48,52 @@ def discover(settings: Settings) -> int:
             )
 
         try:
-            result = discover_all(
+            discover_all(
                 load_companies(REPO_ROOT / "companies.yaml"), HttpFetcher(), policy,
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
             )  # fmt: skip
+        except Exception as exc:
+            st.finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}", tally.as_dict())
+            raise
+        else:
+            st.finish_run(run_id, "done", "", tally.as_dict())
         finally:
             db.close()
+            st.close()
     finally:
         lock.release()
-    for u in result.unreachable:
-        out.write(f"UNREACHABLE  {u.company}: {u.reason}\n")
-    for line in result.skipped_by_policy:
+    report(tally.as_dict(), out)
+    return 0
+
+
+def report(counts: dict[str, Any], out: TextIO) -> None:
+    for line in counts["unreachable"]:
+        out.write(f"UNREACHABLE  {line}\n")
+    for line in counts["skipped"]:
         out.write(f"SKIPPED  {line}\n")
-    out.write(f"read {len(result.postings)} postings\n")
+    for line in counts["notes"]:
+        out.write(f"NOTE  {line}\n")
+    for name, c in counts["portals"].items():
+        out.write(f"PORTAL  {name}: read {c['read']}, new {c['new']}, saved {c['saved']}\n")
+    if drops := counts["drop_reasons"]:
+        out.write("DROPPED  " + ", ".join(f"{k}={v}" for k, v in drops.items()) + "\n")
+    out.write(f"read {counts['read']} postings, {counts['new']} new\n")
+
+
+def kill_switch(settings: Settings, command: str) -> int:
+    """The switch is a DB flag so it survives restarts; the STOP file still works locally."""
+    ensure_data_dir(settings)
+    st = Store(settings.db_path)
+    try:
+        if command in ("stop", "resume"):
+            st.set_kill_switch(command == "stop")
+        if command == "resume":
+            clear_kill_switch(settings.stop_file)
+        on = st.kill_switch() or settings.stop_file.exists()
+    finally:
+        st.close()
+    state = "ON (agent halted)" if on else "off"
+    sys.stdout.write(f"kill switch: {state}\nstop file: {settings.stop_file}\n")
     return 0
 
 
@@ -101,13 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         return discover(settings)
     if args.command == "recheck":
         return recheck(settings)
-    if args.command == "stop":
-        engage_kill_switch(settings.stop_file)
-    elif args.command == "resume":
-        clear_kill_switch(settings.stop_file)
-    state = "ON (agent halted)" if settings.stop_file.exists() else "off"
-    sys.stdout.write(f"kill switch: {state}\nstop file: {settings.stop_file}\n")
-    return 0
+    return kill_switch(settings, args.command)
 
 
 if __name__ == "__main__":

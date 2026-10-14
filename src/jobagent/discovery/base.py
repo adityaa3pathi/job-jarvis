@@ -100,12 +100,16 @@ class DiscoveryResult:
     unreachable: list[Unreachable] = field(default_factory=list)
     skipped_by_policy: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    per_target: dict[str, int] = field(default_factory=dict)
+    portal: str = ""
 
     def extend(self, other: DiscoveryResult) -> None:
         self.postings += other.postings
         self.unreachable += other.unreachable
         self.skipped_by_policy += other.skipped_by_policy
         self.notes += other.notes
+        self.per_target.update(other.per_target)
+        self.portal = self.portal or other.portal
 
 
 class Postings(list[Posting]):
@@ -114,6 +118,7 @@ class Postings(list[Posting]):
     def __init__(self) -> None:
         super().__init__()
         self.skipped: Counter[str] = Counter()
+        self.more: bool | None = None  # the site's own "more results" flag, when it has one
 
 
 def build_each[R](records: Iterable[R], build: Callable[[R], Posting | None]) -> Postings:
@@ -168,6 +173,7 @@ class Adapter[T: Target]:
     expect_json: bool = True
     # False when page_urls are separate lists (e.g. city pages), not one list split into pages.
     paged: bool = True
+    page_size: int | None = None  # a last page this full means the page cap cut results
 
     def url_for(self, target: T) -> str:
         raise NotImplementedError
@@ -187,8 +193,12 @@ class Adapter[T: Target]:
             return out
         seen: set[str] = set()
         skipped: Counter[str] = Counter()
-        for page, url in enumerate(self.page_urls(target)):
-            if page and not policy.begin(self.portal, "discover").allowed:
+        urls = self.page_urls(target)
+        empty_first = truncated = False
+        for page, url in enumerate(urls):
+            if page and not (decision := policy.begin(self.portal, "discover")).allowed:
+                why = "by kill switch" if policy.stopped() else f"({decision.reason})"
+                out.notes.append(f"{target.name}: stopped {why} after page {page}")
                 break
             try:
                 result = fetcher.get(url)
@@ -215,6 +225,7 @@ class Adapter[T: Target]:
             if not parsed and (reason := blocked_reason(result, expect_json=self.expect_json)):
                 out.unreachable.append(Unreachable(target.name, url, reason))
                 break
+            empty_first = empty_first or (page == 0 and not parsed)
             fresh = [p for p in parsed if p.url not in seen]
             if not fresh:
                 if self.paged:
@@ -222,9 +233,22 @@ class Adapter[T: Target]:
                 continue
             seen.update(p.url for p in fresh)
             out.postings += fresh
+            if page == len(urls) - 1:
+                truncated = self._more_after(parsed)
         if skipped:
             out.notes.append(skipped_note(target.name, skipped))
+        if empty_first and not out.postings:
+            out.notes.append(f"{target.name}: 0 jobs (check layout)")
+        if truncated:
+            out.notes.append(f"{target.name}: truncated at {len(urls)} pages")
+        out.per_target[target.name] = len(out.postings)
         return out
+
+    def _more_after(self, parsed: list[Posting]) -> bool:
+        more = parsed.more if isinstance(parsed, Postings) else None
+        if more is not None:
+            return more
+        return self.page_size is not None and len(parsed) >= self.page_size
 
 
 def parse_json(text: str) -> Any:

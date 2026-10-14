@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 import secrets
 import shutil
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
 from urllib.parse import urlsplit
 
+import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
@@ -31,7 +33,7 @@ from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
 from jobagent.llm import LLM, LLMError
 from jobagent.lock import LockHeldError, RunLock
-from jobagent.policy import Policy, clear_kill_switch, engage_kill_switch
+from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume.coach import MAX_JD_CHARS, CoachReport, Message, build_report, reply
 from jobagent.resume.evidence import cards_from_summary
 from jobagent.resume.jd_agent import analyze_jd
@@ -39,13 +41,15 @@ from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
-from jobagent.web.store import Store, profile_from_json, profile_to_json
+from jobagent.web.store import RunTally, Store, profile_from_json, profile_to_json
 from jobagent.web.uploads import UploadError, doc_to_text
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_WINDOW_S = 900
 PDF_TIMEOUT_S = 120
 MAX_TASKS = 50
+PING_EVERY_S = 300  # Render spins a free service down after 15 idle minutes
+log = logging.getLogger(__name__)
 OwnerMark = Literal["found", "applied", "dropped", "interview", "rejected"]
 
 
@@ -60,6 +64,30 @@ class WebConfig:
     resolver: Resolver = system_resolver
     cookie_secure: bool = True
     cron_token: str = ""
+    ping: Callable[[str], object] = field(default=lambda url: httpx.get(url, timeout=30))
+    ping_every_s: float = PING_EVERY_S
+
+
+def keep_awake(
+    stop: threading.Event, ping: Callable[[str], object], every_s: float = PING_EVERY_S
+) -> threading.Thread | None:
+    """Ping our public URL until `stop` is set (KTD4). Only a request through Render's proxy
+    counts as activity, so a localhost ping would not do; skipped when the URL is unset."""
+    base = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+    if not base:
+        return None
+    url = f"{base}/api/health"
+
+    def loop() -> None:
+        while not stop.wait(every_s):
+            try:
+                ping(url)
+            except Exception as exc:  # a missed ping is not worth failing the run
+                log.warning("self-ping failed: %s", exc)
+
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+    return thread
 
 
 @dataclass
@@ -73,7 +101,6 @@ class _Task:
 @dataclass
 class _DiscoverState:
     running: bool = False
-    last: dict[str, Any] = field(default_factory=dict)
     guard: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -169,6 +196,13 @@ def create_app(cfg: WebConfig) -> FastAPI:
     failures: list[float] = []
     discover_state = _DiscoverState()
 
+    def db_stopped() -> bool:
+        with stores.borrow() as st:
+            return st.kill_switch()
+
+    def load_policy() -> Policy:
+        return Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file, stop_check=db_stopped)
+
     def owner(request: Request) -> None:
         token = request.cookies.get(COOKIE, "")
         if not token or not token_valid(cfg.session_secret, token):
@@ -201,8 +235,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return {"ok": True}
 
     @app.get("/api/me", dependencies=[Owner])
-    def me() -> dict[str, Any]:
-        return {"ok": True, "kill_switch": settings.stop_file.exists()}
+    def me(st: ST) -> dict[str, Any]:
+        return {"ok": True, "kill_switch": st.kill_switch() or settings.stop_file.exists()}
 
     # --- jobs and discovery ---
 
@@ -218,51 +252,69 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return {"ok": True}
 
     def _discover() -> None:
-        lock = RunLock(settings.lock_file)
+        lock, tally, stop_ping = RunLock(settings.lock_file), RunTally(), threading.Event()
+        held, run_id = False, None
         try:
-            lock.acquire()
-        except LockHeldError as exc:
-            discover_state.last = {"error": str(exc)}
-            discover_state.running = False
-            return
-        counts = {"read": 0, "new": 0}
-        try:
-            policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
-            with jobs_db.borrow() as db:
+            with stores.borrow() as st:
+                try:
+                    lock.acquire()
+                    held, run_id = True, st.start_run()
+                    keep_awake(stop_ping, cfg.ping, cfg.ping_every_s)
+                    with jobs_db.borrow() as db:
 
-                def save(part: DiscoveryResult) -> None:
-                    saved = db.upsert_many(part.postings)
-                    counts["read"] += len(saved)
-                    counts["new"] += sum(r.outcome == "new" and r.status == "found" for r in saved)
-                    clean = not (part.unreachable or part.skipped_by_policy)
-                    db.close_vanished(
-                        part.postings, clean=clean, after_runs=settings.close_after_clean_runs
-                    )
+                        def save(part: DiscoveryResult) -> None:
+                            tally.save(part, db.upsert_many)
+                            clean = not (part.unreachable or part.skipped_by_policy)
+                            try:
+                                db.close_vanished(
+                                    part.postings, clean=clean,
+                                    after_runs=settings.close_after_clean_runs,
+                                )  # fmt: skip
+                            except Exception:  # closing is housekeeping; never fail the run
+                                log.exception("closing vanished jobs failed")
+                            st.update_run(run_id, tally.as_dict())
 
-                result = discover_all(
-                    load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher, policy,
-                    load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
-                )  # fmt: skip
-            discover_state.last = {
-                **counts,
-                "unreachable": [f"{u.company}: {u.reason}" for u in result.unreachable],
-                "skipped": result.skipped_by_policy, "finished_at": time.time(),
-            }  # fmt: skip
-        except Exception as exc:  # report, never crash the server thread; saved portals stay
-            discover_state.last = {"error": f"{type(exc).__name__}: {exc}", **counts}
+                        discover_all(
+                            load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher,
+                            load_policy(), load_searches(REPO_ROOT / "searches.yaml"),
+                            on_portal_done=save,
+                        )  # fmt: skip
+                    st.finish_run(run_id, "done", "", tally.as_dict())
+                except Exception as exc:  # record every failure; saved portals stay saved
+                    held_elsewhere = isinstance(exc, LockHeldError)
+                    error = str(exc) if held_elsewhere else f"{type(exc).__name__}: {exc}"
+                    if not held_elsewhere:
+                        log.exception("discovery run failed")
+                    if run_id is None:
+                        st.failed_run(error)
+                    else:
+                        st.finish_run(run_id, "failed", error, tally.as_dict())
+        except Exception:  # the run state could not be written; "running" must still end
+            log.exception("could not record the discovery run")
         finally:
-            lock.release()
-            discover_state.running = False
+            stop_ping.set()
+            try:
+                if held:
+                    lock.release()
+            finally:
+                discover_state.running = False
+
+    def discover_view() -> dict[str, Any]:
+        with stores.borrow() as st:
+            runs = st.runs()
+        current = runs["current"]
+        running = discover_state.running or current is not None
+        return {"running": running, "last": runs["last"] or {}, "current": current}
 
     @app.post("/api/discover", dependencies=[Owner])
     def start_discover() -> dict[str, Any]:
         # Same shape as GET /api/discover, which the page reads.
         with discover_state.guard:
-            if discover_state.running:
-                return {"started": False, "running": True, "last": discover_state.last}
+            started = not discover_state.running
             discover_state.running = True
-        threading.Thread(target=_discover, daemon=True).start()
-        return {"started": True, "running": True, "last": discover_state.last}
+        if started:
+            threading.Thread(target=_discover, daemon=True).start()
+        return {"started": started, **discover_view()}
 
     @app.post("/api/cron/discover")
     def cron_discover(request: Request) -> dict[str, Any]:
@@ -274,15 +326,17 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.get("/api/discover", dependencies=[Owner])
     def discover_status() -> dict[str, Any]:
-        return {"running": discover_state.running, "last": discover_state.last}
+        return discover_view()
 
     @app.get("/api/searches", dependencies=[Owner])
     def searches() -> list[dict[str, str]]:
         return [s.model_dump() for s in load_searches(REPO_ROOT / "searches.yaml")]
 
     @app.post("/api/kill-switch/{state}", dependencies=[Owner])
-    def kill_switch(state: Literal["on", "off"]) -> dict[str, bool]:
-        (engage_kill_switch if state == "on" else clear_kill_switch)(settings.stop_file)
+    def kill_switch(state: Literal["on", "off"], st: ST) -> dict[str, bool]:
+        st.set_kill_switch(state == "on")
+        if state == "off":
+            clear_kill_switch(settings.stop_file)  # the local trigger too, or "off" would not stick
         return {"kill_switch": state == "on"}
 
     # --- profile ---
@@ -379,7 +433,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         if not body.url:
             raise HTTPException(400, "paste a job link or the job description text")
         host = (urlsplit(body.url).hostname or "").lower()
-        policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
+        policy = load_policy()
         got = fetch_posting(
             body.url, companies=load_companies(REPO_ROOT / "companies.yaml"),
             fetcher=cfg.fetcher, policy=policy, resolver=cfg.resolver,

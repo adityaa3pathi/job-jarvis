@@ -114,7 +114,34 @@ export type Job = {
   url: string | null;
 };
 
-export type LearnItem = { topic: string; why: string; resource: string; days: number };
+export type PortalCounts = { read: number; new: number; saved: number };
+
+/** One discovery run as stored on the server; counts fill in as each portal finishes. */
+export type DiscoverRun = {
+  id: number;
+  status: "running" | "done" | "failed";
+  started_at: number;
+  finished_at: number | null;
+  error: string;
+  read?: number;
+  new?: number;
+  saved?: number;
+  portals?: Record<string, PortalCounts>;
+  drop_reasons?: Record<string, number>;
+  unreachable?: string[];
+  skipped?: string[];
+  notes?: string[];
+};
+
+/** `last` is `{}` before the first run ever finishes. */
+export type DiscoverState = {
+  started?: boolean;
+  running: boolean;
+  current: DiscoverRun | null;
+  last: DiscoverRun | Record<string, never>;
+};
+
+export type LearnItem ={ topic: string; why: string; resource: string; days: number };
 
 export type Report = {
   role_title: string;
@@ -153,6 +180,20 @@ const IST = new Intl.DateTimeFormat("en-GB", {
   month: "2-digit",
   year: "numeric",
 });
+
+const IST_TIME = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Kolkata",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** Unix seconds as "dd-mm-yyyy HH:MM IST". */
+export function istDateTime(seconds: number | null): string {
+  if (!seconds) return "—";
+  const d = new Date(seconds * 1000);
+  return `${IST.format(d).replaceAll("/", "-")} ${IST_TIME.format(d)} IST`;
+}
 
 /** Dates show in IST as dd-mm-yyyy, the owner's format. */
 export function istDate(value: string | null): string {

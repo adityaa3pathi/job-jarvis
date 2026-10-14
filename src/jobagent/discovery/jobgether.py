@@ -14,6 +14,7 @@ MAX_PAGES = 4  # the API caps a page at 25 jobs
 
 class JobgetherAdapter(Adapter[BoardSearch]):
     portal = "jobgether"
+    page_size = 25
 
     def url_for(self, search: BoardSearch, page: int = 1) -> str:
         query = {"keyword": search.term, "locations": "india", "sort": "date", "limit": 25}
@@ -38,4 +39,8 @@ class JobgetherAdapter(Adapter[BoardSearch]):
                 posted_date=parse_date(job.get("postedAt")),
             )
 
-        return build_each(parse_json(text)["jobs"], build)
+        data = parse_json(text)
+        out = build_each(data["jobs"], build)
+        more = (data.get("pagination") or {}).get("hasMore")
+        out.more = more if isinstance(more, bool) else None
+        return out

@@ -1,14 +1,22 @@
-"""Storage for the web app: profile, coach sessions, chat, facts and resume builds."""
+"""Storage for the web app: profile, coach sessions, chat, facts, resume builds, discovery
+runs and the kill switch. Runs and the switch live here so they survive restarts (KTD5)."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import asdict
+import time
+from collections import Counter
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+from jobagent.db import UpsertResult
+from jobagent.discovery.base import DiscoveryResult
+from jobagent.lock import STALE_AFTER_S
+from jobagent.models import Posting
 from jobagent.resume.jd import JDProfile, SkillNeed
 from jobagent.sqlconn import connect
 
@@ -34,7 +42,65 @@ CREATE TABLE IF NOT EXISTS resume_builds (
   id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES coach_sessions(id),
   tex TEXT NOT NULL, report TEXT NOT NULL, at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+  id INTEGER PRIMARY KEY, started_at REAL NOT NULL, finished_at REAL,
+  status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', counts_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS flags (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+RunStatus = Literal["running", "done", "failed"]
+STALE_RUN_ERROR = "run did not finish (server restarted or stuck for 30 min)"
+
+
+@dataclass
+class RunTally:
+    """What one discovery run read, saved and dropped, per portal (R9)."""
+
+    portals: dict[str, dict[str, int]] = field(default_factory=dict)
+    drop_reasons: Counter[str] = field(default_factory=Counter)
+    unreachable: list[str] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    per_target: dict[str, int] = field(default_factory=dict)
+
+    def add(self, part: DiscoveryResult, saved: Sequence[UpsertResult] | None) -> None:
+        name = part.portal or (part.postings[0].source if part.postings else "other")
+        row = self.portals.setdefault(name, {"read": 0, "new": 0, "saved": 0})
+        row["read"] += len(part.postings)
+        for r in saved or []:
+            row["saved"] += 1
+            if r.outcome == "new" and r.status == "found":
+                row["new"] += 1
+            elif r.outcome == "new" and r.drop_reason:
+                self.drop_reasons[r.drop_reason] += 1
+        self.unreachable += [f"{u.company}: {u.reason}" for u in part.unreachable]
+        self.skipped += part.skipped_by_policy
+        self.notes += part.notes
+        self.per_target.update(part.per_target)
+
+    def save(
+        self, part: DiscoveryResult, upsert: Callable[[list[Posting]], list[UpsertResult]]
+    ) -> list[UpsertResult] | None:
+        """Save one portal and count it; a failed save is noted and never loses the others."""
+        try:
+            saved = upsert(part.postings)
+        except Exception as exc:
+            self.add(part, None)
+            self.notes.append(
+                f"{part.portal or 'a portal'}: save failed: {type(exc).__name__}: {exc}"
+            )
+            return None
+        self.add(part, saved)
+        return saved
+
+    def as_dict(self) -> dict[str, Any]:
+        totals = {k: sum(r[k] for r in self.portals.values()) for k in ("read", "new", "saved")}
+        return {
+            **totals, "portals": self.portals,
+            "drop_reasons": dict(sorted(self.drop_reasons.items())),
+            "unreachable": self.unreachable, "skipped": self.skipped, "notes": self.notes,
+            "per_target": self.per_target,
+        }  # fmt: skip
 
 
 def _now() -> str:
@@ -50,6 +116,29 @@ def profile_from_json(raw: str) -> JDProfile:
     data["skills"] = [SkillNeed(**s) for s in data["skills"]]
     data["implicit_skills"] = [SkillNeed(**s) for s in data["implicit_skills"]]
     return JDProfile(**data)
+
+
+def _run_view(row: sqlite3.Row, now: float) -> dict[str, Any]:
+    view = {
+        **json.loads(row["counts_json"]), "id": row["id"], "status": row["status"],
+        "started_at": row["started_at"], "finished_at": row["finished_at"], "error": row["error"],
+    }  # fmt: skip
+    if view["status"] == "running" and now - row["started_at"] >= STALE_AFTER_S:
+        view.update(status="failed", error=STALE_RUN_ERROR)
+    return view
+
+
+def kill_switch_check(path: Path | str) -> Callable[[], bool]:
+    """Reads the DB kill switch on its own connection, so any thread may call it."""
+
+    def check() -> bool:
+        st = Store(path, schema=False)
+        try:
+            return st.kill_switch()
+        finally:
+            st.close()
+
+    return check
 
 
 class Store:
@@ -159,3 +248,66 @@ class Store:
             "SELECT * FROM resume_builds WHERE id=?", (build_id,)
         ).fetchone()
         return row
+
+    # --- kill switch ---
+
+    def kill_switch(self) -> bool:
+        row = self.conn.execute("SELECT value FROM flags WHERE name='kill_switch'").fetchone()
+        return bool(row) and row["value"] == "1"
+
+    def set_kill_switch(self, on: bool) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO flags(name, value) VALUES ('kill_switch', ?)"
+                " ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+                ("1" if on else "0",),
+            )
+
+    # --- discovery runs ---
+
+    def start_run(self, started_at: float | None = None) -> int:
+        """Call while holding the run lock: any other "running" row is a leftover."""
+        now = time.time() if started_at is None else started_at
+        with self.conn:
+            self.conn.execute(
+                "UPDATE runs SET status='failed', error=?, finished_at=? WHERE status='running'",
+                (STALE_RUN_ERROR, now),
+            )
+            cur = self.conn.execute(
+                "INSERT INTO runs(started_at, status) VALUES (?, 'running')", (now,)
+            )
+        return int(cur.lastrowid or 0)
+
+    def update_run(self, run_id: int, counts: dict[str, Any]) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE runs SET counts_json=? WHERE id=?", (json.dumps(counts), run_id)
+            )
+
+    def finish_run(
+        self, run_id: int, status: RunStatus, error: str, counts: dict[str, Any]
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE runs SET status=?, error=?, finished_at=?, counts_json=? WHERE id=?",
+                (status, error, time.time(), json.dumps(counts), run_id),
+            )
+
+    def failed_run(self, error: str) -> None:
+        """A run that never started (e.g. the lock is held) is still shown to the owner."""
+        now = time.time()
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO runs(started_at, finished_at, status, error) VALUES (?,?,'failed',?)",
+                (now, now, error),
+            )
+
+    def runs(self, now: float | None = None) -> dict[str, dict[str, Any] | None]:
+        """The run still going, if any, and the last finished one. Refused starts (lock held)
+        may be newer than the live run, so both are picked from the latest few rows."""
+        now = time.time() if now is None else now
+        rows = self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 10").fetchall()
+        views = [_run_view(r, now) for r in rows]
+        current = next((v for v in views if v["status"] == "running"), None)
+        last = next((v for v in views if v["status"] != "running"), None)
+        return {"current": current, "last": last}

@@ -9,7 +9,7 @@ import pytest
 from jobagent.discovery import ADAPTERS, BOARD_ADAPTERS, discover_all
 from jobagent.discovery.base import BoardSearch, FetchResult, load_searches
 from jobagent.discovery.fetch import KNOWN_BOARD_HOSTS
-from jobagent.policy import Policy
+from jobagent.policy import Policy, engage_kill_switch
 from tests.test_discovery import FIX, GH, FakeFetcher, ok
 
 REPO = Path(__file__).parents[1]
@@ -239,3 +239,58 @@ def test_one_bad_record_is_skipped_with_a_note(policy: Policy) -> None:
     res = discover_all([], FakeFetcher({url: page}), policy, [search])
     assert len(res.postings) == 2 and res.unreachable == []
     assert res.notes == ["jobgether: ai engineer: 1 record skipped (ValidationError)"]
+
+
+# --- run report notes (R9) ---
+
+
+def test_a_target_with_no_postings_on_page_one_gets_a_check_layout_note(policy: Policy) -> None:
+    search = BoardSearch(board="bebee", term="python")
+    url = BOARD_ADAPTERS["bebee"].url_for(search)
+    page = FetchResult(200, "<html><body><main>No cards here</main></body></html>", url)
+    res = discover_all([], FakeFetcher({url: page}), policy, [search])
+    assert res.postings == [] and res.unreachable == []
+    assert res.notes == ["bebee: python: 0 jobs (check layout)"]
+    assert res.per_target == {"bebee: python": 0}
+
+
+def test_per_target_counts_are_kept(policy: Policy) -> None:
+    search = BoardSearch(board="jobgether", term="full stack developer")
+    url = BOARD_ADAPTERS["jobgether"].url_for(search)
+    page = FetchResult(200, (FIX / "boards" / "jobgether.json").read_text(), url)
+    res = discover_all([], FakeFetcher({url: page}), policy, [search])
+    assert res.per_target == {"jobgether: full stack developer": 2} and res.notes == []
+
+
+def _jobgether_pages(more: bool) -> tuple[BoardSearch, dict[str, FetchResult]]:
+    search = BoardSearch(board="jobgether", term="ai engineer")
+    job = json.loads((FIX / "boards" / "jobgether.json").read_text())["jobs"][0]
+    pages = {}
+    for n, url in enumerate(BOARD_ADAPTERS["jobgether"].page_urls(search)):
+        jobs = [{**job, "url": f"https://jobgether.com/offer/{n}-{i}"} for i in range(25)]
+        body = {"jobs": jobs, "pagination": {"page": n + 1, "limit": 25, "hasMore": more}}
+        pages[url] = FetchResult(200, json.dumps(body), url)
+    return search, pages
+
+
+@pytest.mark.parametrize("more", [True, False])
+def test_a_full_last_page_with_more_results_is_noted_as_truncated(
+    policy: Policy, more: bool
+) -> None:
+    search, pages = _jobgether_pages(more)
+    res = discover_all([], FakeFetcher(pages), policy, [search])
+    assert len(res.postings) == 100
+    assert res.notes == (["jobgether: ai engineer: truncated at 4 pages"] if more else [])
+
+
+def test_kill_switch_mid_run_is_noted(policy: Policy) -> None:
+    search, pages = _jobgether_pages(True)
+
+    class StopAfterFirst(FakeFetcher):
+        def get(self, url: str) -> FetchResult:
+            engage_kill_switch(policy.stop_file)
+            return super().get(url)
+
+    res = discover_all([], StopAfterFirst(pages), policy, [search])
+    assert len(res.postings) == 25
+    assert res.notes == ["jobgether: ai engineer: stopped by kill switch after page 1"]

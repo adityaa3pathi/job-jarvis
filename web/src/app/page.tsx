@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, istDate, post, type Job } from "@/lib/api";
+import {
+  api,
+  istDate,
+  istDateTime,
+  post,
+  type DiscoverRun,
+  type DiscoverState,
+  type Job,
+} from "@/lib/api";
 import { Button, ErrorNote } from "@/components/ui";
-
-type DiscoverState = {
-  running: boolean;
-  last: { read?: number; new?: number; unreachable?: string[]; error?: string };
-};
 
 const STATUSES = ["found", "applied", "interview", "rejected", "dropped"];
 
@@ -24,8 +27,20 @@ export default function JobsPage() {
   );
 
   useEffect(() => {
-    api<Job[]>(`/jobs?status=${status}`).then(setJobs, (e: Error) => setError(e.message));
+    let current = true; // a slower reply for an older filter must not replace this one
+    api<Job[]>(`/jobs?status=${status}`).then(
+      (js) => current && setJobs(js),
+      (e: Error) => current && setError(e.message),
+    );
+    return () => {
+      current = false;
+    };
   }, [status]);
+
+  // A run started elsewhere (cron, another tab) or before a reload still shows.
+  useEffect(() => {
+    api<DiscoverState>("/discover").then(setDiscover, (e: Error) => setError(e.message));
+  }, []);
 
   useEffect(() => {
     if (!discover?.running) return;
@@ -33,6 +48,7 @@ export default function JobsPage() {
       try {
         const s = await api<DiscoverState>("/discover");
         setDiscover(s);
+        setError(null);
         if (!s.running) load();
       } catch (e) {
         setError((e as Error).message);
@@ -40,6 +56,10 @@ export default function JobsPage() {
     }, 4000);
     return () => clearInterval(t);
   }, [discover?.running, load]);
+
+  // The last run's error is old news while a new run is going.
+  const last =
+    discover && !discover.running && "id" in discover.last ? (discover.last as DiscoverRun) : null;
 
   async function mark(id: number, next: string) {
     setError(null);
@@ -79,13 +99,17 @@ export default function JobsPage() {
           {discover?.running ? "Searching boards…" : "Find new jobs"}
         </Button>
       </div>
-      {discover && !discover.running && discover.last.read !== undefined && (
+      {discover?.running ? (
         <p className="text-sm text-zinc-600">
-          Read {discover.last.read} jobs, {discover.last.new} new.
-          {discover.last.unreachable?.length ? ` Could not reach: ${discover.last.unreachable.join(", ")}` : ""}
+          Searching boards
+          {discover.current
+            ? ` since ${istDateTime(discover.current.started_at)}: read ${discover.current.read ?? 0}, ${discover.current.new ?? 0} new so far.`
+            : "…"}
         </p>
+      ) : (
+        last && <RunSummary run={last} />
       )}
-      <ErrorNote message={error ?? discover?.last?.error ?? null} />
+      <ErrorNote message={error ?? (last?.error || null)} />
       {jobs === null ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : jobs.length === 0 ? (
@@ -132,6 +156,39 @@ export default function JobsPage() {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function RunSummary({ run }: { run: DiscoverRun }) {
+  const portals = Object.entries(run.portals ?? {});
+  const drops = Object.entries(run.drop_reasons ?? {});
+  const problems = [...(run.unreachable ?? []), ...(run.skipped ?? []), ...(run.notes ?? [])];
+  return (
+    <div className="text-sm text-zinc-600">
+      <p>
+        Last search {run.status === "failed" ? "failed" : "finished"} {istDateTime(run.finished_at ?? run.started_at)}
+        : read {run.read ?? 0} jobs, {run.new ?? 0} new
+        {drops.length ? `, dropped ${drops.map(([k, v]) => `${k} ${v}`).join(", ")}` : ""}.
+        {run.unreachable?.length ? ` Could not reach ${run.unreachable.length} site(s).` : ""}
+      </p>
+      {(portals.length > 0 || problems.length > 0) && (
+        <details className="mt-1">
+          <summary className="cursor-pointer">Details per site</summary>
+          <ul className="mt-1 list-disc pl-5">
+            {portals.map(([name, c]) => (
+              <li key={`p-${name}`}>
+                {name}: read {c.read}, new {c.new}, saved {c.saved}
+              </li>
+            ))}
+            {problems.map((line, i) => (
+              <li key={`n-${i}`} className="text-amber-700">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

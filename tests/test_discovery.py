@@ -499,3 +499,34 @@ def test_cli_discover_saves_each_portal_as_it_finishes(
         cli.discover(settings)
     assert saved_sources(settings.db_path) == {"hirist"}
     assert not settings.lock_file.exists()
+
+
+def test_cli_discover_reports_counts_drops_and_notes_and_records_the_run(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    from jobagent.discovery.base import Unreachable
+    from jobagent.web.store import Store
+
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        part = StubAdapter("hirist").discover(GH, None, None)
+        part.postings.append(
+            Posting(source="hirist", url="https://hirist.example/s", company="Zed",
+                    title="AI Engineer", experience_text="12+ years")
+        )  # fmt: skip
+        part.portal, part.notes = "hirist", ["bebee: python: 0 jobs (check layout)"]
+        part.unreachable = [Unreachable("Acme", "u", "http 403")]
+        on_portal_done(part)
+        return part
+
+    monkeypatch.setattr("jobagent.cli.discover_all", fake_discover_all)
+    assert cli.discover(settings) == 0
+    out = capsys.readouterr().out
+    assert "PORTAL  hirist: read 2, new 1, saved 2" in out
+    assert "DROPPED  too_senior=1" in out
+    assert "UNREACHABLE  Acme: http 403" in out
+    assert "NOTE  bebee: python: 0 jobs (check layout)" in out
+    assert "read 2 postings, 1 new" in out
+    st = Store(settings.db_path)
+    last = st.runs()["last"]
+    st.close()
+    assert last is not None and last["status"] == "done" and last["read"] == 2

@@ -62,8 +62,10 @@ def discover_all(
             (company.name, partial(adapter.discover, company, fetcher, policy))
         )
 
-    def run_portal(tasks: list[tuple[str, Callable[[], DiscoveryResult]]]) -> DiscoveryResult:
-        out = DiscoveryResult()
+    def run_portal(
+        portal: str, tasks: list[tuple[str, Callable[[], DiscoveryResult]]]
+    ) -> DiscoveryResult:
+        out = DiscoveryResult(portal=portal)
         for name, task in tasks:
             try:
                 out.extend(task())
@@ -75,7 +77,7 @@ def discover_all(
     if not jobs:
         return result
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-        futures = [pool.submit(run_portal, tasks) for tasks in jobs.values()]
+        futures = [pool.submit(run_portal, name, tasks) for name, tasks in jobs.items()]
         parts: dict[Future[DiscoveryResult], DiscoveryResult] = {}
         for future in as_completed(futures):
             parts[future] = future.result()
