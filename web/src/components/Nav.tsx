@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { post } from "@/lib/api";
 
 const LINKS = [
@@ -13,6 +14,7 @@ const LINKS = [
 
 export function Nav() {
   const path = usePathname();
+  const [error, setError] = useState<string | null>(null);
   if (path === "/login") return null;
   return (
     <header className="border-b border-zinc-200 bg-white">
@@ -30,11 +32,21 @@ export function Nav() {
             </Link>
           );
         })}
+        {error && (
+          <span role="alert" className="ml-auto text-sm text-red-800">
+            Log out failed: {error}
+          </span>
+        )}
         <button
-          className="ml-auto text-sm text-zinc-500 hover:text-zinc-900"
+          className={`${error ? "" : "ml-auto "}text-sm text-zinc-500 hover:text-zinc-900`}
           onClick={async () => {
-            await post("/logout");
-            window.location.href = "/login";
+            setError(null);
+            try {
+              await post("/logout");
+              window.location.href = "/login";
+            } catch (e) {
+              setError((e as Error).message);
+            }
           }}
         >
           Log out

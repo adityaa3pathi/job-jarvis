@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { api, istDate, post, runTask, type Session } from "@/lib/api";
+import { api, istDate, post, runTask, TaskAborted, type Session } from "@/lib/api";
 import { ReportView } from "@/components/ReportView";
 import { Button, Card, ErrorNote } from "@/components/ui";
 
@@ -13,7 +13,15 @@ function CoachSession() {
   const [busy, setBusy] = useState<"chat" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastReport, setLastReport] = useState<string | null>(null);
+  const [factError, setFactError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const alive = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    alive.current = ctl;
+    return () => ctl.abort();
+  }, []);
 
   useEffect(() => {
     api<Session>(`/coach/${id}`).then(setSession, (e) => setError(e.message));
@@ -28,10 +36,11 @@ function CoachSession() {
     setBusy("chat");
     setError(null);
     try {
-      await runTask(`/coach/${id}/chat`, { message });
+      await runTask(`/coach/${id}/chat`, { message }, alive.current?.signal);
       setMessage("");
       setSession(await api<Session>(`/coach/${id}`));
     } catch (err) {
+      if (err instanceof TaskAborted) return;
       setError((err as Error).message);
     } finally {
       setBusy(null);
@@ -39,18 +48,28 @@ function CoachSession() {
   }
 
   async function confirm(factId: number, confirmed: boolean) {
-    await post(`/coach/${id}/facts/${factId}`, { confirmed });
-    setSession(await api<Session>(`/coach/${id}`));
+    setFactError(null);
+    try {
+      await post(`/coach/${id}/facts/${factId}`, { confirmed });
+      setSession(await api<Session>(`/coach/${id}`));
+    } catch (err) {
+      setFactError((err as Error).message);
+    }
   }
 
   async function buildResume() {
     setBusy("resume");
     setError(null);
     try {
-      const out = await runTask<{ build_id: number; report: string }>(`/coach/${id}/resume`);
+      const out = await runTask<{ build_id: number; report: string }>(
+        `/coach/${id}/resume`,
+        undefined,
+        alive.current?.signal,
+      );
       setLastReport(out.report);
       setSession(await api<Session>(`/coach/${id}`));
     } catch (err) {
+      if (err instanceof TaskAborted) return;
       setError((err as Error).message);
     } finally {
       setBusy(null);
@@ -118,6 +137,9 @@ function CoachSession() {
               </li>
             ))}
           </ul>
+          <div className="mt-2">
+            <ErrorNote message={factError} />
+          </div>
         </Card>
       )}
 

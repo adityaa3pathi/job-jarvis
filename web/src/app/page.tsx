@@ -42,8 +42,13 @@ export default function JobsPage() {
   }, [discover?.running, load]);
 
   async function mark(id: number, next: string) {
-    await post(`/jobs/${id}/mark`, { status: next });
-    setJobs((js) => js?.filter((j) => j.id !== id) ?? null);
+    setError(null);
+    try {
+      await post(`/jobs/${id}/mark`, { status: next });
+      setJobs((js) => js?.filter((j) => j.id !== id) ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   return (

@@ -17,31 +17,34 @@ export default function ProfilePage() {
     setSummary(p.summary);
   }
 
-  async function load() {
-    show(await api<Profile>("/profile"));
+  /** A .tex upload must not replace unsaved text in the summary box. */
+  async function load(keepSummary: boolean) {
+    const p = await api<Profile>("/profile");
+    if (keepSummary) setProfile(p);
+    else show(p);
   }
 
   useEffect(() => {
     api<Profile>("/profile").then(show, (e: Error) => setError(e.message));
   }, []);
 
-  async function run(action: () => Promise<unknown>, done: string) {
+  async function run(action: () => Promise<unknown>, done: string, keepSummary = false) {
     setError(null);
     setNote(null);
     try {
       await action();
-      await load();
+      await load(keepSummary);
       setNote(done);
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
-  function upload(path: string, file: File | undefined, done: string) {
+  function upload(path: string, file: File | undefined, done: string, keepSummary = false) {
     if (!file) return;
     const form = new FormData();
     form.append("file", file);
-    run(() => api(path, { method: "POST", body: form }), done);
+    run(() => api(path, { method: "POST", body: form }), done, keepSummary);
   }
 
   return (
@@ -88,7 +91,7 @@ export default function ProfilePage() {
           accept=".tex"
           aria-label="Upload base resume"
           className="block text-sm"
-          onChange={(e) => upload("/profile/tex", e.target.files?.[0], "Base resume saved.")}
+          onChange={(e) => upload("/profile/tex", e.target.files?.[0], "Base resume saved.", true)}
         />
       </Card>
     </div>

@@ -44,14 +44,58 @@ export const post = <T>(path: string, data?: unknown) =>
 
 type TaskState<T> = { status: "running" | "done" | "failed"; result: T | null; error: string; code: number };
 
-/** Start a slow AI step, then poll until it finishes; AI calls outlast proxy timeouts. */
-export async function runTask<T>(path: string, data?: unknown): Promise<T> {
+const POLL_MS = 1500;
+const MAX_POLL_MISSES = 5;
+
+/** Thrown when the caller stopped waiting (page left); callers should stay silent. */
+export class TaskAborted extends Error {}
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new TaskAborted("stopped"));
+    const t = setTimeout(done, ms);
+    function done() {
+      signal?.removeEventListener("abort", stop);
+      resolve();
+    }
+    function stop() {
+      clearTimeout(t);
+      reject(new TaskAborted("stopped"));
+    }
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+}
+
+/** Network errors and 5xx may clear up; 401, 404 and task failures will not. */
+function transient(e: unknown): boolean {
+  if (e instanceof ApiError) return e.status >= 500;
+  return e instanceof TypeError;
+}
+
+/** Start a slow AI step, then poll the same task until it finishes; AI calls outlast proxy timeouts.
+ * Failed polls are retried a few times, never by starting a second task. Abort `signal` on unmount. */
+export async function runTask<T>(path: string, data?: unknown, signal?: AbortSignal): Promise<T> {
   const { task_id } = await post<{ task_id: string }>(path, data);
+  let misses = 0;
   for (;;) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const state = await api<TaskState<T>>(`/tasks/${task_id}`);
+    await wait(POLL_MS * (misses + 1), signal);
+    let state: TaskState<T>;
+    try {
+      state = await api<TaskState<T>>(`/tasks/${task_id}`, { signal });
+      misses = 0;
+    } catch (e) {
+      if (signal?.aborted) throw new TaskAborted("stopped");
+      if (!transient(e)) throw e;
+      if (++misses >= MAX_POLL_MISSES) {
+        throw new ApiError(
+          e instanceof ApiError ? e.status : 0,
+          `Lost contact while waiting (${(e as Error).message}). It may still finish; reload before trying again.`,
+        );
+      }
+      continue;
+    }
     if (state.status === "done") return state.result as T;
-    if (state.status === "failed") throw new ApiError(state.code, state.error);
+    if (state.status === "failed") throw new ApiError(state.code, state.error || "the task failed");
   }
 }
 
