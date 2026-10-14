@@ -113,7 +113,7 @@ def test_wellfound_reads_apollo_state_and_maps_company(policy: Policy) -> None:
     first, second = run("wellfound", "software engineer", "wellfound.html", policy)
     assert first.url == "https://wellfound.com/jobs/4824775-software-engineer"
     assert (first.title, first.company) == ("Software Engineer", "Insight Consultants")
-    assert first.location == "Bangalore Urban, Remote"
+    assert first.location == "Bangalore Urban / Remote"
     assert first.experience_text == "1+ years"
     assert first.posted_date == date(2026, 10, 12)
     assert second.description == "Build APIs & agents."

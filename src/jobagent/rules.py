@@ -6,7 +6,7 @@ import re
 
 from jobagent.models import DropReason, Posting
 
-RULES_VERSION = 2  # bump when a rule change could undrop or drop stored rows
+RULES_VERSION = 3  # bump when a rule change could undrop or drop stored rows
 
 INDIA_MARKERS = (
     "india", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "delhi",
@@ -20,7 +20,7 @@ FOREIGN_MARKERS = (
     "united states", "usa", "us", "u.s.", "canada", "united kingdom", "uk", "london", "germany",
     "berlin", "france", "paris", "netherlands", "amsterdam", "ireland", "dublin", "spain",
     "singapore", "dubai", "uae", "saudi", "australia", "sydney", "new zealand", "europe",
-    "emea", "apac", "latam", "brazil", "mexico", "japan", "tokyo", "china", "philippines",
+    "emea", "latam", "brazil", "mexico", "japan", "tokyo", "china", "philippines",
     "new york", "san francisco", "california", "texas", "seattle", "toronto", "poland", "israel",
 )  # fmt: skip
 # Fee words alone are normal fintech text; spam asks the applicant to pay the employer.
@@ -63,6 +63,16 @@ _COMPANY_HISTORY = re.compile(
     r"|track record|legacy)\b",
     re.IGNORECASE,
 )
+OPEN_REGIONS = (
+    "worldwide", "global", "globally", "anywhere in the world", "south asia", "asia", "apac",
+    "asia pacific", "asia-pacific",
+)  # fmt: skip
+_LIST_SPLIT = re.compile(r"\s*[/|;]\s*|\s+or\s+")
+_IN_CODE = re.compile(r"^remote\s*\((?:[^)]*;\s*)?in(?:\s*;[^)]*)?\)$")
+_BARE_REMOTE = frozenset(
+    ("remote", "full remote", "fully remote", "100% remote", "remote anywhere", "anywhere")
+)
+_REMOTE = re.compile(r"remote|anywhere", re.IGNORECASE)
 _US_STATES = frozenset(
     ("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN",
      "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH",
@@ -132,11 +142,21 @@ def _us_state_suffix(location: str) -> bool:
     return False
 
 
+def _open_to_india(location: str) -> bool:
+    """Remote the owner can take from India: an open region, or a bare "Remote" list item."""
+    items = [i.strip().lower() for i in _LIST_SPLIT.split(location)]
+    if "in" in items or any(_IN_CODE.search(i) for i in items):
+        return True  # YC writes India as a bare "IN" list item or inside "Remote (SG; IN)"
+    if any(i in _BARE_REMOTE for i in items):
+        return True
+    return bool(_REMOTE.search(location)) and _has_marker(location, OPEN_REGIONS)
+
+
 def outside_india(location: str) -> bool:
     if not location.strip():
         return False
     foreign = _has_marker(location, FOREIGN_MARKERS) or _us_state_suffix(location)
-    return foreign and not _has_marker(location, INDIA_MARKERS)
+    return foreign and not _has_marker(location, INDIA_MARKERS) and not _open_to_india(location)
 
 
 def check_hard_rules(posting: Posting, max_years_asked: int = 5) -> DropReason | None:

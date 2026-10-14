@@ -109,6 +109,13 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
         ({"title": "Lead Engineer", "experience_text": ""}, "too_senior"),
         ({"location": "Austin, TX"}, "outside_india"),
         ({"location": "Indianapolis, IN"}, "outside_india"),
+        # Remote only inside another country is still out of reach.
+        ({"location": "San Francisco (Remote)"}, "outside_india"),
+        ({"location": "Remote, United States"}, "outside_india"),
+        ({"location": "San Francisco, CA, US / Remote (US)"}, "outside_india"),
+        ({"location": "Anywhere, United States (Full Remote)"}, "outside_india"),
+        ({"location": "Remote - Canada"}, "outside_india"),
+        ({"location": "Fort Wayne, IN / Remote (US)"}, "outside_india"),
     ],
 )
 def test_hard_rules(kw: dict[str, object], reason: str) -> None:
@@ -120,6 +127,16 @@ def test_hard_rules(kw: dict[str, object], reason: str) -> None:
     [
         {"experience_text": "3-7 yrs overall, asks 1-3 yrs hands-on"},
         {"location": "Remote (India)"},
+        # Remote that India can take: open regions, plain "Remote", YC's "IN" code.
+        {"location": "APAC (Full Remote)"},
+        {"location": "Europe, Asia, South Asia, Middle East (Full Remote)"},
+        {"location": "Remote - Worldwide"},
+        {"location": "Global (Remote)"},
+        {"location": "San Francisco, CA, US / Remote"},
+        {"location": "Boston / Remote"},
+        {"location": "San Francisco, CA, US / IN"},
+        {"location": "SG / HK / IN / US / Remote (SG; HK; IN; US)"},
+        {"location": "APAC"},
         {"location": ""},
         {"experience_text": "0-1 yr"},
         {"description": "Everyone gets 5 paid days off to volunteer."},
@@ -163,7 +180,7 @@ def test_years_parse() -> None:
 
 
 def test_rules_version() -> None:
-    assert RULES_VERSION == 2
+    assert RULES_VERSION == 3
 
 
 def test_normalisers() -> None:

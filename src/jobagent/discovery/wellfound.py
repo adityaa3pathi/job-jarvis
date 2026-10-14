@@ -43,9 +43,12 @@ class WellfoundAdapter(Adapter[BoardSearch]):
             key, job = item
             if not key.startswith("JobListingSearchResult:"):
                 return None
-            places = list(job.get("locationNames") or [])
+            location = ", ".join(job.get("locationNames") or [])
             if job.get("remote"):
-                places.append("Remote")
+                # A separate list item, so the India rule can tell open remote from limited.
+                limits = "; ".join(job.get("acceptedRemoteLocationNames") or [])
+                remote = f"Remote ({limits})" if limits else "Remote"
+                location = f"{location} / {remote}" if location else remote
             low = job.get("yearsExperienceMin")
             started = job.get("liveStartAt")
             return Posting(
@@ -53,7 +56,7 @@ class WellfoundAdapter(Adapter[BoardSearch]):
                 url=f"https://wellfound.com/jobs/{job['id']}-{job.get('slug') or 'job'}",
                 company=company_of.get(key, ""),
                 title=job["title"],
-                location=", ".join(places),
+                location=location,
                 experience_text=f"{low}+ years" if low is not None else "",
                 posted_date=datetime.fromtimestamp(started, UTC).date() if started else None,
                 description=strip_hidden_html(html.unescape(job.get("description") or "")),
