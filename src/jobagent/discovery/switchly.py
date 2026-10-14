@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
-from jobagent.discovery.base import Adapter, BoardSearch
+from jobagent.discovery.base import Adapter, BoardSearch, build_each
 from jobagent.models import Posting
 
 
@@ -16,19 +16,17 @@ class SwitchlyAdapter(Adapter[BoardSearch]):
         return f"https://www.switchly.in/{search.slug}-jobs"
 
     def parse(self, text: str, search: BoardSearch) -> list[Posting]:
-        postings = []
-        for link in BeautifulSoup(text, "html.parser").select('a[href^="/j/"]'):
+        def build(link: Tag) -> Posting | None:
             lines = [p.get_text(" ", strip=True) for p in link.find_all("p")]
             if len(lines) < 2:
-                continue
+                return None
             company, _, location = lines[1].partition(" · ")
-            postings.append(
-                Posting(
-                    source=self.portal,
-                    url=f"https://www.switchly.in{link.get('href')}",
-                    company=company.strip(),
-                    title=lines[0],
-                    location=location.strip(),
-                )
+            return Posting(
+                source=self.portal,
+                url=f"https://www.switchly.in{link.get('href')}",
+                company=company.strip(),
+                title=lines[0],
+                location=location.strip(),
             )
-        return postings
+
+        return build_each(BeautifulSoup(text, "html.parser").select('a[href^="/j/"]'), build)

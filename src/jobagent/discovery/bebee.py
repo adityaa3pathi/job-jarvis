@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
-from jobagent.discovery.base import Adapter, BoardSearch
+from jobagent.discovery.base import Adapter, BoardSearch, build_each
 from jobagent.models import Posting
 
 
@@ -16,20 +16,19 @@ class BebeeAdapter(Adapter[BoardSearch]):
         return f"https://bebee.com/in/jobs/role/{search.slug}"
 
     def parse(self, text: str, search: BoardSearch) -> list[Posting]:
-        postings = []
-        for card in BeautifulSoup(text, "html.parser").select('article[data-voice-job="card"]'):
+        def build(card: Tag) -> Posting | None:
             path = str(card.get("data-voice-url") or "")
             if not path.startswith("/"):
-                continue
+                return None
             snippet = card.select_one("p.line-clamp-2")
-            postings.append(
-                Posting(
-                    source=self.portal,
-                    url=f"https://bebee.com{path}",
-                    company=str(card.get("data-voice-company") or ""),
-                    title=str(card.get("data-voice-title") or ""),
-                    location=str(card.get("data-voice-location") or ""),
-                    description=snippet.get_text(" ", strip=True) if snippet else "",
-                )
+            return Posting(
+                source=self.portal,
+                url=f"https://bebee.com{path}",
+                company=str(card.get("data-voice-company") or ""),
+                title=str(card.get("data-voice-title") or ""),
+                location=str(card.get("data-voice-location") or ""),
+                description=snippet.get_text(" ", strip=True) if snippet else "",
             )
-        return postings
+
+        cards = BeautifulSoup(text, "html.parser").select('article[data-voice-job="card"]')
+        return build_each(cards, build)

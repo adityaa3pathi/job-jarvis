@@ -9,7 +9,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from jobagent.discovery.base import Adapter, BoardSearch
+from jobagent.discovery.base import Adapter, BoardSearch, build_each
 from jobagent.models import Posting
 from jobagent.sanitize import strip_hidden_html
 
@@ -38,25 +38,25 @@ class WellfoundAdapter(Adapter[BoardSearch]):
             for key, startup in data.items() if key.startswith("StartupResult:")
             for ref in startup.get("highlightedJobListings") or []
         }  # fmt: skip
-        postings = []
-        for key, job in data.items():
+
+        def build(item: tuple[str, Any]) -> Posting | None:
+            key, job = item
             if not key.startswith("JobListingSearchResult:"):
-                continue
+                return None
             places = list(job.get("locationNames") or [])
             if job.get("remote"):
                 places.append("Remote")
             low = job.get("yearsExperienceMin")
             started = job.get("liveStartAt")
-            postings.append(
-                Posting(
-                    source=self.portal,
-                    url=f"https://wellfound.com/jobs/{job['id']}-{job.get('slug') or 'job'}",
-                    company=company_of.get(key, ""),
-                    title=job["title"],
-                    location=", ".join(places),
-                    experience_text=f"{low}+ years" if low is not None else "",
-                    posted_date=datetime.fromtimestamp(started, UTC).date() if started else None,
-                    description=strip_hidden_html(html.unescape(job.get("description") or "")),
-                )
+            return Posting(
+                source=self.portal,
+                url=f"https://wellfound.com/jobs/{job['id']}-{job.get('slug') or 'job'}",
+                company=company_of.get(key, ""),
+                title=job["title"],
+                location=", ".join(places),
+                experience_text=f"{low}+ years" if low is not None else "",
+                posted_date=datetime.fromtimestamp(started, UTC).date() if started else None,
+                description=strip_hidden_html(html.unescape(job.get("description") or "")),
             )
-        return postings
+
+        return build_each(data.items(), build)

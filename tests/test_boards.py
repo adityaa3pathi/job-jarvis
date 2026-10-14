@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from jobagent.discovery import BOARD_ADAPTERS, discover_all
+from jobagent.discovery import ADAPTERS, BOARD_ADAPTERS, discover_all
 from jobagent.discovery.base import BoardSearch, FetchResult, load_searches
 from jobagent.discovery.fetch import KNOWN_BOARD_HOSTS
 from jobagent.policy import Policy
-from tests.test_discovery import FIX, FakeFetcher
+from tests.test_discovery import FIX, GH, FakeFetcher, ok
 
 REPO = Path(__file__).parents[1]
 
@@ -175,3 +176,66 @@ def test_a_real_wall_page_is_still_reported(policy: Policy) -> None:
     wall = FetchResult(200, "<html><title>Just a moment...</title></html>", url)
     res = discover_all([], FakeFetcher({url: wall}), policy, [search])
     assert [u.reason for u in res.unreachable] == ["bot wall or captcha page"]
+
+
+def test_empty_cutshort_queries_do_not_lose_greenhouse_jobs(policy: Policy) -> None:
+    search = BoardSearch(board="cutshort", term="fullstack developer")
+    url = BOARD_ADAPTERS["cutshort"].url_for(search)
+    data = {"props": {"pageProps": {"dehydratedState": {"queries": []}}}}
+    page = f'<script id="__NEXT_DATA__">{json.dumps(data)}</script>'
+    gh_url = ADAPTERS["greenhouse"].url_for(GH)
+    f = FakeFetcher(
+        {url: FetchResult(200, page, url), gh_url: ok("api/greenhouse_acme.json", gh_url)}
+    )
+    res = discover_all([GH], f, policy, [search])
+    assert len(res.postings) == 2 and {p.source for p in res.postings} == {"greenhouse"}
+    assert [u.company for u in res.unreachable] == ["cutshort: fullstack developer"]
+
+
+@pytest.mark.parametrize("error", [IndexError("list index out of range"), RuntimeError("boom")])
+def test_any_parse_error_is_unreachable_and_other_portals_still_return(
+    policy: Policy, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    def broken(*_: object) -> list:  # type: ignore[type-arg]
+        raise error
+
+    monkeypatch.setattr(BOARD_ADAPTERS["hirist"], "parse", broken)
+    hirist = BoardSearch(board="hirist", term="ai engineer")
+    h_url = BOARD_ADAPTERS["hirist"].url_for(hirist)
+    jg = BoardSearch(board="jobgether", term="full stack developer")
+    jg_url = BOARD_ADAPTERS["jobgether"].url_for(jg)
+    f = FakeFetcher(
+        {
+            h_url: FetchResult(200, '{"data": []}', h_url),
+            jg_url: FetchResult(200, (FIX / "boards" / "jobgether.json").read_text(), jg_url),
+        }
+    )
+    res = discover_all([], f, policy, [hirist, jg])
+    assert len(res.postings) == 2
+    (bad,) = res.unreachable
+    assert bad.company == "hirist: ai engineer" and type(error).__name__ in bad.reason
+
+
+def test_a_task_that_raises_is_unreachable_not_a_crash(
+    policy: Policy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(BOARD_ADAPTERS["hirist"], "discover", broken)
+    hirist = BoardSearch(board="hirist", term="ai engineer")
+    res = discover_all([], FakeFetcher({}), policy, [hirist])
+    assert [(u.company, u.reason) for u in res.unreachable] == [
+        ("hirist: ai engineer", "RuntimeError: boom")
+    ]
+
+
+def test_one_bad_record_is_skipped_with_a_note(policy: Policy) -> None:
+    good = json.loads((FIX / "boards" / "jobgether.json").read_text())["jobs"]
+    bad = {**good[0], "url": "https://jobgether.com/offer/x", "company": None}
+    search = BoardSearch(board="jobgether", term="ai engineer")
+    url = BOARD_ADAPTERS["jobgether"].url_for(search)
+    page = FetchResult(200, json.dumps({"jobs": [good[0], bad, good[1]]}), url)
+    res = discover_all([], FakeFetcher({url: page}), policy, [search])
+    assert len(res.postings) == 2 and res.unreachable == []
+    assert res.notes == ["jobgether: ai engineer: 1 record skipped (ValidationError)"]

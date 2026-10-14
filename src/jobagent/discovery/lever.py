@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
-from jobagent.discovery.base import Adapter, Company, parse_json
+from jobagent.discovery.base import Adapter, Company, build_each, parse_json
 from jobagent.models import Posting
 
 
@@ -16,20 +17,20 @@ class LeverAdapter(Adapter[Company]):
         return f"https://{host}/v0/postings/{company.token}?mode=json"
 
     def parse(self, text: str, company: Company) -> list[Posting]:
-        postings = []
-        for job in parse_json(text):
+        def build(job: dict[str, Any]) -> Posting:
             cats = job.get("categories") or {}
             created = job.get("createdAt")
-            posted = datetime.fromtimestamp(created / 1000, UTC).date() if created else None
-            postings.append(
-                Posting(
-                    source=self.portal,
-                    url=job["hostedUrl"],
-                    company=company.name,
-                    title=job["text"],
-                    location=cats.get("location") or ", ".join(cats.get("allLocations") or []),
-                    posted_date=posted,
-                    description=job.get("descriptionPlain") or "",
-                )
+            return Posting(
+                source=self.portal,
+                url=job["hostedUrl"],
+                company=company.name,
+                title=job["text"],
+                location=cats.get("location") or ", ".join(cats.get("allLocations") or []),
+                posted_date=datetime.fromtimestamp(created / 1000, UTC).date() if created else None,
+                description=job.get("descriptionPlain") or "",
             )
-        return postings
+
+        jobs = parse_json(text)
+        if not isinstance(jobs, list):
+            raise ValueError("expected a list of postings")
+        return build_each(jobs, build)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -97,11 +99,41 @@ class DiscoveryResult:
     postings: list[Posting] = field(default_factory=list)
     unreachable: list[Unreachable] = field(default_factory=list)
     skipped_by_policy: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     def extend(self, other: DiscoveryResult) -> None:
         self.postings += other.postings
         self.unreachable += other.unreachable
         self.skipped_by_policy += other.skipped_by_policy
+        self.notes += other.notes
+
+
+class Postings(list[Posting]):
+    """One page's postings, plus the error names of records that could not be read."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.skipped: Counter[str] = Counter()
+
+
+def build_each[R](records: Iterable[R], build: Callable[[R], Posting | None]) -> Postings:
+    """One bad record is counted and skipped; it never loses the rest of the page (R1)."""
+    out = Postings()
+    for record in records:
+        try:
+            posting = build(record)
+        except Exception as exc:
+            out.skipped[type(exc).__name__] += 1
+            continue
+        if posting is not None:
+            out.append(posting)
+    return out
+
+
+def skipped_note(name: str, skipped: Counter[str]) -> str:
+    total = sum(skipped.values())
+    noun = "record" if total == 1 else "records"
+    return f"{name}: {total} {noun} skipped ({', '.join(sorted(skipped))})"
 
 
 def http_error(result: FetchResult) -> str | None:
@@ -154,6 +186,7 @@ class Adapter[T: Target]:
             out.skipped_by_policy.append(f"{target.name}: {decision.reason}")
             return out
         seen: set[str] = set()
+        skipped: Counter[str] = Counter()
         for page, url in enumerate(self.page_urls(target)):
             if page and not policy.begin(self.portal, "discover").allowed:
                 break
@@ -172,12 +205,13 @@ class Adapter[T: Target]:
             # Wall markers count only on pages with no jobs; real pages may say "captcha" in CSS.
             try:
                 parsed = self.parse(result.text, target)
-            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            except Exception as exc:  # any layout change costs this target, never the run
                 reason = blocked_reason(result, expect_json=self.expect_json)
-                out.unreachable.append(
-                    Unreachable(target.name, url, reason or f"unparseable: {exc}")
-                )
+                unparseable = f"unparseable: {type(exc).__name__}: {exc}"
+                out.unreachable.append(Unreachable(target.name, url, reason or unparseable))
                 break
+            if isinstance(parsed, Postings):
+                skipped += parsed.skipped
             if not parsed and (reason := blocked_reason(result, expect_json=self.expect_json)):
                 out.unreachable.append(Unreachable(target.name, url, reason))
                 break
@@ -188,6 +222,8 @@ class Adapter[T: Target]:
                 continue
             seen.update(p.url for p in fresh)
             out.postings += fresh
+        if skipped:
+            out.notes.append(skipped_note(target.name, skipped))
         return out
 
 

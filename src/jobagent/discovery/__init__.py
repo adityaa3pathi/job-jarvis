@@ -13,6 +13,7 @@ from jobagent.discovery.base import (
     Company,
     DiscoveryResult,
     Fetcher,
+    Unreachable,
 )
 from jobagent.discovery.bebee import BebeeAdapter
 from jobagent.discovery.cutshort import CutshortAdapter
@@ -46,20 +47,25 @@ def discover_all(
     searches: list[BoardSearch] | None = None,
 ) -> DiscoveryResult:
     """Each portal runs in its own thread, so one site's pauses never hold up another's."""
-    jobs: dict[str, list[Callable[[], DiscoveryResult]]] = {}
+    jobs: dict[str, list[tuple[str, Callable[[], DiscoveryResult]]]] = {}
     for company in companies:
         adapter = ADAPTERS[company.ats]
         jobs.setdefault(adapter.portal, []).append(
-            partial(adapter.discover, company, fetcher, policy)
+            (company.name, partial(adapter.discover, company, fetcher, policy))
         )
     for search in searches or []:
         board = BOARD_ADAPTERS[search.board]
-        jobs.setdefault(board.portal, []).append(partial(board.discover, search, fetcher, policy))
+        jobs.setdefault(board.portal, []).append(
+            (search.name, partial(board.discover, search, fetcher, policy))
+        )
 
-    def run_portal(tasks: list[Callable[[], DiscoveryResult]]) -> DiscoveryResult:
+    def run_portal(tasks: list[tuple[str, Callable[[], DiscoveryResult]]]) -> DiscoveryResult:
         out = DiscoveryResult()
-        for task in tasks:
-            out.extend(task())
+        for name, task in tasks:
+            try:
+                out.extend(task())
+            except Exception as exc:  # pool.map must never raise, or every portal's jobs are lost
+                out.unreachable.append(Unreachable(name, "", f"{type(exc).__name__}: {exc}"))
         return out
 
     result = DiscoveryResult()

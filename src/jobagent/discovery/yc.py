@@ -7,7 +7,7 @@ import json
 import re
 from typing import Any
 
-from jobagent.discovery.base import Adapter, BoardSearch
+from jobagent.discovery.base import Adapter, BoardSearch, build_each
 from jobagent.models import Posting
 
 _PAGE_DATA = re.compile(r'data-page="([^"]+)"')
@@ -27,8 +27,9 @@ class YcAdapter(Adapter[BoardSearch]):
         if match is None:
             raise ValueError("no page data on YC jobs page")
         props: dict[str, Any] = json.loads(html.unescape(match.group(1)))["props"]
-        return [
-            Posting(
+
+        def build(job: dict[str, Any]) -> Posting:
+            return Posting(
                 source=self.portal,
                 url=f"https://www.ycombinator.com{job['url']}",
                 company=job.get("companyName") or "",
@@ -37,5 +38,5 @@ class YcAdapter(Adapter[BoardSearch]):
                 experience_text=job.get("minExperience") or "",
                 stack_words=list(job.get("skills") or []),
             )
-            for job in props["jobPostings"]
-        ]
+
+        return build_each(props["jobPostings"], build)
