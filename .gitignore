@@ -24,3 +24,4 @@ output/
 
 # local skill scratch space
 .context/
+.claude/
