@@ -7,6 +7,16 @@ from typing import Any
 
 from jobagent.discovery.base import Adapter, Company, build_each, parse_json
 from jobagent.models import Posting
+from jobagent.sanitize import strip_hidden_html
+
+
+def full_description(job: dict[str, Any]) -> str:
+    """Requirement lists often hold the years asked, so the rules must see them."""
+    parts = [job.get("descriptionPlain") or ""]
+    for item in job.get("lists") or []:
+        parts += [item.get("text") or "", strip_hidden_html(item.get("content") or "")]
+    parts.append(job.get("additionalPlain") or "")
+    return "\n".join(p.strip() for p in parts if p and p.strip())
 
 
 class LeverAdapter(Adapter[Company]):
@@ -27,7 +37,7 @@ class LeverAdapter(Adapter[Company]):
                 title=job["text"],
                 location=cats.get("location") or ", ".join(cats.get("allLocations") or []),
                 posted_date=datetime.fromtimestamp(created / 1000, UTC).date() if created else None,
-                description=job.get("descriptionPlain") or "",
+                description=full_description(job),
             )
 
         jobs = parse_json(text)

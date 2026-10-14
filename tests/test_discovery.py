@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from jobagent.discovery.base import Company, FetchResult, load_companies
 from jobagent.discovery.fetch import MAX_BYTES, FetchRefused, HttpFetcher, guard_url
 from jobagent.discovery.manual import fetch_posting
 from jobagent.policy import Policy
+from jobagent.rules import check_hard_rules
 from jobagent.sanitize import clean_posting_text, strip_hidden_html
 from tests.conftest import FakeClock
 
@@ -63,6 +65,22 @@ def test_lever_parses_and_uses_eu_host(policy: Policy) -> None:
     assert (p.title, p.location, p.source) == ("Full Stack Developer", "Pune", "lever")
     assert p.url.startswith("https://jobs.lever.co/beta/")
     assert p.posted_date is not None
+
+
+def test_lever_reads_lists_and_additional(policy: Policy) -> None:
+    co = Company(name="Docsumo", ats="lever", token="docsumo")
+    url = ADAPTERS["lever"].url_for(co)
+    res = discover_all([co], FakeFetcher({url: ok("api/lever_docsumo.json", url)}), policy)
+    ae, bdr = res.postings
+    assert "5+ years of experience in sales" in ae.description
+    assert "Requirements" in ae.description and "<li>" not in ae.description
+    assert (
+        "5+ years"
+        not in json.loads((FIX / "api/lever_docsumo.json").read_text())[0]["descriptionPlain"]
+    )
+    assert check_hard_rules(ae) == "too_senior"
+    assert "What we are looking for" in bdr.description
+    assert check_hard_rules(bdr) != "too_senior"
 
 
 def test_ashby_skips_unlisted(policy: Policy) -> None:
