@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import threading
 import time
@@ -336,13 +337,71 @@ def test_a_run_left_running_too_long_reads_as_failed(web: TestClient, settings: 
 def test_a_recent_run_from_another_process_shows_as_running(
     web: TestClient, settings: Settings
 ) -> None:
+    from jobagent.lock import RunLock
     from jobagent.web.store import Store
 
     st = Store(settings.db_path)
     st.start_run()
     st.close()
-    state = web.get("/api/discover").json()
+    with RunLock(settings.lock_file, pid=os.getppid()):  # a live process that is not us
+        state = web.get("/api/discover").json()
     assert state["running"] is True and state["current"]["status"] == "running"
+
+
+def test_a_leftover_running_row_without_a_live_lock_does_not_block(
+    web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    st.start_run()  # the server restarted mid-run: the row says running, no lock is held
+    st.close()
+    assert web.get("/api/discover").json()["running"] is False
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: DiscoveryResult())
+    assert web.post("/api/discover").json()["started"]
+    assert wait_discover(web)["last"]["status"] == "done"
+
+
+def test_a_failed_run_start_releases_the_lock(
+    web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    def broken(*_: Any, **__: Any) -> int:
+        raise OSError("turso hiccup")
+
+    monkeypatch.setattr(Store, "start_run", broken)
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran"))
+    assert web.post("/api/discover").json()["started"]
+    assert wait_discover(web)["last"]["status"] == "failed"
+    assert not settings.lock_file.exists()
+
+
+def test_a_failed_progress_write_never_loses_later_portals(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    real, calls = Store.update_run, []
+
+    def flaky(self: Store, *a: Any) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("turso hiccup")
+        real(self, *a)
+
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        on_portal_done(portal("greenhouse", 1))
+        on_portal_done(portal("hirist", 2))
+        return DiscoveryResult()
+
+    monkeypatch.setattr(Store, "update_run", flaky)
+    monkeypatch.setattr("jobagent.web.app.discover_all", fake_discover_all)
+    web.post("/api/discover")
+    last = wait_discover(web)["last"]
+    assert (last["status"], last["read"]) == ("done", 3)
+    assert any("OSError: turso hiccup" in n for n in last["notes"])
+    assert {j["source"] for j in web.get("/api/jobs").json()} == {"hirist", "greenhouse"}
 
 
 def test_kill_switch_survives_a_restart_and_reaches_the_run(
@@ -525,3 +584,45 @@ def test_cron_can_read_discovery_state_with_its_token(settings: Settings) -> Non
     ok = c.get("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
     assert ok.status_code == 200
     assert ok.json() == {"running": False, "last": {}, "current": None}
+
+
+def test_a_task_past_its_deadline_writes_nothing_afterwards(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from jobagent.resume.coach import ChatTurn
+    from jobagent.web.store import Store
+
+    c = client_for(settings, task_deadline_s=0.3)
+    c.post("/api/login", json={"password": PASSWORD})
+    c.put("/api/profile/summary", json={"summary": SUMMARY})
+    c.post("/api/profile/tex", files={"file": ("r.tex", SAMPLE.encode(), "text/plain")})
+    session_id = start_session(c)
+    release, woke = threading.Event(), threading.Event()
+
+    def slow[T](value: T) -> Any:
+        def call(*_: Any, **__: Any) -> T:
+            release.wait(5)
+            woke.set()
+            return value
+
+        return call
+
+    outcome = SimpleNamespace(tailored=SimpleNamespace(latex="x"), report="r")
+    monkeypatch.setattr(
+        "jobagent.web.app.reply", slow(ChatTurn(reply="late", new_facts=["late fact"]))
+    )
+    monkeypatch.setattr("jobagent.web.app.run_tailor", slow(outcome))
+    chat = done(c, c.post(f"/api/coach/{session_id}/chat", json={"message": "hi"}))
+    build = done(c, c.post(f"/api/coach/{session_id}/resume"))
+    assert chat["code"] == build["code"] == 504
+    release.set()
+    woke.wait(5)
+    time.sleep(0.3)  # let the woken workers try to write
+    st = Store(settings.db_path)
+    try:
+        assert st.messages(session_id) == [] and st.facts(session_id) == []
+        assert st.builds(session_id) == []
+    finally:
+        st.close()

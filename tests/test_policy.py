@@ -13,7 +13,7 @@ from jobagent import cli
 from jobagent.config import REPO_ROOT, ConfigError, Settings, ensure_data_dir, load_secrets
 from jobagent.lock import STALE_AFTER_S, LockHeldError, RunLock
 from jobagent.policy import Policy, PolicyDenied, engage_kill_switch
-from jobagent.web.store import kill_switch_check
+from jobagent.runs import kill_switch_check
 from tests.conftest import FakeClock
 
 

@@ -102,6 +102,7 @@ class DiscoveryResult:
     notes: list[str] = field(default_factory=list)
     per_target: dict[str, int] = field(default_factory=dict)
     portal: str = ""
+    partial: bool = False  # some target read incompletely, so missing jobs prove nothing
 
     def extend(self, other: DiscoveryResult) -> None:
         self.postings += other.postings
@@ -110,6 +111,7 @@ class DiscoveryResult:
         self.notes += other.notes
         self.per_target.update(other.per_target)
         self.portal = self.portal or other.portal
+        self.partial = self.partial or other.partial
 
 
 class Postings(list[Posting]):
@@ -199,6 +201,7 @@ class Adapter[T: Target]:
             if page and not (decision := policy.begin(self.portal, "discover")).allowed:
                 why = "by kill switch" if policy.stopped() else f"({decision.reason})"
                 out.notes.append(f"{target.name}: stopped {why} after page {page}")
+                out.partial = True
                 break
             try:
                 result = fetcher.get(url)
@@ -241,6 +244,7 @@ class Adapter[T: Target]:
             out.notes.append(f"{target.name}: 0 jobs (check layout)")
         if truncated:
             out.notes.append(f"{target.name}: truncated at {len(urls)} pages")
+        out.partial = out.partial or bool(skipped or truncated or not out.postings)
         out.per_target[target.name] = len(out.postings)
         return out
 

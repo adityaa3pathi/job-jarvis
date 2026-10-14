@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
-from jobagent.db import Database
+from jobagent.db import OWNER, Database
 from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
@@ -40,8 +40,9 @@ from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
+from jobagent.runs import RunTally, save_portal
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
-from jobagent.web.store import RunTally, Store, profile_from_json, profile_to_json
+from jobagent.web.store import Store, profile_from_json, profile_to_json
 from jobagent.web.uploads import MAX_UPLOAD_BYTES, UploadError, doc_to_text
 
 MAX_LOGIN_FAILURES = 5
@@ -101,6 +102,15 @@ class _Task:
     result: dict[str, Any] | None = None
     error: str = ""
     code: int = 0
+
+
+class _Abandoned(Exception):
+    """The task passed its deadline; the owner was told to retry, so it must not write."""
+
+
+def _still_wanted(cancelled: threading.Event) -> None:
+    if cancelled.is_set():
+        raise _Abandoned
 
 
 @dataclass
@@ -269,7 +279,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
     def mark(job_id: int, body: Mark, db: DB) -> dict[str, bool]:
         if db.get_job(job_id) is None:
             raise HTTPException(404, "no such job")
-        db.set_status(job_id, body.status, "owner")
+        db.set_status(job_id, body.status, OWNER)
         return {"ok": True}
 
     def _discover() -> None:
@@ -279,21 +289,16 @@ def create_app(cfg: WebConfig) -> FastAPI:
             with stores.borrow() as st:
                 try:
                     lock.acquire()
-                    held, run_id = True, st.start_run()
+                    held = True
+                    run_id = this_run = st.start_run()
                     keep_awake(stop_ping, cfg.ping, cfg.ping_every_s)
                     with jobs_db.borrow() as db:
 
                         def save(part: DiscoveryResult) -> None:
-                            tally.save(part, db.upsert_many)
-                            clean = not (part.unreachable or part.skipped_by_policy)
-                            try:
-                                db.close_vanished(
-                                    part.postings, clean=clean,
-                                    after_runs=settings.close_after_clean_runs,
-                                )  # fmt: skip
-                            except Exception:  # closing is housekeeping; never fail the run
-                                log.exception("closing vanished jobs failed")
-                            st.update_run(run_id, tally.as_dict())
+                            save_portal(
+                                part, db=db, st=st, run_id=this_run, tally=tally,
+                                after_runs=settings.close_after_clean_runs,
+                            )  # fmt: skip
 
                         discover_all(
                             load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher,
@@ -323,9 +328,16 @@ def create_app(cfg: WebConfig) -> FastAPI:
     def discover_view() -> dict[str, Any]:
         with stores.borrow() as st:
             runs = st.runs()
+        # A "running" row counts only while another live process holds the lock;
+        # after a restart the row is a leftover and must not block a new run.
         current = runs["current"]
-        running = discover_state.running or current is not None
-        return {"running": running, "last": runs["last"] or {}, "current": current}
+        elsewhere = current is not None and RunLock(settings.lock_file).held_elsewhere()
+        running = discover_state.running or elsewhere
+        return {
+            "running": running,
+            "last": runs["last"] or {},
+            "current": current if running else None,
+        }
 
     @app.post("/api/discover", dependencies=[Owner])
     def start_discover() -> dict[str, Any]:
@@ -422,8 +434,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 task.result, task.code, task.error = result, code, error
                 task.status = "failed" if error else "done"
 
-    def submit(work: Callable[[Store], dict[str, Any]]) -> dict[str, str]:
-        task_id, task = secrets.token_hex(8), _Task()
+    def submit(work: Callable[[Store, threading.Event], dict[str, Any]]) -> dict[str, str]:
+        task_id, task, cancelled = secrets.token_hex(8), _Task(), threading.Event()
         with tasks_lock:
             finished = [k for k, v in tasks.items() if v.status != "running"]
             for key in finished[: max(0, len(tasks) - MAX_TASKS)]:
@@ -433,7 +445,9 @@ def create_app(cfg: WebConfig) -> FastAPI:
         def body() -> None:
             try:
                 with stores.borrow() as st:
-                    finish(task, 0, "", work(st))
+                    finish(task, 0, "", work(st, cancelled))
+            except _Abandoned:
+                log.warning("background task %s ended after its deadline; nothing saved", task_id)
             except HTTPException as exc:
                 finish(task, exc.status_code, str(exc.detail) or "the task failed")
             except Exception as exc:  # report, never crash the worker
@@ -446,6 +460,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
             worker.start()
             worker.join(cfg.task_deadline_s)
             if worker.is_alive():
+                cancelled.set()
                 log.error("background task %s passed its deadline", task_id)
                 minutes = max(1, round(cfg.task_deadline_s / 60))
                 finish(task, 504, f"took longer than {minutes} min; stopped waiting. Try again.")
@@ -507,7 +522,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
             raise HTTPException(400, "add your career summary on the Profile page first")
         jd_text, title, company = _jd_from(body)
 
-        def work(st: Store) -> dict[str, Any]:
+        def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
                 thinker = cfg.thinker()
                 profile = analyze_jd(jd_text, thinker)
@@ -515,6 +530,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 report = build_report(profile, match_profile(profile, cards), summary, thinker)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
+            _still_wanted(cancelled)
             session_id = st.add_session(
                 url=body.url, title=title or profile.role_title, company=company,
                 jd_text=jd_text, profile=profile_to_json(profile), report=report.to_json(),
@@ -537,14 +553,17 @@ def create_app(cfg: WebConfig) -> FastAPI:
         history = [Message(m["role"], m["text"]) for m in st.messages(session_id)]
         report, summary = CoachReport.from_json(row["report_json"]), st.profile()["summary"]
 
-        def work(st: Store) -> dict[str, Any]:
+        def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
                 turn = reply(report, summary, history, body.message, cfg.thinker())
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
+            _still_wanted(cancelled)
             st.add_message(session_id, "user", body.message)
+            _still_wanted(cancelled)
             st.add_message(session_id, "coach", turn.reply)
             for fact in turn.new_facts[:5]:
+                _still_wanted(cancelled)
                 st.add_fact(session_id, fact.strip()[:500])
             return {"session_id": session_id}
 
@@ -566,7 +585,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         cards = cards_from_summary("\n".join([prof["summary"], *confirmed]))
         jd_text, profile = row["jd_text"], profile_from_json(row["profile_json"])
 
-        def work(st: Store) -> dict[str, Any]:
+        def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
                 outcome = run_tailor(
                     jd_text, prof["base_tex"], cards, cfg.thinker(),
@@ -574,6 +593,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 )  # fmt: skip
             except (LatexError, LLMError) as exc:
                 raise HTTPException(502, f"resume build failed: {exc}") from exc
+            _still_wanted(cancelled)
             build_id = st.add_build(session_id, outcome.tailored.latex, outcome.report)
             return {"session_id": session_id, "build_id": build_id, "report": outcome.report}
 
@@ -608,11 +628,12 @@ def create_app(cfg: WebConfig) -> FastAPI:
         """Tectonic can take two minutes, longer than a proxy waits, so the page polls."""
         tex = _build(st, build_id)["tex"]
 
-        def work(_: Store) -> dict[str, Any]:
+        def work(_: Store, cancelled: threading.Event) -> dict[str, Any]:
             with pdfs_lock:
                 ready = build_id in pdfs
             if not ready:
                 pdf = compile_pdf(tex)
+                _still_wanted(cancelled)
                 with pdfs_lock:
                     pdfs[build_id] = pdf
                     for old in list(pdfs)[: max(0, len(pdfs) - MAX_PDFS)]:

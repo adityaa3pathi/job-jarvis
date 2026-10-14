@@ -48,18 +48,24 @@ class RunLock:
             started = self.path.stat().st_mtime
         return pid, started
 
-    def acquire(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def live_holder(self) -> int | None:
+        """The pid of a live, recent holder; None when the lock is free or left over."""
         try:
             holder, started = self._holder()
         except FileNotFoundError:
-            pass
-        else:
-            # Containers reuse low pids, so a live pid alone does not prove a run holds it.
-            fresh = self.clock() - started < self.max_age_s
-            if holder > 0 and _alive(holder) and fresh:
-                raise LockHeldError(f"another run holds the lock (pid {holder})")
-            self.path.unlink(missing_ok=True)
+            return None
+        # Containers reuse low pids, so a live pid alone does not prove a run holds it.
+        fresh = self.clock() - started < self.max_age_s
+        return holder if holder > 0 and _alive(holder) and fresh else None
+
+    def held_elsewhere(self) -> bool:
+        return self.live_holder() not in (None, self.pid)
+
+    def acquire(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if (holder := self.live_holder()) is not None:
+            raise LockHeldError(f"another run holds the lock (pid {holder})")
+        self.path.unlink(missing_ok=True)
         try:
             fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError as exc:

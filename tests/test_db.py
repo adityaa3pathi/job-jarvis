@@ -159,8 +159,10 @@ def run(db: Database, seen: list[Posting], *, clean: bool = True) -> int:
     return db.close_vanished(seen, clean=clean, after_runs=3)
 
 
-def ats(i: int) -> Posting:
-    return posting(i, source="greenhouse", url=f"https://job-boards.greenhouse.io/acme/jobs/{i}")
+def ats(i: int, company: str = "Acme") -> Posting:
+    token = company.lower()
+    return posting(i, source="greenhouse", company=company, title=f"AI Engineer {i}",
+                   url=f"https://job-boards.greenhouse.io/{token}/jobs/{i}")  # fmt: skip
 
 
 def test_job_missing_from_three_clean_runs_is_closed() -> None:
@@ -239,3 +241,55 @@ def test_search_board_jobs_are_never_auto_closed() -> None:
     for _ in range(4):
         assert run(db, board[:1]) == 0
     assert db.get_job(goes.job_id)["status"] == "found"
+
+
+def test_a_company_missing_from_the_part_is_never_swept() -> None:
+    # Bolt's board came back empty (or Bolt left companies.yaml): that proves nothing.
+    db = Database(":memory:")
+    _, bolt = db.upsert_many([ats(1), ats(2, "Bolt")])
+    for _ in range(4):
+        assert run(db, [ats(1)]) == 0
+    job = db.get_job(bolt.job_id)
+    assert (job["status"], job["missed_runs"]) == ("found", 0)
+
+
+def test_a_job_closed_by_the_sweep_reopens_when_seen_again() -> None:
+    db = Database(":memory:")
+    _, goes = db.upsert_many([ats(1), ats(2)])
+    for _ in range(3):
+        run(db, [ats(1)])
+    assert db.get_job(goes.job_id)["status"] == "closed"
+    assert db.upsert_posting(ats(2)).status == "found"
+    assert db.get_job(goes.job_id)["status"] == "found"
+    last = db.events(goes.job_id)[-1]
+    assert (last["old_status"], last["new_status"]) == ("closed", "found")
+
+
+def test_a_job_the_source_closed_is_not_reopened() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting())
+    assert db.upsert_posting(posting(closed=True)).status == "closed"
+    assert db.upsert_posting(posting()).status == "closed"
+    assert db.get_job(saved.job_id)["status"] == "closed"
+
+
+def test_owner_back_to_list_survives_recheck_and_richer_text() -> None:
+    db = Database(":memory:")
+    senior = posting(experience_text="10-12 yrs")
+    saved = db.upsert_posting(senior)
+    assert saved.status == "dropped"
+    db.set_status(saved.job_id, "found", "owner")  # "Back to list"; drop_reason stays
+    db.recheck()
+    assert db.get_job(saved.job_id)["status"] == "found"
+    db.upsert_posting(posting(experience_text="10-12 yrs", description="Lead a big team."))
+    assert db.get_job(saved.job_id)["status"] == "found"
+
+
+def test_owner_drop_is_not_undone_by_recheck() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting(description="Unpaid leave on request."))
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET status='dropped', drop_reason='unpaid', rules_version=1")
+    db.set_status(saved.job_id, "dropped", "owner")
+    db.recheck()
+    assert db.get_job(saved.job_id)["status"] == "dropped"

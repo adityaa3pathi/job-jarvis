@@ -39,7 +39,11 @@ export default function JobsPage() {
 
   // A run started elsewhere (cron, another tab) or before a reload still shows.
   useEffect(() => {
-    api<DiscoverState>("/discover").then(setDiscover, (e: Error) => setError(e.message));
+    // A click's newer state may land first; this older reply must not overwrite it.
+    api<DiscoverState>("/discover").then(
+      (s) => setDiscover((prev) => prev ?? s),
+      (e: Error) => setError(e.message),
+    );
   }, []);
 
   useEffect(() => {

@@ -14,7 +14,8 @@ from jobagent.discovery.fetch import HttpFetcher
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume import cli_tailor
-from jobagent.web.store import RunTally, Store, kill_switch_check
+from jobagent.runs import RunTally, kill_switch_check, save_portal
+from jobagent.web.store import Store
 
 
 def discover(settings: Settings) -> int:
@@ -35,17 +36,15 @@ def discover(settings: Settings) -> int:
         tally, run_id = RunTally(), st.start_run()
 
         def save(part: DiscoveryResult) -> None:
-            saved = tally.save(part, db.upsert_many)
-            st.update_run(run_id, tally.as_dict())
+            saved = save_portal(
+                part, db=db, st=st, run_id=run_id, tally=tally,
+                after_runs=settings.close_after_clean_runs,
+            )  # fmt: skip
             for p, r in zip(part.postings, saved or [], strict=False):
                 if r.outcome == "new" and r.status == "found":
                     out.write(
                         f"NEW  {p.source:9} {p.title} | {p.company} | {p.location} | {p.url}\n"
                     )
-            clean = not (part.unreachable or part.skipped_by_policy)
-            db.close_vanished(
-                part.postings, clean=clean, after_runs=settings.close_after_clean_runs
-            )
 
         try:
             discover_all(

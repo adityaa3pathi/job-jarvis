@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, at TEXT NOT NULL,
   old_status TEXT, new_status TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS events_job ON events(job_id);
 """
 
 # Added after the first release; old tables get them by ALTER TABLE.
@@ -52,6 +54,13 @@ NEW_COLUMNS = {
 }
 # Drops the hard rules made, so a rule fix may undo them; owner and ranker drops stay.
 RULE_REASONS = frozenset(get_args(DropReason)) - {"no_track"}
+OWNER = "owner"  # the event note of a status the owner set; rules never undo it
+SWEPT = re.compile(r"gone from \d+ clean runs")
+# The note of a job's latest status event; merge events only repeat the status.
+LAST_NOTE = (
+    "(SELECT e.note FROM events e WHERE e.job_id=j.id AND e.note NOT LIKE 'merged job %'"
+    " ORDER BY e.id DESC LIMIT 1)"
+)
 
 Outcome = Literal["new", "merged", "updated", "duplicate"]
 
@@ -148,15 +157,16 @@ class Database:
         for chunk in _chunks(sorted({norm for _, norm, _ in keyed})):
             marks = ",".join("?" * len(chunk))
             for row in self.conn.execute(
-                "SELECT l.norm_url AS link_url, j.* FROM jobs j JOIN job_links l ON l.job_id=j.id"
-                f" WHERE l.norm_url IN ({marks})", chunk,
+                f"SELECT l.norm_url AS link_url, {LAST_NOTE} AS last_note, j.* FROM jobs j"
+                f" JOIN job_links l ON l.job_id=j.id WHERE l.norm_url IN ({marks})", chunk,
             ).fetchall():  # fmt: skip
                 by_url[row["link_url"]] = dict(row)
         by_key: dict[str, _Job] = {}
         keys = sorted({key for _, norm, key in keyed if norm not in by_url})
         for chunk in _chunks(keys):
             marks = ",".join("?" * len(chunk))
-            sql = f"SELECT * FROM jobs WHERE key IN ({marks}) ORDER BY id"
+            sql = f"SELECT {LAST_NOTE} AS last_note, j.* FROM jobs j WHERE key IN ({marks})"
+            sql += " ORDER BY id"
             for row in self.conn.execute(sql, chunk).fetchall():
                 by_key.setdefault(row["key"], dict(row))
         return by_url, by_key
@@ -230,7 +240,8 @@ class Database:
     def _refresh(
         self, row: _Job, posting: Posting, seen: str, bumps: list[tuple[str, int]]
     ) -> UpsertResult:
-        """A known job seen again: take richer text, re-run stale or new rules, honour closed."""
+        """A known job seen again: take richer text, re-run stale or new rules, honour closed,
+        reopen a job the sweep closed. A status the owner set is never re-judged."""
         new_date = posting.posted_date.isoformat() if posting.posted_date else None
         reposted = bool(new_date and new_date != row["posted_date"])
         changes: dict[str, object] = {"seen_date": seen}
@@ -247,7 +258,11 @@ class Database:
             and row["rules_version"] < RULES_VERSION
         )  # fmt: skip
         events: list[tuple[str, str, str]] = []
-        if stale or (richer and row["status"] == "found"):
+        if row["status"] == "closed" and SWEPT.fullmatch(row.get("last_note") or ""):
+            changes["status"] = "found"
+            events.append(("closed", "found", "seen again"))
+        found = changes.get("status", row["status"]) == "found"
+        if row.get("last_note") != OWNER and (stale or (richer and found)):
             verdict, event = self._judge(row | changes)
             changes |= verdict
             events += [event] if event else []
@@ -263,24 +278,31 @@ class Database:
             self.conn.execute(f"UPDATE jobs SET {sets} WHERE id=?", (*changes.values(), row["id"]))
         for old, new, note in events:
             self._event(row["id"], old, new, note)
+            row["last_note"] = note
         row.update(changes)
         outcome: Outcome = "updated" if reposted else "duplicate"
         return UpsertResult(row["id"], outcome, row["status"], row["drop_reason"])
 
     def close_vanished(self, postings: Sequence[Posting], *, clean: bool, after_runs: int) -> int:
         """Close found jobs that a portal's clean reads missed `after_runs` times in a row (R8).
-        Upserts reset the count; an errored or empty read proves nothing, so counts for none."""
+        Upserts reset the count; an errored or empty read proves nothing, so counts for none.
+        Only companies that listed jobs in this read are swept: an absent board proves nothing."""
         # Only company boards list every open job; a search board shows a window of results.
         postings = [p for p in postings if p.source in FULL_LIST_SOURCES]
         if not clean or not postings:
             return 0
         seen = {normalize_url(p.url) for p in postings}
-        portals = sorted({p.source for p in postings})
-        rows = self.conn.execute(
-            "SELECT j.id, j.missed_runs, l.norm_url FROM jobs j JOIN job_links l ON l.job_id=j.id"
-            f" WHERE j.status='found' AND j.source IN ({','.join('?' * len(portals))})",
-            portals,
-        ).fetchall()
+        boards = {(p.source, normalize_company(p.company)) for p in postings}
+        portals = sorted({source for source, _ in boards})
+        rows = [
+            row for row in self.conn.execute(
+                "SELECT j.id, j.source, j.company, j.missed_runs, l.norm_url FROM jobs j"
+                " JOIN job_links l ON l.job_id=j.id"
+                f" WHERE j.status='found' AND j.source IN ({','.join('?' * len(portals))})",
+                portals,
+            ).fetchall()
+            if (row["source"], normalize_company(row["company"])) in boards
+        ]  # fmt: skip
         hit = {row["id"] for row in rows if row["norm_url"] in seen}
         missed = {row["id"]: row["missed_runs"] + 1 for row in rows if row["id"] not in hit}
         closing = [job_id for job_id, n in missed.items() if n >= after_runs]
@@ -304,11 +326,15 @@ class Database:
             merged = self._rekey()
             self._renorm_applications()
             recheckable = RULE_REASONS - {"closed"}  # no fresh source says it reopened
+            sql = f"SELECT {LAST_NOTE} AS last_note, j.* FROM jobs j ORDER BY id"
             rows = [
                 dict(row)
-                for row in self.conn.execute("SELECT * FROM jobs ORDER BY id").fetchall()
-                if row["status"] == "found"
-                or (row["status"] == "dropped" and row["drop_reason"] in recheckable)
+                for row in self.conn.execute(sql).fetchall()
+                if row["last_note"] != OWNER
+                and (
+                    row["status"] == "found"
+                    or (row["status"] == "dropped" and row["drop_reason"] in recheckable)
+                )
             ]
             updates: list[tuple[object, ...]] = []
             events: list[tuple[int, str, str, str]] = []
