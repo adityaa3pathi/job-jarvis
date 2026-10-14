@@ -36,7 +36,7 @@ def test_jobs_store_reads_rows_by_name_and_position(tmp_path: Path) -> None:
     assert db.upsert_posting(posting).outcome == "duplicate"
     db.set_status(saved.job_id, "applied", "owner")
     (row,) = db.list_jobs(status="applied")
-    assert (row["company"], row["url"]) == ("Acme", "https://hirist.tech/j/a-1")
+    assert (row["company"], row["url"]) == ("Acme", "https://www.hirist.tech/j/a-1")
     assert dict(row)["title"] == "Full Stack Developer"
     db.close()
 

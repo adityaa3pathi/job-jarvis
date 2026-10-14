@@ -195,7 +195,7 @@ def test_owner_can_mark_a_job(web: TestClient, settings: Settings) -> None:
                 title="Full Stack Developer", location="Bengaluru")
     ).job_id  # fmt: skip
     db.close()
-    assert web.get("/api/jobs").json()[0]["url"] == "https://hirist.tech/j/x-1"
+    assert web.get("/api/jobs").json()[0]["url"] == "https://www.hirist.tech/j/x-1"
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "applied"}).status_code == 200
     assert web.get("/api/jobs?status=applied").json()[0]["id"] == job_id
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "hacked"}).status_code == 422

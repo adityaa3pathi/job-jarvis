@@ -110,7 +110,7 @@ class Database:
     def _add_link(self, job_id: int, posting: Posting) -> None:
         self.conn.execute(
             "INSERT OR IGNORE INTO job_links(job_id, source, url, norm_url) VALUES (?,?,?,?)",
-            (job_id, posting.source, normalize_url(posting.url), normalize_url(posting.url)),
+            (job_id, posting.source, posting.url, normalize_url(posting.url)),
         )
 
     def _update_existing(self, row: sqlite3.Row, posting: Posting, seen: str) -> UpsertResult:
