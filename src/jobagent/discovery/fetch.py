@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+import time
 from collections.abc import Callable, Iterable
 from urllib.parse import urljoin, urlsplit
 
@@ -82,10 +83,15 @@ class HttpFetcher:
         transport: httpx.BaseTransport | None = None,
         timeout_s: float = 15.0,
         max_bytes: int = MAX_BYTES,
+        deadline_s: float = 60.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.allowed_hosts = frozenset(h.lower() for h in allowed_hosts)
         self.resolver = resolver
         self.max_bytes = max_bytes
+        self.timeout_s = timeout_s
+        self.deadline_s = deadline_s
+        self.clock = clock
         self._client = httpx.Client(
             transport=transport,
             timeout=timeout_s,
@@ -94,21 +100,38 @@ class HttpFetcher:
         )
 
     def get(self, url: str) -> FetchResult:
+        # timeout_s bounds each read; deadline_s bounds the whole request incl. redirects
+        end = self.clock() + self.deadline_s
         current = url
         for _ in range(MAX_REDIRECTS + 1):
             guard_url(current, self.allowed_hosts, self.resolver)
-            with self._client.stream("GET", current) as response:
+            timeout = min(self.timeout_s, self._remaining(end))
+            with self._client.stream("GET", current, timeout=timeout) as response:
+                self._remaining(end)
                 if response.is_redirect:
                     location = response.headers.get("location")
                     if not location:
                         raise FetchRefused("redirect without location")
                     current = urljoin(current, location)
                     continue
-                body = bytearray()
-                for chunk in response.iter_bytes():
-                    body += chunk
-                    if len(body) > self.max_bytes:
-                        raise FetchRefused("response too large")
-                text = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+                text = self._read_text(response, end)
                 return FetchResult(response.status_code, text, current)
         raise FetchRefused("too many redirects")
+
+    def _remaining(self, end: float) -> float:
+        left = end - self.clock()
+        if left <= 0:
+            raise FetchRefused(f"request took longer than {self.deadline_s:g} s")
+        return left
+
+    def _read_text(self, response: httpx.Response, end: float) -> str:
+        # One growing buffer decoded in place: peak is about body + text, not 3x body
+        body = bytearray()
+        for chunk in response.iter_bytes():
+            body += chunk
+            if len(body) > self.max_bytes:
+                raise FetchRefused("response too large")
+            self._remaining(end)
+        text = body.decode(response.encoding or "utf-8", errors="replace")
+        del body
+        return text

@@ -262,6 +262,87 @@ def test_good_fetch_follows_one_safe_redirect() -> None:
     assert (res.status, res.text) == (200, "hello")
 
 
+class _Drip(httpx.SyncByteStream):
+    """Yields chunks while advancing a fake clock, like a slow server."""
+
+    def __init__(self, chunks: list[bytes], clock: FakeClock, step_s: float = 0.0) -> None:
+        self.chunks, self.clock, self.step_s = chunks, clock, step_s
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        for chunk in self.chunks:
+            self.clock.sleep(self.step_s)
+            yield chunk
+
+
+def test_dripping_body_hits_total_deadline(clock: FakeClock) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=_Drip([b"x"] * 10, clock, step_s=1.0))
+
+    f = HttpFetcher(
+        transport=httpx.MockTransport(handler), resolver=PUBLIC, deadline_s=3, clock=clock
+    )
+    with pytest.raises(FetchRefused, match="longer than 3 s"):
+        f.get("https://jobs.lever.co/a")
+    assert clock.slept == [1.0] * 3  # stopped reading as soon as the deadline was reached
+
+
+def test_slow_redirects_hit_total_deadline(clock: FakeClock) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        clock.sleep(2.0)
+        return httpx.Response(302, headers={"location": "https://jobs.lever.co/next"})
+
+    f = HttpFetcher(
+        transport=httpx.MockTransport(handler), resolver=PUBLIC, deadline_s=3, clock=clock
+    )
+    with pytest.raises(FetchRefused, match="longer than 3 s"):
+        f.get("https://jobs.lever.co/a")
+
+
+def test_fast_response_within_deadline_is_fine(clock: FakeClock) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=_Drip([b"ab", b"cd"], clock, step_s=1.0))
+
+    f = HttpFetcher(
+        transport=httpx.MockTransport(handler), resolver=PUBLIC, deadline_s=3, clock=clock
+    )
+    assert f.get("https://jobs.lever.co/a").text == "abcd"
+
+
+def test_size_cap_is_exact_across_chunks(clock: FakeClock) -> None:
+    def make(n: int) -> HttpFetcher:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200, stream=_Drip([b"x" * 4] * (n // 4) + [b"x" * (n % 4)], clock)
+            )
+
+        return HttpFetcher(transport=httpx.MockTransport(handler), resolver=PUBLIC, max_bytes=10)
+
+    assert len(make(10).get("https://jobs.lever.co/a").text) == 10
+    with pytest.raises(FetchRefused, match="large"):
+        make(11).get("https://jobs.lever.co/a")
+
+
+@pytest.mark.parametrize(
+    ("charset", "text"),
+    [("utf-8", "café — naïve ✓"), ("iso-8859-1", "café naïve"), ("windows-1252", "café — “q”")],
+)
+def test_body_decodes_with_declared_charset_across_chunk_splits(
+    charset: str, text: str, clock: FakeClock
+) -> None:
+    raw = text.encode(charset) + b"\xff\xfe"  # trailing junk is replaced, not fatal
+    expected = raw.decode(charset, errors="replace")
+    chunks = [raw[i : i + 1] for i in range(len(raw))]  # splits every multi-byte character
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            stream=_Drip(chunks, clock),
+            headers={"content-type": f"text/html; charset={charset}"},
+        )
+
+    assert _fetcher(handler).get("https://jobs.lever.co/a").text == expected
+
+
 def test_guard_rejects_ipv4_mapped_private() -> None:
     with pytest.raises(FetchRefused):
         guard_url("https://api.lever.co/x", ["api.lever.co"], lambda h, p: ["::ffff:127.0.0.1"])
