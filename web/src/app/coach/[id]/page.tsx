@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api, istDate, post, runTask, TaskAborted, type Session } from "@/lib/api";
+import { PdfLink } from "@/components/PdfLink";
 import { ReportView } from "@/components/ReportView";
 import { Button, Card, ErrorNote } from "@/components/ui";
 
@@ -163,7 +164,7 @@ function CoachSession() {
             {session.builds.map((b) => (
               <li key={b.id} className="flex gap-3">
                 <span className="text-zinc-500">{istDate(b.at)}</span>
-                <a className="underline" href={`/api/builds/${b.id}/pdf`}>PDF</a>
+                <PdfLink buildId={b.id} />
                 <a className="underline" href={`/api/builds/${b.id}/tex`}>.tex</a>
                 <a className="underline" href={`/api/builds/${b.id}/report`} target="_blank" rel="noreferrer">
                   What changed

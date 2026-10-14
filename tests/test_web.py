@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from jobagent.config import Settings
@@ -39,13 +40,15 @@ def fake(system: str, user: str) -> Any:
     return EXTRACT
 
 
-def client_for(settings: Settings, llm: Any = None, fetcher: Any = None) -> TestClient:
+def client_for(
+    settings: Settings, llm: Any = None, fetcher: Any = None, **extra: Any
+) -> TestClient:
     llm = llm or StubLLM(fake)
     app = create_app(
         WebConfig(
             settings=settings, owner_hash=hash_password(PASSWORD), session_secret="s3cret",
             thinker=lambda: llm, writer=lambda: llm, fetcher=fetcher or FakeFetcher({}),
-            resolver=lambda h, p: ["104.18.0.1"], cookie_secure=False,
+            resolver=lambda h, p: ["104.18.0.1"], cookie_secure=False, **extra,
         )
     )  # fmt: skip
     return TestClient(app)
@@ -434,3 +437,91 @@ def test_cron_trigger_is_off_without_a_token(settings: Settings) -> None:
 def test_pdftex_template_compiles_under_tectonic() -> None:
     pdf = compile_pdf(SAMPLE)
     assert pdf.startswith(b"%PDF")
+
+
+def test_a_crashed_task_shows_the_message_and_logs_the_traceback(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken(*_: Any, **__: Any) -> Any:
+        raise KeyError("candidates")
+
+    web.put("/api/profile/summary", json={"summary": SUMMARY})
+    monkeypatch.setattr("jobagent.web.app.analyze_jd", broken)
+    state = done(web, web.post("/api/coach", json={"jd_text": JD}))
+    assert (state["status"], state["code"]) == ("failed", 500)
+    assert "KeyError" in state["error"] and "candidates" in state["error"]
+    (record,) = [r for r in caplog.records if r.name == "jobagent.web.app" and r.exc_info]
+    assert "background task" in record.getMessage()
+
+
+def test_a_hung_task_is_failed_at_its_deadline(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = threading.Event()
+
+    def hang(*_: Any, **__: Any) -> Any:
+        release.wait(5)
+        raise HTTPException(500, "woke too late")  # quiet: no log after the test ends
+
+    c = client_for(settings, task_deadline_s=0.2)
+    c.post("/api/login", json={"password": PASSWORD})
+    c.put("/api/profile/summary", json={"summary": SUMMARY})
+    monkeypatch.setattr("jobagent.web.app.analyze_jd", hang)
+    states = [done(c, c.post("/api/coach", json={"jd_text": JD})) for _ in range(3)]
+    release.set()
+    for state in states:  # three in a row: hung tasks do not hold the 2-worker pool
+        assert (state["status"], state["code"]) == ("failed", 504)
+        assert "took longer than" in state["error"]
+
+
+def test_bad_logins_from_one_client_do_not_lock_out_another(settings: Settings) -> None:
+    a = client_for(settings)
+    codes = [a.post("/api/login", json={"password": "nope"}).status_code for _ in range(6)]
+    assert codes == [401] * 5 + [429]
+    b = TestClient(a.app, client=("203.0.113.9", 4000))
+    assert b.post("/api/login", json={"password": "nope"}).status_code == 401
+    assert b.post("/api/login", json={"password": PASSWORD}).status_code == 200
+
+
+def test_pdf_is_built_as_a_task_then_downloaded(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    compiled: list[str] = []
+
+    def fake_compile(tex: str) -> bytes:
+        compiled.append(tex)
+        return b"%PDF-1.7 fake"
+
+    monkeypatch.setattr("jobagent.web.app.compile_pdf", fake_compile)
+    web.put("/api/profile/summary", json={"summary": SUMMARY})
+    sid = start_session(web)
+    web.post("/api/profile/tex", files={"file": ("base.tex", SAMPLE.encode(), "text/plain")})
+    build_id = done(web, web.post(f"/api/coach/{sid}/resume"))["result"]["build_id"]
+    assert web.get(f"/api/builds/{build_id}/pdf").status_code == 404  # not built yet
+    state = done(web, web.post(f"/api/builds/{build_id}/pdf"))
+    assert state["status"] == "done" and state["result"]["build_id"] == build_id
+    pdf = web.get(f"/api/builds/{build_id}/pdf")
+    assert pdf.status_code == 200 and pdf.content == b"%PDF-1.7 fake"
+    assert pdf.headers["content-type"] == "application/pdf" and len(compiled) == 1
+    assert web.post("/api/builds/999/pdf").status_code == 404
+
+
+def test_upload_over_the_limit_is_refused_before_it_is_read(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.uploads import MAX_UPLOAD_BYTES
+
+    monkeypatch.setattr("jobagent.web.app.doc_to_text", lambda *a: pytest.fail("parsed"))
+    big = b"x" * (MAX_UPLOAD_BYTES + 200_000)
+    for path, name in (("/api/profile/summary-file", "me.txt"), ("/api/profile/tex", "b.tex")):
+        res = web.post(path, files={"file": (name, big)})
+        assert res.status_code == 413 and "5 MB" in res.json()["detail"]
+
+
+def test_cron_can_read_discovery_state_with_its_token(settings: Settings) -> None:
+    c = client_for(settings, cron_token="cron-123")
+    assert c.get("/api/cron/discover").status_code == 401
+    assert c.get("/api/cron/discover", headers={"Authorization": "Bearer no"}).status_code == 401
+    ok = c.get("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
+    assert ok.status_code == 200
+    assert ok.json() == {"running": False, "last": {}, "current": None}

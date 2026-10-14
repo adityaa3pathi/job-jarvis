@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, istDate, type Build } from "@/lib/api";
+import { PdfLink } from "@/components/PdfLink";
 import { ErrorNote } from "@/components/ui";
 
 export default function ResumesPage() {
@@ -26,7 +27,7 @@ export default function ResumesPage() {
             </Link>
             <span className="text-xs text-zinc-500">{istDate(b.at)}</span>
             <span className="ml-auto flex gap-3 text-sm">
-              <a className="underline" href={`/api/builds/${b.id}/pdf`}>PDF</a>
+              <PdfLink buildId={b.id} />
               <a className="underline" href={`/api/builds/${b.id}/tex`}>.tex</a>
               <a className="underline" href={`/api/builds/${b.id}/report`} target="_blank" rel="noreferrer">
                 Report

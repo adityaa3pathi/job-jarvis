@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
@@ -42,12 +42,16 @@ from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.store import RunTally, Store, profile_from_json, profile_to_json
-from jobagent.web.uploads import UploadError, doc_to_text
+from jobagent.web.uploads import MAX_UPLOAD_BYTES, UploadError, doc_to_text
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_WINDOW_S = 900
 PDF_TIMEOUT_S = 120
 MAX_TASKS = 50
+TASK_DEADLINE_S = 600.0  # free-tier retries can stall an AI step for tens of minutes
+MAX_PDFS = 8
+UPLOAD_PATHS = ("/api/profile/summary-file", "/api/profile/tex")
+MULTIPART_SLACK = 64_000
 PING_EVERY_S = 300  # Render spins a free service down after 15 idle minutes
 log = logging.getLogger(__name__)
 OwnerMark = Literal["found", "applied", "dropped", "interview", "rejected"]
@@ -66,6 +70,7 @@ class WebConfig:
     cron_token: str = ""
     ping: Callable[[str], object] = field(default=lambda url: httpx.get(url, timeout=30))
     ping_every_s: float = PING_EVERY_S
+    task_deadline_s: float = TASK_DEADLINE_S
 
 
 def keep_awake(
@@ -193,7 +198,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
     )
     stores = _Handles(lambda: Store(settings.db_path, schema=False), Store(settings.db_path))
     app.state.jobs_db, app.state.stores = jobs_db, stores
-    failures: list[float] = []
+    failures: dict[str, list[float]] = {}
+    failures_lock = threading.Lock()
     discover_state = _DiscoverState()
 
     def db_stopped() -> bool:
@@ -214,14 +220,29 @@ def create_app(cfg: WebConfig) -> FastAPI:
     def health() -> dict[str, str]:
         return {"ok": "yes"}
 
+    @app.middleware("http")
+    async def upload_limit(request: Request, call_next: Any) -> Any:
+        # Refuse by the declared size before the multipart body is read into memory.
+        size = request.headers.get("content-length", "")
+        too_big = size.isdigit() and int(size) > MAX_UPLOAD_BYTES + MULTIPART_SLACK
+        if request.url.path in UPLOAD_PATHS and too_big:
+            return JSONResponse({"detail": "file is larger than 5 MB"}, status_code=413)
+        return await call_next(request)
+
     @app.post("/api/login")
-    def login(body: Login, response: Response) -> dict[str, bool]:
-        now = time.time()
-        failures[:] = [t for t in failures if now - t < LOGIN_WINDOW_S]
-        if len(failures) >= MAX_LOGIN_FAILURES:
-            raise HTTPException(429, "too many attempts, wait 15 minutes")
+    def login(body: Login, request: Request, response: Response) -> dict[str, bool]:
+        # Per client, so strangers cannot lock the owner out; --proxy-headers sets the host.
+        now, who = time.time(), request.client.host if request.client else "?"
+        with failures_lock:
+            for key in list(failures):
+                failures[key] = [t for t in failures[key] if now - t < LOGIN_WINDOW_S]
+                if not failures[key]:
+                    del failures[key]
+            if len(failures.get(who, [])) >= MAX_LOGIN_FAILURES:
+                raise HTTPException(429, "too many attempts, wait 15 minutes")
         if not verify_password(body.password, cfg.owner_hash):
-            failures.append(now)
+            with failures_lock:
+                failures.setdefault(who, []).append(now)
             raise HTTPException(401, "wrong password")
         response.set_cookie(
             COOKIE, make_token(cfg.session_secret), max_age=SESSION_TTL_S,
@@ -316,13 +337,19 @@ def create_app(cfg: WebConfig) -> FastAPI:
             threading.Thread(target=_discover, daemon=True).start()
         return {"started": started, **discover_view()}
 
-    @app.post("/api/cron/discover")
-    def cron_discover(request: Request) -> dict[str, Any]:
-        """Daily trigger from a scheduler that holds a token instead of a login."""
+    def cron(request: Request) -> None:
+        """A scheduler holds a token instead of a login."""
         given = request.headers.get("authorization", "").removeprefix("Bearer ")
         if not cfg.cron_token or not hmac.compare_digest(given, cfg.cron_token):
             raise HTTPException(401, "bad cron token")
+
+    @app.post("/api/cron/discover", dependencies=[Depends(cron)])
+    def cron_discover() -> dict[str, Any]:
         return start_discover()
+
+    @app.get("/api/cron/discover", dependencies=[Depends(cron)])
+    def cron_discover_status() -> dict[str, Any]:
+        return discover_view()
 
     @app.get("/api/discover", dependencies=[Owner])
     def discover_status() -> dict[str, Any]:
@@ -355,10 +382,15 @@ def create_app(cfg: WebConfig) -> FastAPI:
         st.save_profile(summary=body.summary)
         return {"chars": len(body.summary)}
 
+    def _read(file: UploadFile) -> bytes:
+        # Sync routes: parsing runs in the threadpool, not on the event loop.
+        # One byte over the cap is enough for doc_to_text to refuse it.
+        return file.file.read(MAX_UPLOAD_BYTES + 1)
+
     @app.post("/api/profile/summary-file", dependencies=[Owner])
-    async def upload_summary(st: ST, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    def upload_summary(st: ST, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         try:
-            text = doc_to_text(file.filename or "", await file.read())
+            text = doc_to_text(file.filename or "", _read(file))
         except UploadError as exc:
             raise HTTPException(400, str(exc)) from exc
         if not text:
@@ -367,11 +399,11 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return {"chars": len(text), "summary": text}
 
     @app.post("/api/profile/tex", dependencies=[Owner])
-    async def upload_tex(st: ST, file: Annotated[UploadFile, File()]) -> dict[str, int]:
+    def upload_tex(st: ST, file: Annotated[UploadFile, File()]) -> dict[str, int]:
         if not (file.filename or "").lower().endswith(".tex"):
             raise HTTPException(400, "upload a .tex file")
         try:
-            text = doc_to_text(file.filename or "", await file.read())
+            text = doc_to_text(file.filename or "", _read(file))
         except UploadError as exc:
             raise HTTPException(400, str(exc)) from exc
         st.save_profile(base_tex=text)
@@ -380,33 +412,54 @@ def create_app(cfg: WebConfig) -> FastAPI:
     # --- background tasks: AI steps outlast proxy timeouts, so the page polls instead ---
 
     tasks: dict[str, _Task] = {}
+    tasks_lock = threading.Lock()
     pool = ThreadPoolExecutor(max_workers=2)
 
-    def submit(work: Callable[[Store], dict[str, Any]]) -> dict[str, str]:
-        finished = [k for k, v in tasks.items() if v.status != "running"]
-        for key in finished[: max(0, len(tasks) - MAX_TASKS)]:
-            del tasks[key]
-        task_id, task = secrets.token_hex(8), _Task()
-        tasks[task_id] = task
+    def finish(task: _Task, code: int, error: str, result: dict[str, Any] | None = None) -> None:
+        # Status last and under the lock, so a poll never sees "failed" without its error.
+        with tasks_lock:
+            if task.status == "running":
+                task.result, task.code, task.error = result, code, error
+                task.status = "failed" if error else "done"
 
-        def run() -> None:
+    def submit(work: Callable[[Store], dict[str, Any]]) -> dict[str, str]:
+        task_id, task = secrets.token_hex(8), _Task()
+        with tasks_lock:
+            finished = [k for k, v in tasks.items() if v.status != "running"]
+            for key in finished[: max(0, len(tasks) - MAX_TASKS)]:
+                del tasks[key]
+            tasks[task_id] = task
+
+        def body() -> None:
             try:
                 with stores.borrow() as st:
-                    task.result, task.status = work(st), "done"
+                    finish(task, 0, "", work(st))
             except HTTPException as exc:
-                task.status, task.code, task.error = "failed", exc.status_code, str(exc.detail)
+                finish(task, exc.status_code, str(exc.detail) or "the task failed")
             except Exception as exc:  # report, never crash the worker
-                task.status, task.code, task.error = "failed", 500, type(exc).__name__
+                log.exception("background task %s failed", task_id)
+                finish(task, 500, f"{type(exc).__name__}: {exc}"[:500])
+
+        def run() -> None:
+            # A thread cannot be killed; past the deadline we stop waiting and free the worker.
+            worker = threading.Thread(target=body, daemon=True)
+            worker.start()
+            worker.join(cfg.task_deadline_s)
+            if worker.is_alive():
+                log.error("background task %s passed its deadline", task_id)
+                minutes = max(1, round(cfg.task_deadline_s / 60))
+                finish(task, 504, f"took longer than {minutes} min; stopped waiting. Try again.")
 
         pool.submit(run)
         return {"task_id": task_id}
 
     @app.get("/api/tasks/{task_id}", dependencies=[Owner])
     def task_status(task_id: str) -> dict[str, Any]:
-        task = tasks.get(task_id)
-        if task is None:
-            raise HTTPException(404, "no such task (the server may have restarted)")
-        return asdict(task)
+        with tasks_lock:
+            task = tasks.get(task_id)
+            if task is None:
+                raise HTTPException(404, "no such task (the server may have restarted)")
+            return asdict(task)
 
     # --- coach ---
 
@@ -547,11 +600,35 @@ def create_app(cfg: WebConfig) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="resume-{build_id}.tex"'},
         )  # fmt: skip
 
-    @app.get("/api/builds/{build_id}/pdf", dependencies=[Owner])
-    def build_pdf(build_id: int, st: ST) -> Response:
+    pdfs: dict[int, bytes] = {}  # recent builds only; after a restart the PDF is built again
+    pdfs_lock = threading.Lock()
+
+    @app.post("/api/builds/{build_id}/pdf", dependencies=[Owner])
+    def start_pdf(build_id: int, st: ST) -> dict[str, str]:
+        """Tectonic can take two minutes, longer than a proxy waits, so the page polls."""
         tex = _build(st, build_id)["tex"]
+
+        def work(_: Store) -> dict[str, Any]:
+            with pdfs_lock:
+                ready = build_id in pdfs
+            if not ready:
+                pdf = compile_pdf(tex)
+                with pdfs_lock:
+                    pdfs[build_id] = pdf
+                    for old in list(pdfs)[: max(0, len(pdfs) - MAX_PDFS)]:
+                        del pdfs[old]
+            return {"build_id": build_id}
+
+        return submit(work)
+
+    @app.get("/api/builds/{build_id}/pdf", dependencies=[Owner])
+    def build_pdf(build_id: int) -> Response:
+        with pdfs_lock:
+            pdf = pdfs.get(build_id)
+        if pdf is None:
+            raise HTTPException(404, "PDF not built yet; use the PDF button")
         return Response(
-            compile_pdf(tex), media_type="application/pdf",
+            pdf, media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="resume-{build_id}.pdf"'},
         )  # fmt: skip
 
@@ -591,7 +668,9 @@ def app_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn --factory jobagent.web.app:app_from_env`."""
     from jobagent.config import load_settings
     from jobagent.llm import GeminiLLM
+    from jobagent.redact import Redactor, configure_logging
 
+    configure_logging(Redactor.from_environment())  # task tracebacks reach the host's logs
     settings = load_settings()
     model = settings.llm.model
     return create_app(
@@ -603,5 +682,6 @@ def app_from_env() -> FastAPI:
             writer=lambda: GeminiLLM(model, temperature=0.5),
             cookie_secure=os.environ.get("JOBAGENT_COOKIE_SECURE", "1") != "0",
             cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
+            task_deadline_s=float(os.environ.get("JOBAGENT_TASK_DEADLINE_S", TASK_DEADLINE_S)),
         )
     )
