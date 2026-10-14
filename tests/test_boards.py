@@ -130,10 +130,10 @@ def test_yc_reads_public_job_board_page(policy: Policy) -> None:
 
 
 def test_boards_read_past_the_first_page_until_one_adds_nothing(policy: Policy) -> None:
-    search = BoardSearch(board="hirist", term="full stack developer")
-    adapter = BOARD_ADAPTERS["hirist"]
-    page = (FIX / "boards" / "hirist.json").read_text()
-    empty = '{"data": []}'
+    search = BoardSearch(board="jobgether", term="full stack developer")
+    adapter = BOARD_ADAPTERS["jobgether"]
+    page = (FIX / "boards" / "jobgether.json").read_text()
+    empty = '{"jobs": []}'
     urls = adapter.page_urls(search)
     f = FakeFetcher(
         {urls[0]: FetchResult(200, page, urls[0]), urls[1]: FetchResult(200, empty, urls[1])}
