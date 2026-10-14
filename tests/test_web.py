@@ -8,8 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from jobagent.config import Settings
-from jobagent.discovery.base import FetchResult
+from jobagent.discovery.base import DiscoveryResult, FetchResult
 from jobagent.llm import FailingLLM, StubLLM
+from jobagent.models import Posting
 from jobagent.web.app import WebConfig, compile_pdf, create_app
 from jobagent.web.auth import hash_password, make_token, token_valid
 from tests.test_discovery import FIX, FakeFetcher
@@ -222,6 +223,84 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
     assert c.post("/api/cron/discover", headers={"Authorization": "Bearer nope"}).status_code == 401
     ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
     assert ok.json() == {"started": True, "running": True, "last": {}} and started == [True]
+
+
+def wait_discover(c: TestClient) -> dict[str, Any]:
+    for _ in range(200):
+        state: dict[str, Any] = c.get("/api/discover").json()
+        if not state["running"]:
+            return state
+        time.sleep(0.02)
+    raise AssertionError("discovery did not finish")
+
+
+def portal(source: str, n: int) -> DiscoveryResult:
+    return DiscoveryResult(postings=[
+        Posting(source=source, url=f"https://{source}.example/{i}", company=f"{source}{i}",
+                title="AI Engineer", location="Bengaluru") for i in range(n)
+    ])  # fmt: skip
+
+
+@pytest.mark.parametrize("crash", [False, True])
+def test_discover_saves_each_portal_and_keeps_them_after_a_crash(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch, crash: bool
+) -> None:
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        merged = DiscoveryResult()
+        for part in (portal("hirist", 2), portal("greenhouse", 1)):
+            on_portal_done(part)
+            merged.extend(part)
+        if crash:
+            raise RuntimeError("portal 3 died")
+        return merged
+
+    monkeypatch.setattr("jobagent.web.app.discover_all", fake_discover_all)
+    assert web.post("/api/discover").json()["started"]
+    last = wait_discover(web)["last"]
+    if crash:
+        assert "portal 3 died" in last["error"] and last["new"] == 3
+    else:
+        assert (last["read"], last["new"]) == (3, 3)
+    assert {j["source"] for j in web.get("/api/jobs").json()} == {"hirist", "greenhouse"}
+
+
+def test_schema_runs_once_and_connections_are_reused(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent import sqlconn
+
+    opened: list[str] = []
+    scripts: list[str] = []
+
+    def counting_connect(path: Any) -> Any:
+        conn = sqlconn.connect(path)
+        opened.append(str(path))
+
+        class Spy:
+            def __getattr__(self, name: str) -> Any:
+                return getattr(conn, name)
+
+            def executescript(self, script: str) -> Any:
+                scripts.append(script)
+                return conn.executescript(script)
+
+            def __enter__(self) -> Any:
+                return conn.__enter__()
+
+            def __exit__(self, *exc: Any) -> Any:
+                return conn.__exit__(*exc)
+
+        return Spy()
+
+    monkeypatch.setattr("jobagent.db.connect", counting_connect)
+    monkeypatch.setattr("jobagent.web.store.connect", counting_connect)
+    c = client_for(settings)
+    c.post("/api/login", json={"password": PASSWORD})
+    for _ in range(10):
+        assert c.get("/api/jobs").status_code == 200
+        assert c.get("/api/profile").status_code == 200
+    assert len(scripts) == 2  # one schema each for jobs and the web store
+    assert len(opened) == 2
 
 
 def test_cron_trigger_is_off_without_a_token(settings: Settings) -> None:

@@ -13,9 +13,10 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Protocol
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
 from jobagent.db import Database
 from jobagent.discovery import discover_all
-from jobagent.discovery.base import Fetcher, load_companies, load_searches
+from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
 from jobagent.llm import LLM, LLMError
@@ -104,24 +105,46 @@ class FactIn(BaseModel):
     confirmed: bool
 
 
+class _Closable(Protocol):
+    def close(self) -> None: ...
+
+
+class _Handles[T: _Closable]:
+    """Open DB handles reused across requests, each lent to one borrower at a time.
+    One locked shared handle would stall pages behind a discovery write, and a libsql
+    connection must never serve two threads at once."""
+
+    def __init__(self, make: Callable[[], T], first: T, keep: int = 4) -> None:
+        self._make, self._keep, self._idle = make, keep, [first]
+        self._lock = threading.Lock()
+
+    @contextmanager
+    def borrow(self) -> Iterator[T]:
+        with self._lock:
+            handle = self._idle.pop() if self._idle else None
+        handle = handle or self._make()
+        try:
+            yield handle
+        except BaseException:
+            handle.close()  # it may be broken or mid-transaction; never lend it again
+            raise
+        with self._lock:
+            if len(self._idle) < self._keep:
+                self._idle.append(handle)
+                return
+        handle.close()
+
+
 def _jobs_db(request: Request) -> Iterator[Database]:
-    settings: Settings = request.app.state.settings
-    ensure_data_dir(settings)
-    db = Database(settings.db_path, settings.max_years_asked)
-    try:
+    handles: _Handles[Database] = request.app.state.jobs_db
+    with handles.borrow() as db:
         yield db
-    finally:
-        db.close()
 
 
 def _store(request: Request) -> Iterator[Store]:
-    settings: Settings = request.app.state.settings
-    ensure_data_dir(settings)
-    st = Store(settings.db_path)
-    try:
+    handles: _Handles[Store] = request.app.state.stores
+    with handles.borrow() as st:
         yield st
-    finally:
-        st.close()
 
 
 # Module level: with postponed annotations FastAPI resolves these names from module globals.
@@ -135,6 +158,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
     app = FastAPI(title="job-agent", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = cfg.settings
     settings = cfg.settings
+    ensure_data_dir(settings)
+    # Schema setup runs once here; later handles skip it.
+    jobs_db = _Handles(
+        lambda: Database(settings.db_path, settings.max_years_asked, schema=False),
+        Database(settings.db_path, settings.max_years_asked),
+    )
+    stores = _Handles(lambda: Store(settings.db_path, schema=False), Store(settings.db_path))
+    app.state.jobs_db, app.state.stores = jobs_db, stores
     failures: list[float] = []
     discover_state = _DiscoverState()
 
@@ -194,28 +225,27 @@ def create_app(cfg: WebConfig) -> FastAPI:
             discover_state.last = {"error": str(exc)}
             discover_state.running = False
             return
+        counts = {"read": 0, "new": 0}
         try:
             policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
-            result = discover_all(
-                load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher, policy,
-                load_searches(REPO_ROOT / "searches.yaml"),
-            )  # fmt: skip
-            ensure_data_dir(settings)
-            db = Database(settings.db_path, settings.max_years_asked)
-            try:
-                new = sum(
-                    1 for p in result.postings
-                    if (r := db.upsert_posting(p)).outcome == "new" and r.status == "found"
+            with jobs_db.borrow() as db:
+
+                def save(part: DiscoveryResult) -> None:
+                    saved = db.upsert_many(part.postings)
+                    counts["read"] += len(saved)
+                    counts["new"] += sum(r.outcome == "new" and r.status == "found" for r in saved)
+
+                result = discover_all(
+                    load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher, policy,
+                    load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
                 )  # fmt: skip
-            finally:
-                db.close()
             discover_state.last = {
-                "read": len(result.postings), "new": new,
+                **counts,
                 "unreachable": [f"{u.company}: {u.reason}" for u in result.unreachable],
                 "skipped": result.skipped_by_policy, "finished_at": time.time(),
             }  # fmt: skip
-        except Exception as exc:  # report, never crash the server thread
-            discover_state.last = {"error": f"{type(exc).__name__}: {exc}"}
+        except Exception as exc:  # report, never crash the server thread; saved portals stay
+            discover_state.last = {"error": f"{type(exc).__name__}: {exc}", **counts}
         finally:
             lock.release()
             discover_state.running = False
@@ -302,15 +332,13 @@ def create_app(cfg: WebConfig) -> FastAPI:
         tasks[task_id] = task
 
         def run() -> None:
-            st = Store(settings.db_path)
             try:
-                task.result, task.status = work(st), "done"
+                with stores.borrow() as st:
+                    task.result, task.status = work(st), "done"
             except HTTPException as exc:
                 task.status, task.code, task.error = "failed", exc.status_code, str(exc.detail)
             except Exception as exc:  # report, never crash the worker
                 task.status, task.code, task.error = "failed", 500, type(exc).__name__
-            finally:
-                st.close()
 
         pool.submit(run)
         return {"task_id": task_id}

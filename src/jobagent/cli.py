@@ -8,31 +8,42 @@ import sys
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir, load_settings
 from jobagent.db import Database
 from jobagent.discovery import discover_all
-from jobagent.discovery.base import load_companies, load_searches
+from jobagent.discovery.base import DiscoveryResult, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher
+from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch, engage_kill_switch
 from jobagent.resume import cli_tailor
 
 
 def discover(settings: Settings) -> int:
-    """Read every enabled company board and job-board search, then store new postings."""
-    policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
-    result = discover_all(
-        load_companies(REPO_ROOT / "companies.yaml"),
-        HttpFetcher(),
-        policy,
-        load_searches(REPO_ROOT / "searches.yaml"),
-    )
-    ensure_data_dir(settings)
-    db = Database(settings.db_path, settings.max_years_asked)
-    out = sys.stdout
+    """Read every enabled company board and job-board search, saving each portal as it ends."""
+    out, lock = sys.stdout, RunLock(settings.lock_file)
     try:
-        for p in result.postings:
-            saved = db.upsert_posting(p)
-            if saved.outcome == "new" and saved.status == "found":
-                out.write(f"NEW  {p.source:9} {p.title} | {p.company} | {p.location} | {p.url}\n")
+        lock.acquire()
+    except LockHeldError as exc:
+        out.write(f"not started: {exc}\n")
+        return 1
+    try:
+        policy = Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file)
+        ensure_data_dir(settings)
+        db = Database(settings.db_path, settings.max_years_asked)
+
+        def save(part: DiscoveryResult) -> None:
+            for p, saved in zip(part.postings, db.upsert_many(part.postings), strict=True):
+                if saved.outcome == "new" and saved.status == "found":
+                    out.write(
+                        f"NEW  {p.source:9} {p.title} | {p.company} | {p.location} | {p.url}\n"
+                    )
+
+        try:
+            result = discover_all(
+                load_companies(REPO_ROOT / "companies.yaml"), HttpFetcher(), policy,
+                load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
+            )  # fmt: skip
+        finally:
+            db.close()
     finally:
-        db.close()
+        lock.release()
     for u in result.unreachable:
         out.write(f"UNREACHABLE  {u.company}: {u.reason}\n")
     for line in result.skipped_by_policy:

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from jobagent.dedupe import (
     dedupe_key,
@@ -60,76 +61,143 @@ class ApplicationResult:
     created: bool
 
 
+_Job = dict[str, Any]  # a jobs row read up front, kept current as the batch writes
+CHUNK = 500  # stays under SQLite's limit on `?` marks in one statement
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _chunks(items: list[str]) -> list[list[str]]:
+    return [items[i : i + CHUNK] for i in range(0, len(items), CHUNK)]
+
+
 class Database:
-    def __init__(self, path: Path | str, max_years_asked: int = 5) -> None:
+    def __init__(self, path: Path | str, max_years_asked: int = 5, *, schema: bool = True) -> None:
         self.conn = connect(path)
-        self.conn.executescript(SCHEMA)
+        if schema:
+            self.conn.executescript(SCHEMA)
         self.max_years_asked = max_years_asked
 
     def close(self) -> None:
         self.conn.close()
 
     def upsert_posting(self, posting: Posting, now: str | None = None) -> UpsertResult:
+        return self.upsert_many([posting], now)[0]
+
+    def upsert_many(
+        self, postings: Sequence[Posting], now: str | None = None
+    ) -> list[UpsertResult]:
+        """Save one portal's postings in one transaction (R2, R3). Known rows are read up
+        front, so a re-seen posting costs one write instead of three calls and a commit."""
         seen = now or _now()
-        norm = normalize_url(posting.url)
-        row = self.conn.execute(
-            "SELECT j.* FROM jobs j JOIN job_links l ON l.job_id=j.id WHERE l.norm_url=?", (norm,)
-        ).fetchone()
-        if row:
-            return self._update_existing(row, posting, seen)
-        key = dedupe_key(posting.company, posting.title, posting.location, url=posting.url)
-        row = self.conn.execute("SELECT * FROM jobs WHERE key=? LIMIT 1", (key,)).fetchone()
-        if row:
-            with self.conn:
-                self._add_link(row["id"], posting)
-                self.conn.execute("UPDATE jobs SET seen_date=? WHERE id=?", (seen, row["id"]))
+        keyed = [
+            (p, normalize_url(p.url), dedupe_key(p.company, p.title, p.location, url=p.url))
+            for p in postings
+        ]
+        by_url, by_key = self._known(keyed)
+        bumps: list[tuple[str, int]] = []
+        with self.conn:
+            out = [
+                self._upsert(p, norm, key, seen, by_url, by_key, bumps) for p, norm, key in keyed
+            ]
+            if bumps:
+                self.conn.executemany("UPDATE jobs SET seen_date=? WHERE id=?", bumps)
+        return out
+
+    def _known(
+        self, keyed: list[tuple[Posting, str, str]]
+    ) -> tuple[dict[str, _Job], dict[str, _Job]]:
+        by_url: dict[str, _Job] = {}
+        for chunk in _chunks(sorted({norm for _, norm, _ in keyed})):
+            marks = ",".join("?" * len(chunk))
+            for row in self.conn.execute(
+                "SELECT l.norm_url AS link_url, j.* FROM jobs j JOIN job_links l ON l.job_id=j.id"
+                f" WHERE l.norm_url IN ({marks})", chunk,
+            ).fetchall():  # fmt: skip
+                by_url[row["link_url"]] = dict(row)
+        by_key: dict[str, _Job] = {}
+        keys = sorted({key for _, norm, key in keyed if norm not in by_url})
+        for chunk in _chunks(keys):
+            marks = ",".join("?" * len(chunk))
+            sql = f"SELECT * FROM jobs WHERE key IN ({marks}) ORDER BY id"
+            for row in self.conn.execute(sql, chunk).fetchall():
+                by_key.setdefault(row["key"], dict(row))
+        return by_url, by_key
+
+    def _upsert(
+        self, posting: Posting, norm: str, key: str, seen: str,
+        by_url: dict[str, _Job], by_key: dict[str, _Job], bumps: list[tuple[str, int]],
+    ) -> UpsertResult:  # fmt: skip
+        if row := by_url.get(norm):
+            return self._update_existing(row, posting, seen, bumps)
+        if row := by_key.get(key):
+            self._add_link(row["id"], posting, norm)
+            bumps.append((seen, row["id"]))
+            by_url[norm] = row
             return UpsertResult(row["id"], "merged", row["status"], row["drop_reason"])
         reason = check_hard_rules(posting, self.max_years_asked)
         status = "dropped" if reason else "found"
-        with self.conn:
-            cur = self.conn.execute(
-                "INSERT INTO jobs(key, company, title, location, experience_text, stack_words,"
-                " description, posted_date, seen_date, source, status, drop_reason)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    key, posting.company, posting.title, posting.location, posting.experience_text,
-                    json.dumps(posting.stack_words), posting.description,
-                    posting.posted_date.isoformat() if posting.posted_date else None,
-                    seen, posting.source, status, reason,
-                ),
-            )  # fmt: skip
-            job_id = int(cur.lastrowid or 0)
-            self._add_link(job_id, posting)
-            self._event(job_id, None, status, reason or "")
+        posted = posting.posted_date.isoformat() if posting.posted_date else None
+        cur = self.conn.execute(
+            "INSERT INTO jobs(key, company, title, location, experience_text, stack_words,"
+            " description, posted_date, seen_date, source, status, drop_reason)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                key, posting.company, posting.title, posting.location, posting.experience_text,
+                json.dumps(posting.stack_words), posting.description, posted,
+                seen, posting.source, status, reason,
+            ),
+        )  # fmt: skip
+        job_id = int(cur.lastrowid or 0)
+        if not self._add_link(job_id, posting, norm):
+            # Another handle saved this URL after our read: keep its row, not a linkless copy.
+            self.conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+            found = self.conn.execute(
+                "SELECT j.* FROM jobs j JOIN job_links l ON l.job_id=j.id WHERE l.norm_url=?",
+                (norm,),
+            ).fetchone()
+            by_url[norm] = dict(found)
+            return self._update_existing(by_url[norm], posting, seen, bumps)
+        self._event(job_id, None, status, reason or "")
+        row = {"id": job_id, "key": key, "title": posting.title, "description": posting.description,
+               "posted_date": posted, "status": status, "drop_reason": reason}  # fmt: skip
+        by_url[norm] = row
+        by_key.setdefault(key, row)
         return UpsertResult(job_id, "new", status, reason)
 
-    def _add_link(self, job_id: int, posting: Posting) -> None:
-        self.conn.execute(
-            "INSERT OR IGNORE INTO job_links(job_id, source, url, norm_url) VALUES (?,?,?,?)",
-            (job_id, posting.source, posting.url, normalize_url(posting.url)),
+    def _add_link(self, job_id: int, posting: Posting, norm: str) -> bool:
+        """False when the URL is already linked to a job."""
+        cur = self.conn.execute(
+            "INSERT INTO job_links(job_id, source, url, norm_url) VALUES (?,?,?,?)"
+            " ON CONFLICT(norm_url) DO NOTHING",
+            (job_id, posting.source, posting.url, norm),
         )
+        return cur.rowcount > 0
 
-    def _update_existing(self, row: sqlite3.Row, posting: Posting, seen: str) -> UpsertResult:
+    def _update_existing(
+        self, row: _Job, posting: Posting, seen: str, bumps: list[tuple[str, int]]
+    ) -> UpsertResult:
         new_date = posting.posted_date.isoformat() if posting.posted_date else None
         reposted = bool(new_date and new_date != row["posted_date"])
-        with self.conn:
-            if reposted:
-                self.conn.execute(
-                    "UPDATE jobs SET posted_date=?, seen_date=?, description=?, title=? WHERE id=?",
-                    (new_date, seen, posting.description or row["description"], posting.title,
-                     row["id"]),
-                )  # fmt: skip
-            else:
-                self.conn.execute("UPDATE jobs SET seen_date=? WHERE id=?", (seen, row["id"]))
-            if posting.closed and row["status"] not in ("closed", "applied"):
-                self._set_status(row["id"], "closed", "source says closed")
+        closing = posting.closed and row["status"] not in ("closed", "applied")
+        changes: dict[str, object] = {"seen_date": seen}
+        if reposted:
+            changes |= {"posted_date": new_date, "title": posting.title,
+                        "description": posting.description or row["description"]}  # fmt: skip
+        if closing:
+            changes["status"] = "closed"
+        if len(changes) == 1:
+            bumps.append((seen, row["id"]))
+        else:
+            sets = ", ".join(f"{col}=?" for col in changes)
+            self.conn.execute(f"UPDATE jobs SET {sets} WHERE id=?", (*changes.values(), row["id"]))
+        if closing:
+            self._event(row["id"], row["status"], "closed", "source says closed")
+        row.update(changes)
         outcome: Outcome = "updated" if reposted else "duplicate"
-        status = self.get_job(row["id"])["status"]
-        return UpsertResult(row["id"], outcome, status, row["drop_reason"])
+        return UpsertResult(row["id"], outcome, row["status"], row["drop_reason"])
 
     def _event(self, job_id: int, old: str | None, new: str, note: str = "") -> None:
         self.conn.execute(

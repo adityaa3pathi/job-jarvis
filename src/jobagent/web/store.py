@@ -53,9 +53,10 @@ def profile_from_json(raw: str) -> JDProfile:
 
 
 class Store:
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, schema: bool = True) -> None:
         self.conn = connect(path)
-        self.conn.executescript(SCHEMA)
+        if schema:
+            self.conn.executescript(SCHEMA)
 
     def close(self) -> None:
         self.conn.close()

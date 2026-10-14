@@ -41,6 +41,25 @@ def test_jobs_store_reads_rows_by_name_and_position(tmp_path: Path) -> None:
     db.close()
 
 
+def test_batch_save_and_racing_handles_over_libsql(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a, b = Database(tmp_path / "t.db"), Database(tmp_path / "t.db")
+    postings = [
+        Posting(source="hirist", url=f"https://www.hirist.tech/j/a-{i}", company=f"C{i}",
+                title="Full Stack Developer", location="Pune")
+        for i in range(3)
+    ]  # fmt: skip
+    assert [r.outcome for r in a.upsert_many(postings)] == ["new"] * 3
+    assert [r.outcome for r in a.upsert_many(postings)] == ["duplicate"] * 3  # executemany path
+    monkeypatch.setattr(b, "_known", lambda keyed: ({}, {}))  # b read before a committed
+    assert b.upsert_posting(postings[0]).outcome == "duplicate"
+    count = lambda t: a.conn.execute(f"SELECT COUNT(*) AS n FROM {t}").fetchone()["n"]  # noqa: E731
+    assert (count("jobs"), count("job_links")) == (3, 3)
+    a.close()
+    b.close()
+
+
 def test_failed_write_is_rolled_back(tmp_path: Path) -> None:
     db = Database(tmp_path / "t.db")
     with pytest.raises(ValueError), db.conn:

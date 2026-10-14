@@ -1,16 +1,31 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
 
-from jobagent.discovery import ADAPTERS, discover_all
-from jobagent.discovery.base import Company, FetchResult, load_companies
+from jobagent import cli
+from jobagent.config import Settings
+from jobagent.db import Database
+from jobagent.discovery import ADAPTERS, BOARD_ADAPTERS, discover_all
+from jobagent.discovery.base import (
+    Adapter,
+    BoardSearch,
+    Company,
+    DiscoveryResult,
+    FetchResult,
+    load_companies,
+)
 from jobagent.discovery.fetch import MAX_BYTES, FetchRefused, HttpFetcher, guard_url
 from jobagent.discovery.manual import fetch_posting
+from jobagent.lock import RunLock
+from jobagent.models import Posting
 from jobagent.policy import Policy
 from jobagent.rules import check_hard_rules
 from jobagent.sanitize import clean_posting_text, strip_hidden_html
@@ -305,3 +320,101 @@ def test_instruction_phrases_still_flagged(line: str) -> None:
     text, flagged = clean_posting_text(f"<p>Python role.</p><p>{line}</p>")
     assert flagged
     assert text == "Python role."
+
+
+# --- saving per portal as each finishes (R2) ---
+
+
+class Killed(BaseException):
+    """Stands in for the process dying mid-run (redeploy, spin-down, out of memory)."""
+
+
+class StubAdapter(Adapter[Any]):
+    def __init__(self, portal: str, run: Callable[[], object] = lambda: None) -> None:
+        self.portal, self._run = portal, run
+
+    def discover(self, target: Any, fetcher: Any, policy: Any) -> DiscoveryResult:
+        self._run()
+        url = f"https://{self.portal}.example/{target.name}"
+        posting = Posting(source=self.portal, url=url, company=target.name, title="AI Engineer")
+        return DiscoveryResult(postings=[posting])
+
+
+def stub(monkeypatch: pytest.MonkeyPatch, **runs: Callable[[], object]) -> None:
+    for portal, run in runs.items():
+        table: dict[str, Any] = BOARD_ADAPTERS if portal in BOARD_ADAPTERS else ADAPTERS
+        monkeypatch.setitem(table, portal, StubAdapter(portal, run))
+
+
+def saved_sources(path: Path) -> set[str]:
+    db = Database(path)
+    try:
+        return {r["source"] for r in db.list_jobs()}
+    finally:
+        db.close()
+
+
+def test_portals_saved_before_a_crash_are_kept(
+    policy: Policy, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    two_saved = threading.Event()
+
+    def crash() -> None:
+        assert two_saved.wait(5)
+        raise Killed
+
+    stub(monkeypatch, greenhouse=lambda: None, lever=lambda: None, ashby=crash)
+    db, done = Database(tmp_path / "t.db"), []
+
+    def save(part: DiscoveryResult) -> None:
+        db.upsert_many(part.postings)
+        done.append(part)
+        if len(done) == 2:
+            two_saved.set()
+
+    with pytest.raises(Killed):
+        discover_all([GH, LV, AS], FakeFetcher({}), policy, on_portal_done=save)
+    db.close()
+    assert saved_sources(tmp_path / "t.db") == {"greenhouse", "lever"}
+
+
+def test_portals_finishing_together_are_both_saved_from_the_calling_thread(
+    policy: Policy, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    together = threading.Barrier(2, timeout=5)
+    stub(monkeypatch, greenhouse=together.wait, hirist=together.wait)
+    db, threads = Database(tmp_path / "t.db"), set()
+
+    def save(part: DiscoveryResult) -> None:
+        threads.add(threading.get_ident())
+        db.upsert_many(part.postings)
+
+    search = BoardSearch(board="hirist", term="ai engineer")
+    res = discover_all([GH], FakeFetcher({}), policy, [search], on_portal_done=save)
+    db.close()
+    assert threads == {threading.get_ident()}
+    assert saved_sources(tmp_path / "t.db") == {"greenhouse", "hirist"}
+    assert [p.source for p in res.postings] == ["hirist", "greenhouse"]  # India boards first
+
+
+def test_cli_discover_takes_the_run_lock(
+    settings: Settings, capsys: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.cli.discover_all", lambda *a, **k: pytest.fail("ran unlocked"))
+    with RunLock(settings.lock_file):
+        assert cli.discover(settings) == 1
+    assert "another run holds the lock" in capsys.readouterr().out
+
+
+def test_cli_discover_saves_each_portal_as_it_finishes(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        on_portal_done(StubAdapter("hirist").discover(GH, None, None))
+        raise Killed
+
+    monkeypatch.setattr("jobagent.cli.discover_all", fake_discover_all)
+    with pytest.raises(Killed):
+        cli.discover(settings)
+    assert saved_sources(settings.db_path) == {"hirist"}
+    assert not settings.lock_file.exists()

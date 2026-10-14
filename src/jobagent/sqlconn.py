@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import Any, cast
@@ -56,6 +56,9 @@ class LibsqlConnection:
 
     def execute(self, sql: str, params: Sequence[Any] = ()) -> _Cursor:
         return _Cursor(self._conn.execute(sql, tuple(params)))
+
+    def executemany(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
+        self._conn.executemany(sql, [tuple(r) for r in rows])
 
     def executescript(self, script: str) -> None:
         self._conn.executescript(script)

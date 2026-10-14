@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import partial
 
 from jobagent.discovery.ashby import AshbyAdapter
@@ -45,18 +45,21 @@ def discover_all(
     fetcher: Fetcher,
     policy: Policy,
     searches: list[BoardSearch] | None = None,
+    on_portal_done: Callable[[DiscoveryResult], None] | None = None,
 ) -> DiscoveryResult:
-    """Each portal runs in its own thread, so one site's pauses never hold up another's."""
+    """Each portal runs in its own thread, so one site's pauses never hold up another's.
+    `on_portal_done` gets each portal's result as it finishes, always on the calling thread."""
     jobs: dict[str, list[tuple[str, Callable[[], DiscoveryResult]]]] = {}
-    for company in companies:
-        adapter = ADAPTERS[company.ats]
-        jobs.setdefault(adapter.portal, []).append(
-            (company.name, partial(adapter.discover, company, fetcher, policy))
-        )
+    # India job boards first: they hold most of the useful jobs.
     for search in searches or []:
         board = BOARD_ADAPTERS[search.board]
         jobs.setdefault(board.portal, []).append(
             (search.name, partial(board.discover, search, fetcher, policy))
+        )
+    for company in companies:
+        adapter = ADAPTERS[company.ats]
+        jobs.setdefault(adapter.portal, []).append(
+            (company.name, partial(adapter.discover, company, fetcher, policy))
         )
 
     def run_portal(tasks: list[tuple[str, Callable[[], DiscoveryResult]]]) -> DiscoveryResult:
@@ -64,7 +67,7 @@ def discover_all(
         for name, task in tasks:
             try:
                 out.extend(task())
-            except Exception as exc:  # pool.map must never raise, or every portal's jobs are lost
+            except Exception as exc:  # one target's error must never lose the portal's other jobs
                 out.unreachable.append(Unreachable(name, "", f"{type(exc).__name__}: {exc}"))
         return out
 
@@ -72,6 +75,12 @@ def discover_all(
     if not jobs:
         return result
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-        for part in pool.map(run_portal, jobs.values()):
-            result.extend(part)
+        futures = [pool.submit(run_portal, tasks) for tasks in jobs.values()]
+        parts: dict[Future[DiscoveryResult], DiscoveryResult] = {}
+        for future in as_completed(futures):
+            parts[future] = future.result()
+            if on_portal_done:
+                on_portal_done(parts[future])
+    for future in futures:  # merged in schedule order, so the result does not depend on timing
+        result.extend(parts[future])
     return result
