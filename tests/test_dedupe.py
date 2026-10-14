@@ -7,7 +7,7 @@ import pytest
 from jobagent.db import Database
 from jobagent.dedupe import dedupe_key, normalize_city, normalize_company, normalize_url
 from jobagent.models import Posting
-from jobagent.rules import check_hard_rules, parse_years
+from jobagent.rules import RULES_VERSION, check_hard_rules, parse_years
 
 
 @pytest.fixture
@@ -98,6 +98,17 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
         ({"description": "This is a volunteer role for a student club."}, "unpaid"),
         ({"description": "Pay a registration fee to apply"}, "spam"),
         ({"closed": True}, "closed"),
+        ({"description": "Send your CV on WhatsApp 98xxxxxxxx"}, "whatsapp_contact"),
+        ({"description": "Apply on WhatsApp at +91 98765 43210."}, "whatsapp_contact"),
+        ({"description": "Message us: wa.me/919876543210"}, "whatsapp_contact"),
+        ({"description": "Pay a registration fee of Rs 500"}, "spam"),
+        ({"description": "Earn 2000 per day from home."}, "spam"),
+        ({"experience_text": "6–9 years"}, "too_senior"),
+        ({"experience_text": "", "description": "Need 7+ years experience; Python."}, "too_senior"),
+        ({"title": "Tech Lead - Backend", "experience_text": ""}, "too_senior"),
+        ({"title": "Lead Engineer", "experience_text": ""}, "too_senior"),
+        ({"location": "Austin, TX"}, "outside_india"),
+        ({"location": "Indianapolis, IN"}, "outside_india"),
     ],
 )
 def test_hard_rules(kw: dict[str, object], reason: str) -> None:
@@ -114,6 +125,25 @@ def test_hard_rules(kw: dict[str, object], reason: str) -> None:
         {"description": "Everyone gets 5 paid days off to volunteer."},
         {"description": "Track unpaid invoices and chase payments."},
         {"description": "Paid parental leave, plus unpaid leave when you need it."},
+        {"description": "Build features that send messages via WhatsApp Business API"},
+        {"description": "Work on WhatsApp chatbot context handling"},
+        {"description": "Admin tools for outreach and callback flows on WhatsApp."},
+        {"description": "No experience required, you will learn on the job"},
+        {"description": "Help merchants reduce payment processing fees"},
+        {"description": "Build rent payment and security deposit flows"},
+        {"description": "Benefits: up to 30 days leave without pay"},
+        {"experience_text": "3–6 years"},
+        {"experience_text": "2—4 yrs"},
+        {
+            "experience_text": "",
+            "description": "We have 15 years of experience serving clients. "
+            "You need 1-2 years experience.",
+        },
+        {"title": "Lead Generation Executive", "experience_text": ""},
+        {"title": "Software Engineer (Team lead not required)", "experience_text": ""},
+        {"location": "Bengaluru, IN"},
+        {"location": "Bangalore Urban"},
+        {"location": "Chennai, TN"},
     ],
 )
 def test_hard_rules_keep(kw: dict[str, object]) -> None:
@@ -125,6 +155,15 @@ def test_years_parse() -> None:
     assert parse_years("2-6 yrs") == (2, 6)
     assert parse_years("3 to 5 years") == (3, 5)
     assert parse_years("fresher") is None
+    assert parse_years("3–6 years") == (3, 6)
+    assert parse_years("2 — 4 yrs") == (2, 4)
+    assert parse_years("8 years in total; 3+ years exp in Python") == (3, None)
+    history = "We have 15 years of experience serving clients. You need 1-2 years experience."
+    assert parse_years(history) == (1, 2)
+
+
+def test_rules_version() -> None:
+    assert RULES_VERSION == 2
 
 
 def test_normalisers() -> None:

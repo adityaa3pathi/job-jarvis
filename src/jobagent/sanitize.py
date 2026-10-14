@@ -10,24 +10,56 @@ from bs4 import BeautifulSoup, Tag
 _HIDDEN_STYLE = re.compile(
     r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?\s*(?:;|$)|"
     r"opacity\s*:\s*0(?:\.0+)?\s*(?:;|$)|(?:left|top|text-indent)\s*:\s*-\d{3,}|"
-    r"(?:width|height)\s*:\s*0(?:px)?\s*(?:;|$)|"
-    r"(?<![a-z-])color\s*:\s*(?:#fff(?:fff)?|white)\b",
+    r"(?:width|height)\s*:\s*0(?:px)?\s*(?:;|$)",
     re.IGNORECASE,
 )
+_WHITE_TEXT = re.compile(r"(?<![a-z-])color\s*:\s*(?:#fff(?:fff)?|white)\b", re.IGNORECASE)
+_BACKGROUND = re.compile(r"background(?:-color)?\s*:\s*([^;]+)", re.IGNORECASE)
+_LIGHT_NAMES = {"white", "transparent", "none", "inherit", "initial", "unset"}
 _INJECTION = re.compile(
     r"ignore (?:all |any |the )?(?:previous|prior|above|earlier) (?:instructions?|prompts?|rules?)|"
-    r"disregard (?:all |any |the )?(?:previous|prior|above)|system prompt|you are (?:now )?an? "
-    r"(?:ai|assistant|language model)|as an ai\b|\bscore (?:this|it|the) (?:job |posting )?"
+    r"disregard (?:all |any |the )?(?:previous|prior|above)|(?:ignore|reveal|print|show|output|"
+    r"repeat|leak|forget|disregard) (?:\w+ ){0,3}system prompts?|you are (?:now )?an? "
+    r"(?:ai|assistant|language model)|as an ai (?:language )?(?:model|assistant|chatbot)\b|"
+    r"\bscore (?:this|it|the) (?:job |posting )?"
     r"(?:a )?[1-5]\b|\bscore:? ?[1-5]\b|\b(?:add|include|insert|mention) \S+(?: \S+)? (?:to|on|in) "
     r"(?:the |your |my )?(?:resume|cv|skills)|new instructions?:",
     re.IGNORECASE,
 )
 
 
+def _is_light(color: str) -> bool:
+    """True for white-ish or unset backgrounds; unknown values (var(), gradients) count as dark."""
+    color = color.strip().lower() or "none"
+    first = color.split()[0]
+    if first in _LIGHT_NAMES:
+        return True
+    hexes = re.fullmatch(r"#([0-9a-f]{3}|[0-9a-f]{6})", first)
+    if hexes:
+        h = hexes.group(1)
+        rgb = (
+            [int(c * 2, 16) for c in h]
+            if len(h) == 3
+            else [int(h[i : i + 2], 16) for i in (0, 2, 4)]
+        )
+    else:
+        nums = re.match(r"rgba?\((\d+)\D+(\d+)\D+(\d+)", color)
+        if not nums:
+            return False
+        rgb = [int(n) for n in nums.groups()]
+    return sum(rgb) / 3 > 128
+
+
 def _is_hidden(tag: Tag) -> bool:
     if tag.has_attr("hidden") or tag.get("aria-hidden") == "true":
         return True
-    return bool(_HIDDEN_STYLE.search(str(tag.get("style", ""))))
+    style = str(tag.get("style", ""))
+    if _HIDDEN_STYLE.search(style):
+        return True
+    if _WHITE_TEXT.search(style):
+        bg = _BACKGROUND.search(style)
+        return bg is None or _is_light(bg.group(1))
+    return False
 
 
 def strip_hidden_html(raw: str) -> str:

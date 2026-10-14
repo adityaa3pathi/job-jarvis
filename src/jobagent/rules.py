@@ -6,11 +6,15 @@ import re
 
 from jobagent.models import DropReason, Posting
 
+RULES_VERSION = 2  # bump when a rule change could undrop or drop stored rows
+
 INDIA_MARKERS = (
     "india", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "delhi",
     "gurgaon", "gurugram", "noida", "ghaziabad", "faridabad", "kolkata", "ahmedabad", "jaipur",
     "kochi", "cochin", "coimbatore", "indore", "chandigarh", "thiruvananthapuram", "nagpur",
-    "lucknow", "bhubaneswar", "mysuru", "mysore", "vadodara", "surat", "ncr",
+    "lucknow", "bhubaneswar", "mysuru", "mysore", "vadodara", "surat", "ncr", "goa", "bhopal",
+    "patna", "ranchi", "raipur", "guwahati", "visakhapatnam", "vijayawada", "madurai",
+    "mangalore", "mangaluru", "nashik", "dehradun", "mohali", "gandhinagar", "trivandrum",
 )  # fmt: skip
 FOREIGN_MARKERS = (
     "united states", "usa", "us", "u.s.", "canada", "united kingdom", "uk", "london", "germany",
@@ -19,49 +23,101 @@ FOREIGN_MARKERS = (
     "emea", "apac", "latam", "brazil", "mexico", "japan", "tokyo", "china", "philippines",
     "new york", "san francisco", "california", "texas", "seattle", "toronto", "poland", "israel",
 )  # fmt: skip
+# Fee words alone are normal fintech text; spam asks the applicant to pay the employer.
 SPAM_PATTERNS = (
-    r"registration fee", r"security deposit", r"pay to apply", r"processing fee",
-    r"earn \S+ ?(?:per|a) (?:day|week)", r"no experience required.{0,40}earn",
+    r"\bpay (?:a |an |the )?(?:\w+ )?(?:registration|processing|joining|training|application"
+    r"|security) (?:fee|deposit|charges?)",
+    r"\b(?:fee|deposit|charges?) of (?:rs\.?|inr|₹)\s*\d", r"\bpay to apply",
+    r"\bearn\b \S+ ?(?:per|a) (?:day|week)", r"no experience required.{0,40}\bearn\b",
     r"data entry.{0,40}(?:per|/)\s*(?:day|hour)", r"guaranteed (?:job|placement)",
 )  # fmt: skip
 # Match the role itself, not benefits text like "unpaid leave" or "paid days off to volunteer".
 UNPAID_PATTERNS = (
     r"\bunpaid (?:intern|internship|role|position|job|opportunity|work)\b",
     r"no stipend",
-    r"without (?:any )?(?:pay|stipend)",
+    r"(?<!leave )without (?:any )?(?:pay|stipend)",
     r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
 SENIOR_TITLE = re.compile(
-    r"\b(senior|sr\.?|lead|principal|staff|head|architect|manager|director|vp)\b", re.IGNORECASE
+    r"\b(senior|sr\.?|principal|staff|head|architect|manager|director|vp)\b"
+    r"|\b(?:tech|team|technical|engineering|project|delivery|qa|test|module) lead\b"
+    r"|\blead (?!gen)(?:\w+ )?(?:engineer|developer|scientist|architect|analyst|consultant"
+    r"|designer|programmer)\b",
+    re.IGNORECASE,
 )
-_CONTACT_VERBS = r"(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)"
-_WHATSAPP = re.compile(
-    rf"(?:{_CONTACT_VERBS}.{{0,50}}whats\s?app|whats\s?app.{{0,50}}{_CONTACT_VERBS})|wa\.me/",
-    re.IGNORECASE | re.DOTALL,
+_NEGATED = re.compile(r"\([^)]*\bnot?\b[^)]*\)", re.IGNORECASE)
+_CONTACT_VERBS = re.compile(
+    r"\b(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)\b", re.I
 )
-_YEARS = re.compile(r"(\d{1,2})\s*(?:\+|-\s*(\d{1,2})|to\s*(\d{1,2}))?\s*(?:years?|yrs?)\b", re.I)
+# A real scam asks you to reach a number; a WhatsApp product JD names no contact.
+_CONTACT_OBJECT = re.compile(
+    r"\+\d{2}|\bwa\.me\b|\b\d{2}[\dx*]{6,}\b|\b\d{5}[\s-]\d{5}\b", re.IGNORECASE
+)
+_WHATSAPP = re.compile(r"whats\s?app", re.IGNORECASE)
+_YEARS = re.compile(
+    r"(\d{1,2})\s*(?:\+|[-–—]\s*(\d{1,2})|to\s*(\d{1,2}))?\s*\+?\s*(?:years?|yrs?)\b", re.I
+)
+_EXPERIENCE = re.compile(r"experience|\bexp\b", re.IGNORECASE)
+_COMPANY_HISTORY = re.compile(
+    r"\b(?:we have|we've|our (?:company|firm|founders?)|serving|in business|founded|since"
+    r"|track record|legacy)\b",
+    re.IGNORECASE,
+)
+_US_STATES = frozenset(
+    ("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN",
+     "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH",
+     "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT",
+     "VT", "VA", "WA", "WV", "WI", "WY")
+)  # fmt: skip
+_US_STATE_SUFFIX = re.compile(r"([A-Za-z .]+),\s*([A-Z]{2})(?=\s*(?:$|[,;/|()-]))")
+_INDIANA_CITIES = frozenset(
+    ("indianapolis", "fort wayne", "evansville", "south bend", "carmel", "fishers",
+     "bloomington", "lafayette", "west lafayette", "noblesville", "gary")
+)  # fmt: skip
 
 
-def parse_years(text: str) -> tuple[int, int | None] | None:
-    """Lowest and highest years asked, from phrases like '3-6 yrs' or '5+ years'."""
-    match = _YEARS.search(text)
-    if not match:
+def _years_in(sentence: str) -> list[tuple[int, int | None, bool]]:
+    found = []
+    for m in _YEARS.finditer(sentence):
+        high = m.group(2) or m.group(3)
+        near = sentence[max(0, m.start() - 25) : m.end() + 25]
+        found.append((int(m.group(1)), int(high) if high else None, bool(_EXPERIENCE.search(near))))
+    return found
+
+
+def parse_years(text: str, need_experience: bool = False) -> tuple[int, int | None] | None:
+    """Lowest years asked, from phrases like '3-6 yrs' or '5+ years'.
+
+    Prefers numbers next to 'experience' and skips company-history sentences.
+    """
+    found = []
+    for sentence in re.split(r"[.;\n]", text):
+        if _COMPANY_HISTORY.search(sentence):
+            continue
+        if need_experience and not _EXPERIENCE.search(sentence):
+            continue
+        found += _years_in(sentence)
+    linked = [f for f in found if f[2]] or found
+    if not linked:
         return None
-    low = int(match.group(1))
-    high_raw = match.group(2) or match.group(3)
-    return low, int(high_raw) if high_raw else None
+    low, high, _ = min(linked, key=lambda f: f[0])
+    return low, high
 
 
 def years_asked(posting: Posting) -> tuple[int, int | None] | None:
-    found = parse_years(posting.experience_text)
-    if found:
-        return found
-    for sentence in re.split(r"[.\n]", posting.description):
-        if re.search(r"experience|exp\b", sentence, re.IGNORECASE):
-            found = parse_years(sentence)
-            if found:
-                return found
-    return None
+    return parse_years(posting.experience_text) or parse_years(
+        posting.description, need_experience=True
+    )
+
+
+def has_whatsapp_contact(text: str) -> bool:
+    if re.search(r"\bwa\.me/", text, re.IGNORECASE):
+        return True
+    for m in _WHATSAPP.finditer(text):
+        window = text[max(0, m.start() - 60) : m.end() + 60]
+        if _CONTACT_VERBS.search(window) and _CONTACT_OBJECT.search(window):
+            return True
+    return False
 
 
 def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
@@ -69,17 +125,25 @@ def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
     return any(re.search(rf"(?<![a-z]){re.escape(m)}(?![a-z])", lowered) for m in markers)
 
 
+def _us_state_suffix(location: str) -> bool:
+    for city, state in _US_STATE_SUFFIX.findall(location):
+        if state in _US_STATES and (state != "IN" or city.strip().lower() in _INDIANA_CITIES):
+            return True
+    return False
+
+
 def outside_india(location: str) -> bool:
     if not location.strip():
         return False
-    return _has_marker(location, FOREIGN_MARKERS) and not _has_marker(location, INDIA_MARKERS)
+    foreign = _has_marker(location, FOREIGN_MARKERS) or _us_state_suffix(location)
+    return foreign and not _has_marker(location, INDIA_MARKERS)
 
 
 def check_hard_rules(posting: Posting, max_years_asked: int = 5) -> DropReason | None:
     text = f"{posting.title}\n{posting.description}"
     if posting.closed:
         return "closed"
-    if _WHATSAPP.search(text):
+    if has_whatsapp_contact(text):
         return "whatsapp_contact"
     if any(re.search(p, text, re.IGNORECASE) for p in SPAM_PATTERNS):
         return "spam"
@@ -88,6 +152,8 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 5) -> DropReason |
     if outside_india(posting.location):
         return "outside_india"
     asked = years_asked(posting)
-    if (asked and asked[0] >= max_years_asked) or SENIOR_TITLE.search(posting.title):
+    if (asked and asked[0] >= max_years_asked) or SENIOR_TITLE.search(
+        _NEGATED.sub("", posting.title)
+    ):
         return "too_senior"
     return None
