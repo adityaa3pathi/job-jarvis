@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
@@ -29,22 +30,31 @@ class Row(Mapping[str, Any]):
         return len(self._names)
 
 
+_QUALIFIED = re.compile(r"\w+\.(\w+)")
+
+
+def _name(raw: str) -> str:
+    """SQLite leaves a column's name unspecified without AS; Turso may send `j.key`, which
+    local SQLite calls `key`. Rows are read by the short name."""
+    plain = _QUALIFIED.fullmatch(raw)
+    return plain[1] if plain else raw
+
+
 class _Cursor:
     def __init__(self, cursor: Any) -> None:
         self._cursor = cursor
         self.lastrowid: int | None = cursor.lastrowid
         self.rowcount: int = cursor.rowcount
 
-    def _row(self, values: Sequence[Any] | None) -> Row | None:
-        if values is None:
-            return None
-        return Row([d[0] for d in self._cursor.description], values)
+    def _names(self) -> list[str]:
+        return [_name(d[0]) for d in self._cursor.description or []]
 
     def fetchone(self) -> Row | None:
-        return self._row(self._cursor.fetchone())
+        values = self._cursor.fetchone()
+        return None if values is None else Row(self._names(), values)
 
     def fetchall(self) -> list[Row]:
-        names = [d[0] for d in self._cursor.description or []]
+        names = self._names()
         return [Row(names, values) for values in self._cursor.fetchall()]
 
 

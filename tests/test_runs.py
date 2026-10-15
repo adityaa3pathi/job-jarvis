@@ -59,6 +59,38 @@ def test_cli_bookkeeping_failure_never_stops_later_portals(
     assert any("OSError: turso hiccup" in n for n in last["notes"])
 
 
+def test_cli_run_notes_an_unreadable_kill_switch(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken() -> bool:
+        raise ConnectionError("turso busy")
+
+    def fake_discover_all(_c: Any, _f: Any, policy: Policy, *_: Any, **__: Any) -> Any:
+        assert policy.begin("hirist", "discover").allowed
+        return DiscoveryResult()
+
+    monkeypatch.setattr("jobagent.cli.kill_switch_check", lambda _: broken)
+    monkeypatch.setattr("jobagent.policy.STOP_RETRY_WAIT_S", 0.0)
+    monkeypatch.setattr("jobagent.cli.discover_all", fake_discover_all)
+    assert cli.discover(settings) == 0
+    st = Store(settings.db_path)
+    last = st.runs()["last"]
+    st.close()
+    assert last is not None and "kill switch could not be read" in last["notes"]
+
+
+def test_a_failed_save_logs_its_traceback(caplog: pytest.LogCaptureFixture) -> None:
+    def broken(_: list[Posting]) -> list[Any]:
+        raise ValueError("'key' is not in list")
+
+    tally = RunTally()
+    with caplog.at_level("ERROR", logger="jobagent.runs"):
+        assert tally.save(part("hirist", "Zed", 2), broken) is None
+    assert tally.notes == ["hirist: save failed: ValueError: 'key' is not in list"]
+    (record,) = caplog.records
+    assert "hirist" in record.getMessage() and record.exc_info is not None
+
+
 def board(*jobs: dict[str, Any]) -> FetchResult:
     return FetchResult(200, json.dumps({"jobs": list(jobs)}), "x")
 
