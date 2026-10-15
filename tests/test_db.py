@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from collections import Counter
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from jobagent import cli
+from jobagent import db as db_module
 from jobagent.config import Settings, ensure_data_dir
 from jobagent.db import Database
 from jobagent.models import JobFilters, Posting
@@ -22,13 +24,16 @@ class CountingConn:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
         self.calls: Counter[str] = Counter()
+        self.sqls: list[str] = []
 
     def execute(self, sql: str, params: Any = ()) -> Any:
         self.calls["execute"] += 1
+        self.sqls.append(sql)
         return self._conn.execute(sql, params)
 
     def executemany(self, sql: str, rows: Any) -> Any:
         self.calls["execute"] += 1
+        self.sqls.append(sql)
         return self._conn.executemany(sql, rows)
 
     def executescript(self, script: str) -> None:
@@ -520,3 +525,168 @@ def test_facets_list_companies_and_cities_by_count(monkeypatch: pytest.MonkeyPat
     assert {"name": "Acme 100% Co", "count": 1} in got["companies"]
     assert len(got["companies"]) == 6
     assert db.facets("applied")["cities"] == [{"name": "bangalore", "count": 1}]
+
+
+# --- numbered migrations (U3, production audit #13) ---
+
+
+def sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def test_old_database_upgrades_through_each_migration_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE jobs (id INTEGER PRIMARY KEY, key TEXT NOT NULL, company TEXT NOT NULL,"
+        " title TEXT NOT NULL, location TEXT NOT NULL, experience_text TEXT NOT NULL,"
+        " stack_words TEXT NOT NULL, description TEXT NOT NULL, posted_date TEXT,"
+        " seen_date TEXT NOT NULL, source TEXT NOT NULL, track TEXT, status TEXT NOT NULL,"
+        " drop_reason TEXT, score INTEGER, rank_reason TEXT);"
+        "INSERT INTO jobs VALUES (1,'k','Co','T','L','','[]','Old text','',''"
+        ",'hirist',NULL,'dropped','unpaid',NULL,NULL);"
+    )
+    old.commit()
+    old.close()
+    ran: list[int] = []
+    steps = [
+        lambda conn, n=n, step=step: ran.append(n) or step(conn)
+        for n, step in enumerate(db_module.MIGRATIONS, 1)
+    ]
+    monkeypatch.setattr(db_module, "MIGRATIONS", tuple(steps))
+    Database(path).close()
+    db = Database(path)
+    assert ran == list(range(1, len(steps) + 1))  # each step once, in order
+    assert db.schema_version() == len(steps)
+    job = db.get_job(1)
+    assert (job["rules_version"], job["desc_hash"], job["pruned_at"]) == (1, sha("Old text"), None)
+    tables = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master").fetchall()}
+    assert "fetch_cache" in tables
+    db.close()
+
+
+# --- lean batch saves (U3, efficiency audit #3) ---
+
+SENIOR_TEXT = "Needs 8+ years of experience."
+
+
+def test_preload_never_selects_descriptions(counting: list[CountingConn]) -> None:
+    db = Database(":memory:")
+    db.upsert_many([posting(i, description=f"Text {i}") for i in range(20)])
+    conn = counting[0]
+    conn.sqls.clear()
+    db.upsert_many([posting(i, description=f"Text {i}") for i in range(20)])
+    reads = [s for s in conn.sqls if s.lstrip().upper().startswith("SELECT")]
+    assert reads and all("j.*" not in s for s in reads)
+    assert all("description" not in s.replace("length(j.description)", "") for s in reads)
+
+
+def test_stale_rule_drop_is_judged_on_stored_text_when_the_posting_has_none() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting(experience_text="", description=SENIOR_TEXT))
+    assert saved.drop_reason == "too_senior"
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET rules_version=1")
+    again = db.upsert_posting(posting(experience_text=""))  # a list read: no job text
+    assert (again.status, again.drop_reason) == ("dropped", "too_senior")
+    assert db.get_job(saved.job_id)["description"] == SENIOR_TEXT
+
+
+def test_desc_hash_follows_the_stored_text() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting(description=""))
+    assert db.get_job(saved.job_id)["desc_hash"] == sha("")
+    db.upsert_posting(posting(description="Richer text."))
+    job = db.get_job(saved.job_id)
+    assert (job["description"], job["desc_hash"]) == ("Richer text.", sha("Richer text."))
+
+
+# --- trimming old dropped text (U4) ---
+
+
+def aged(db: Database, job_id: int, days: int) -> None:
+    at = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    with db.conn:
+        db.conn.execute("UPDATE events SET at=? WHERE job_id=?", (at, job_id))
+
+
+def lever(i: int = 1, **kw: Any) -> Posting:
+    base = {"source": "lever", "url": f"https://jobs.lever.co/beta/{i}", "experience_text": "",
+            "description": SENIOR_TEXT}  # fmt: skip
+    return posting(i, **(base | kw))
+
+
+def test_prune_blanks_rule_dropped_text_after_30_days_only() -> None:
+    db = Database(":memory:")
+    old, young = db.upsert_posting(lever(1)), db.upsert_posting(lever(2))
+    found = db.upsert_posting(posting(3, description="Fine job."))
+    owner = db.upsert_posting(posting(4, description="Fine job too."))
+    db.set_status(owner.job_id, "dropped", "owner")
+    for job_id, days in ((old.job_id, 31), (young.job_id, 29), (found.job_id, 40)):
+        aged(db, job_id, days)
+    aged(db, owner.job_id, 40)
+    version = db.data_version()
+    assert db.prune() == 1
+    assert db.data_version() == version + 1
+    gone = db.get_job(old.job_id)
+    assert (gone["description"], gone["desc_hash"]) == ("", sha(SENIOR_TEXT))
+    assert gone["pruned_at"] and gone["status"] == "dropped"
+    for kept in (young, found, owner):
+        assert db.get_job(kept.job_id)["description"] and not db.get_job(kept.job_id)["pruned_at"]
+    assert db.prune() == 0
+
+
+def pruned_lever(db: Database) -> int:
+    saved = db.upsert_posting(lever())
+    aged(db, saved.job_id, 31)
+    assert db.prune() == 1
+    with db.conn:  # rules changed since: the stale path would re-judge it
+        db.conn.execute("UPDATE jobs SET rules_version=1")
+    return saved.job_id
+
+
+def test_pruned_lever_job_seen_again_stays_blank_and_dropped() -> None:
+    db = Database(":memory:")
+    job_id = pruned_lever(db)
+    before = derived(db, job_id)
+    for again in (lever(), lever(posted_date=date(2026, 10, 1)), lever(description="")):
+        result = db.upsert_posting(again)
+        assert (result.status, result.drop_reason) == ("dropped", "too_senior")
+    job = db.get_job(job_id)
+    assert (job["description"], job["status"]) == ("", "dropped") and job["pruned_at"]
+    assert derived(db, job_id) == before
+
+
+def test_recheck_never_re_judges_or_refills_a_pruned_job() -> None:
+    db = Database(":memory:")
+    job_id = pruned_lever(db)
+    before = derived(db, job_id)
+    db.recheck()
+    job = db.get_job(job_id)
+    assert (job["status"], job["description"]) == ("dropped", "")
+    assert job["desc_hash"] == sha(SENIOR_TEXT)
+    assert derived(db, job_id) == before
+
+
+def test_merging_never_refills_a_pruned_job() -> None:
+    db = Database(":memory:")
+    job_id = pruned_lever(db)
+    with db.conn:  # an older key, so the twin below is saved as its own row
+        db.conn.execute("UPDATE jobs SET key='old-key' WHERE id=?", (job_id,))
+    twin = db.upsert_posting(posting(1, source="cutshort", url="https://cutshort.io/job/twin",
+                                     experience_text="", description="Fresh text."))  # fmt: skip
+    assert twin.job_id != job_id
+    assert db.recheck().merged == 1
+    job = db.get_job(job_id)
+    assert (job["description"], job["status"]) == ("", "dropped")
+
+
+def test_cli_prune_prints_the_count(settings: Settings, capsys: Any) -> None:
+    ensure_data_dir(settings)
+    db = Database(settings.db_path)
+    aged(db, db.upsert_posting(lever()).job_id, 31)
+    db.close()
+    assert cli.prune(settings) == 0
+    assert capsys.readouterr().out == "pruned text of 1 dropped jobs\n"

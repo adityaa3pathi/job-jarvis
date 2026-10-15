@@ -13,6 +13,7 @@ from jobagent.discovery.base import (
     Company,
     DiscoveryResult,
     Fetcher,
+    SweepContext,
     Unreachable,
 )
 from jobagent.discovery.bebee import BebeeAdapter
@@ -46,9 +47,11 @@ def discover_all(
     policy: Policy,
     searches: list[BoardSearch] | None = None,
     on_portal_done: Callable[[DiscoveryResult], None] | None = None,
+    ctx: SweepContext | None = None,
 ) -> DiscoveryResult:
     """Each portal runs in its own thread, so one site's pauses never hold up another's.
-    `on_portal_done` gets each portal's result as it finishes, always on the calling thread."""
+    `on_portal_done` gets each portal's result as it finishes, always on the calling thread.
+    `ctx` lets company boards skip unchanged lists and fetch text for new jobs only."""
     jobs: dict[str, list[tuple[str, Callable[[], DiscoveryResult]]]] = {}
     # India job boards first: they hold most of the useful jobs.
     for search in searches or []:
@@ -56,10 +59,11 @@ def discover_all(
         jobs.setdefault(board.portal, []).append(
             (search.name, partial(board.discover, search, fetcher, policy))
         )
+    extra = {"ctx": ctx} if ctx else {}
     for company in companies:
         adapter = ADAPTERS[company.ats]
         jobs.setdefault(adapter.portal, []).append(
-            (company.name, partial(adapter.discover, company, fetcher, policy))
+            (company.name, partial(adapter.discover, company, fetcher, policy, **extra))
         )
 
     def run_portal(

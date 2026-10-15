@@ -15,7 +15,13 @@ from jobagent.discovery.fetch import HttpFetcher
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume import cli_tailor
-from jobagent.runs import RunTally, kill_switch_check, save_portal
+from jobagent.runs import (
+    RunTally,
+    kill_switch_check,
+    prune_after_run,
+    save_portal,
+    sweep_context,
+)
 from jobagent.web.store import Store
 
 
@@ -51,7 +57,9 @@ def discover(settings: Settings) -> int:
             discover_all(
                 load_companies(REPO_ROOT / "companies.yaml"), HttpFetcher(), policy,
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
+                ctx=sweep_context(db, settings.detail_fetch_cap),
             )  # fmt: skip
+            prune_after_run(db, tally)
         except Exception as exc:
             st.finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}", tally.as_dict())
             raise
@@ -73,6 +81,8 @@ def report(counts: dict[str, Any], out: TextIO) -> None:
         out.write(f"SKIPPED  {line}\n")
     for line in counts["notes"]:
         out.write(f"NOTE  {line}\n")
+    if unchanged := counts.get("unchanged"):
+        out.write(f"UNCHANGED  {unchanged} boards same as last run, not re-read\n")
     for name, c in counts["portals"].items():
         out.write(f"PORTAL  {name}: read {c['read']}, new {c['new']}, saved {c['saved']}\n")
     if drops := counts["drop_reasons"]:
@@ -147,10 +157,31 @@ def restore(dump: Path, target: Path) -> int:
     return 0
 
 
+def prune(settings: Settings) -> int:
+    """Blank the text of jobs the rules dropped over 30 days ago (U4)."""
+    lock = RunLock(settings.lock_file)
+    try:
+        lock.acquire()
+    except LockHeldError as exc:
+        sys.stdout.write(f"not started: {exc}\n")
+        return 1
+    try:
+        ensure_data_dir(settings)
+        db = Database(settings.db_path, settings.max_years_asked)
+        try:
+            pruned = db.prune()
+        finally:
+            db.close()
+    finally:
+        lock.release()
+    sys.stdout.write(f"pruned text of {pruned} dropped jobs\n")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="job-agent")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "stop", "resume", "discover", "recheck", "hash-password"):
+    for name in ("status", "stop", "resume", "discover", "recheck", "prune", "hash-password"):
         sub.add_parser(name)
     cli_tailor.add_arguments(sub.add_parser("tailor"))
     sub.add_parser("backup").add_argument("out", type=Path)
@@ -176,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
         return backup(settings, args.out)
     if args.command == "recheck":
         return recheck(settings)
+    if args.command == "prune":
+        return prune(settings)
     return kill_switch(settings, args.command)
 
 

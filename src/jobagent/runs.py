@@ -10,8 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from jobagent.db import UpsertResult
-from jobagent.discovery.base import DiscoveryResult
+from jobagent.db import Database, UpsertResult
+from jobagent.dedupe import normalize_url
+from jobagent.discovery.base import DiscoveryResult, SweepContext, Validators
 from jobagent.models import Posting
 from jobagent.sqlconn import connect
 
@@ -28,6 +29,7 @@ class RunTally:
     skipped: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     per_target: dict[str, int] = field(default_factory=dict)
+    unchanged: list[str] = field(default_factory=list)
 
     def add(self, part: DiscoveryResult, saved: Sequence[UpsertResult] | None) -> None:
         name = part.portal or (part.postings[0].source if part.postings else "other")
@@ -43,6 +45,7 @@ class RunTally:
         self.skipped += part.skipped_by_policy
         self.notes += part.notes
         self.per_target.update(part.per_target)
+        self.unchanged += part.unchanged
 
     def save(
         self, part: DiscoveryResult, upsert: Callable[[list[Posting]], list[UpsertResult]]
@@ -68,7 +71,7 @@ class RunTally:
             **totals, "portals": self.portals,
             "drop_reasons": dict(sorted(self.drop_reasons.items())),
             "unreachable": self.unreachable, "skipped": self.skipped, "notes": self.notes,
-            "per_target": self.per_target,
+            "per_target": self.per_target, "unchanged": len(self.unchanged),
         }  # fmt: skip
 
 
@@ -78,6 +81,8 @@ class _Jobs(Protocol):
     def close_vanished(
         self, postings: Sequence[Posting], *, clean: bool, after_runs: int
     ) -> int: ...
+
+    def save_validators(self, entries: dict[str, Validators]) -> None: ...
 
 
 class _Runs(Protocol):
@@ -91,6 +96,12 @@ def save_portal(
     """Save one finished portal. Closing and progress writes are bookkeeping: a failure
     is logged and noted, never raised, so later portals still get saved."""
     saved = tally.save(part, db.upsert_many)
+    if saved is not None and part.fresh:
+        try:
+            db.save_validators(part.fresh)
+        except Exception as exc:  # those lists are only read again next run
+            log.exception("keeping list validators failed")
+            tally.note_failure(part, "keeping list validators", exc)
     clean = saved is not None and not (part.unreachable or part.skipped_by_policy or part.partial)
     try:
         db.close_vanished(part.postings, clean=clean, after_runs=after_runs)
@@ -103,6 +114,27 @@ def save_portal(
         log.exception("recording run progress failed")
         tally.note_failure(part, "recording progress", exc)
     return saved
+
+
+def sweep_context(db: Database, detail_cap: int) -> SweepContext:
+    """Read once before a run: each list's validators and the stored Greenhouse URLs, so
+    unchanged lists are skipped and job text is fetched for new jobs only (KTD3)."""
+    stored = db.known_urls("greenhouse")
+    return SweepContext(
+        validators={url: Validators(*v) for url, v in db.fetch_validators().items()},
+        known=lambda url: normalize_url(url) in stored,
+        detail_cap=detail_cap,
+    )
+
+
+def prune_after_run(db: Database, tally: RunTally) -> None:
+    """Trim old dropped text once a run's saves are done; a failure is only noted (U4)."""
+    try:
+        if pruned := db.prune():
+            tally.notes.append(f"pruned text of {pruned} old dropped jobs")
+    except Exception as exc:
+        log.exception("pruning old dropped text failed")
+        tally.notes.append(f"pruning failed: {type(exc).__name__}: {exc}")
 
 
 # --- the kill switch: a DB flag, so it survives restarts ---

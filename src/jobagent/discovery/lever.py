@@ -21,6 +21,7 @@ def full_description(job: dict[str, Any]) -> str:
 
 class LeverAdapter(Adapter[Company]):
     portal = "lever"
+    conditional = True
 
     def url_for(self, company: Company) -> str:
         host = "api.eu.lever.co" if company.region == "eu" else "api.lever.co"

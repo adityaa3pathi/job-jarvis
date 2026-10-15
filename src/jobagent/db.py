@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
@@ -53,10 +54,12 @@ CREATE INDEX IF NOT EXISTS events_job ON events(job_id);
 CREATE INDEX IF NOT EXISTS job_links_job ON job_links(job_id);
 CREATE TABLE IF NOT EXISTS flags (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+# SCHEMA holds the first release only; every later column, table or index on a new column
+# is a numbered step in MIGRATIONS, so an old table is altered before anything uses it.
 # Indexes a page read cannot do without; checked at app startup (efficiency audit #1).
 INDEXES = {"job_links_job": "CREATE INDEX IF NOT EXISTS job_links_job ON job_links(job_id)"}
 
-# Added after the first release; old tables get them by ALTER TABLE.
+# Migration 1: columns added after the first release.
 NEW_COLUMNS = {
     "rules_version": "INTEGER NOT NULL DEFAULT 1",
     "missed_runs": "INTEGER NOT NULL DEFAULT 0",
@@ -72,11 +75,22 @@ DERIVED_FROM = ("title", "location", "experience_text", "description")
 RULE_REASONS = frozenset(get_args(DropReason)) - {"no_track"}
 OWNER = "owner"  # the event note of a status the owner set; rules never undo it
 SWEPT = re.compile(r"gone from \d+ clean runs")
-# The note of a job's latest status event; merge events only repeat the status.
-LAST_NOTE = (
-    "(SELECT e.note FROM events e WHERE e.job_id=j.id AND e.note NOT LIKE 'merged job %'"
+# A field of a job's latest status event; merge events only repeat the status.
+LAST_EVENT = (
+    "(SELECT e.{} FROM events e WHERE e.job_id=j.id AND e.note NOT LIKE 'merged job %'"
     " ORDER BY e.id DESC LIMIT 1)"
 )
+LAST_NOTE, LAST_AT = LAST_EVENT.format("note"), LAST_EVENT.format("at")
+PRUNE_AFTER_DAYS = 30  # owner, 15-10-2026: dropped jobs keep their text this long (R4)
+# Every jobs column but the text: a batch preload reads its length and hash instead (KTD4).
+LEAN = ", ".join(
+    f"j.{c}" for c in (
+        "id", "key", "company", "title", "location", "experience_text", "stack_words",
+        "posted_date", "seen_date", "source", "track", "status", "drop_reason", "score",
+        "rank_reason", "rules_version", "missed_runs", "min_years", "max_years", "role",
+        "work_mode", "city", "desc_hash", "pruned_at",
+    )
+) + ", length(j.description) AS desc_len"  # fmt: skip
 
 Outcome = Literal["new", "merged", "updated", "duplicate"]
 
@@ -150,6 +164,76 @@ def data_version(conn: Any) -> int:
     return int(row["value"]) if row else 0
 
 
+def text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _add_column(conn: Any, name: str, kind: str) -> None:
+    have = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    if name in have:
+        return
+    try:
+        conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {kind}")
+    except Exception as exc:  # another handle added it after our read
+        if "duplicate column" not in str(exc).lower():
+            raise
+    conn.commit()
+
+
+def hash_missing(conn: Any) -> int:
+    """Fill `desc_hash` a chunk at a time, so the text never sits in memory all at once."""
+    done = 0
+    sql = "SELECT id, description FROM jobs WHERE desc_hash IS NULL LIMIT ?"
+    while rows := conn.execute(sql, (CHUNK,)).fetchall():
+        with conn:
+            conn.executemany(
+                "UPDATE jobs SET desc_hash=? WHERE id=?",
+                [(text_hash(r["description"]), r["id"]) for r in rows],
+            )
+        done += len(rows)
+    return done
+
+
+def _m1_columns(conn: Any) -> None:
+    for name, kind in NEW_COLUMNS.items():
+        _add_column(conn, name, kind)
+
+
+def _m2_lean_text(conn: Any) -> None:
+    _add_column(conn, "desc_hash", "TEXT")
+    _add_column(conn, "pruned_at", "TEXT")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS fetch_cache (url TEXT PRIMARY KEY, etag TEXT,"
+        " last_modified TEXT, body_sha256 TEXT NOT NULL, saved_at TEXT NOT NULL)"
+    )
+    conn.commit()
+    hash_missing(conn)
+
+
+# Run once each, in order; a step must be safe to re-run (two handles may open at once).
+MIGRATIONS: tuple[Callable[[Any], None], ...] = (_m1_columns, _m2_lean_text)
+
+
+def schema_version(conn: Any) -> int:
+    row = conn.execute("SELECT value FROM flags WHERE name='schema_version'").fetchone()
+    return int(row["value"]) if row else 0
+
+
+def migrate(conn: Any) -> None:
+    done = schema_version(conn)
+    for number, step in enumerate(MIGRATIONS, 1):
+        if number <= done:
+            continue
+        step(conn)
+        with conn:
+            conn.execute(
+                "INSERT INTO flags(name, value) VALUES ('schema_version', ?) ON CONFLICT(name)"
+                " DO UPDATE SET value=excluded.value"
+                " WHERE CAST(value AS INTEGER) < CAST(excluded.value AS INTEGER)",
+                (str(number),),
+            )
+
+
 def _like(text: str) -> str:
     return "%" + re.sub(r"([\\%_])", r"\\\1", text) + "%"
 
@@ -198,7 +282,7 @@ class Database:
         self.conn = connect(path)
         if schema:
             self.conn.executescript(SCHEMA)
-            self._add_columns()
+            migrate(self.conn)
         self.max_years_asked = max_years_asked
 
     def close(self) -> None:
@@ -216,17 +300,8 @@ class Database:
                 self.conn.execute(INDEXES[name])
         return missing
 
-    def _add_columns(self) -> None:
-        have = {row[1] for row in self.conn.execute("PRAGMA table_info(jobs)").fetchall()}
-        for name, kind in NEW_COLUMNS.items():
-            if name in have:
-                continue
-            try:
-                self.conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {kind}")
-            except Exception as exc:  # another handle added it after our read
-                if "duplicate column" not in str(exc).lower():
-                    raise
-        self.conn.commit()
+    def schema_version(self) -> int:
+        return schema_version(self.conn)
 
     def upsert_posting(self, posting: Posting, now: str | None = None) -> UpsertResult:
         return self.upsert_many([posting], now)[0]
@@ -262,7 +337,7 @@ class Database:
         for chunk in _chunks(sorted({norm for _, norm, _ in keyed})):
             marks = ",".join("?" * len(chunk))
             for row in self.conn.execute(
-                f"SELECT l.norm_url AS link_url, {LAST_NOTE} AS last_note, j.* FROM jobs j"
+                f"SELECT l.norm_url AS link_url, {LAST_NOTE} AS last_note, {LEAN} FROM jobs j"
                 f" JOIN job_links l ON l.job_id=j.id WHERE l.norm_url IN ({marks})", chunk,
             ).fetchall():  # fmt: skip
                 by_url[row["link_url"]] = dict(row)
@@ -270,7 +345,7 @@ class Database:
         keys = sorted({key for _, norm, key in keyed if norm not in by_url})
         for chunk in _chunks(keys):
             marks = ",".join("?" * len(chunk))
-            sql = f"SELECT {LAST_NOTE} AS last_note, j.* FROM jobs j WHERE key IN ({marks})"
+            sql = f"SELECT {LAST_NOTE} AS last_note, {LEAN} FROM jobs j WHERE key IN ({marks})"
             sql += " ORDER BY id"
             for row in self.conn.execute(sql, chunk).fetchall():
                 by_key.setdefault(row["key"], dict(row))
@@ -295,6 +370,7 @@ class Database:
             "stack_words": json.dumps(posting.stack_words), "description": posting.description,
             "posted_date": posted, "seen_date": seen, "source": posting.source,
             "status": status, "drop_reason": reason, "rules_version": RULES_VERSION,
+            "desc_hash": text_hash(posting.description),
         }  # fmt: skip
         row |= derive(row)
         cur = self.conn.execute(
@@ -306,13 +382,13 @@ class Database:
             # Another handle saved this URL after our read: keep its row, not a linkless copy.
             self.conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
             found = self.conn.execute(
-                "SELECT j.* FROM jobs j JOIN job_links l ON l.job_id=j.id WHERE l.norm_url=?",
+                f"SELECT {LEAN} FROM jobs j JOIN job_links l ON l.job_id=j.id WHERE l.norm_url=?",
                 (norm,),
             ).fetchone()
             by_url[norm] = dict(found)
             return self._refresh(by_url[norm], posting, seen, bumps)
         self._event(job_id, None, status, reason or "")
-        row |= {"id": job_id, "missed_runs": 0}
+        row |= {"id": job_id, "missed_runs": 0, "pruned_at": None}
         by_url[norm] = row
         by_key.setdefault(key, row)
         return UpsertResult(job_id, "new", status, reason)
@@ -343,22 +419,35 @@ class Database:
         note = reason or f"rules v{RULES_VERSION}: clean"
         return changes | {"status": status, "drop_reason": reason}, (job["status"], status, note)
 
+    def _with_text(self, job: _Job) -> _Job:
+        """The job with its description, read now only if the batch preload left it out."""
+        if "description" in job:
+            return job
+        got = self.conn.execute("SELECT description FROM jobs WHERE id=?", (job["id"],)).fetchone()
+        return job | {"description": got["description"] if got else ""}
+
     def _refresh(
         self, row: _Job, posting: Posting, seen: str, bumps: list[tuple[str, int]]
     ) -> UpsertResult:
         """A known job seen again: take richer text, re-run stale or new rules, honour closed,
-        reopen a job the sweep closed. A status the owner set is never re-judged."""
+        reopen a job the sweep closed. A status the owner set is never re-judged; a pruned
+        job keeps its blank text and its verdict (U4)."""
+        pruned = bool(row["pruned_at"])
         new_date = posting.posted_date.isoformat() if posting.posted_date else None
         reposted = bool(new_date and new_date != row["posted_date"])
         changes: dict[str, object] = {"seen_date": seen}
         if reposted:
-            changes |= {"posted_date": new_date, "title": posting.title,
-                        "description": posting.description or row["description"]}  # fmt: skip
-        for col in ("description", "experience_text"):
-            if not row[col] and getattr(posting, col):
-                changes.setdefault(col, getattr(posting, col))
-        text = ("title", "description", "experience_text")
-        richer = any(changes.get(col, row[col]) != row[col] for col in text)
+            changes |= {"posted_date": new_date, "title": posting.title}
+        has_text = len(row["description"]) if "description" in row else row["desc_len"]
+        if not pruned and posting.description and (reposted or not has_text):
+            digest = text_hash(posting.description)  # same text: nothing to write
+            if digest != row["desc_hash"]:
+                changes |= {"description": posting.description, "desc_hash": digest}
+        if not pruned and posting.experience_text and not row["experience_text"]:
+            changes["experience_text"] = posting.experience_text
+        # A changed description is always new text: it is only set when its hash differs.
+        moved = {col for col, value in changes.items() if value != row.get(col)}
+        richer = bool(moved & {"title", "description", "experience_text"})
         stale = (
             row["status"] == "dropped" and row["drop_reason"] in RULE_REASONS
             and row["rules_version"] < RULES_VERSION
@@ -368,8 +457,8 @@ class Database:
             changes["status"] = "found"
             events.append(("closed", "found", "seen again"))
         found = changes.get("status", row["status"]) == "found"
-        if row.get("last_note") != OWNER and (stale or (richer and found)):
-            verdict, event = self._judge(row | changes)
+        if not pruned and row.get("last_note") != OWNER and (stale or (richer and found)):
+            verdict, event = self._judge(self._with_text(row | changes))
             changes |= verdict
             events += [event] if event else []
         status = str(changes.get("status", row["status"]))
@@ -377,8 +466,8 @@ class Database:
             changes["status"] = "closed"
             events.append((status, "closed", "source says closed"))
         # Only new text or a never-derived row can change them; recheck backfills rule changes.
-        if row["role"] == "" or any(changes.get(c, row[c]) != row[c] for c in DERIVED_FROM):
-            changes |= _stale_derived(row | changes)  # current rows keep the shared bump
+        if not pruned and (row["role"] == "" or moved & set(DERIVED_FROM)):
+            changes |= _stale_derived(self._with_text(row | changes))  # current rows keep the bump
         if len(changes) == 1:
             bumps.append((seen, row["id"]))
         else:
@@ -442,6 +531,7 @@ class Database:
                 row
                 for row in every
                 if row["last_note"] != OWNER
+                and not row["pruned_at"]  # its rules ran on text it no longer has
                 and (
                     row["status"] == "found"
                     or (row["status"] == "dropped" and row["drop_reason"] in recheckable)
@@ -462,6 +552,7 @@ class Database:
                 )
             self._events(events)
             self._backfill(every)
+            self._rehash(every)
             bump_version(self.conn)
         return RecheckSummary(
             rechecked=len(rows),
@@ -471,13 +562,22 @@ class Database:
         )
 
     def _backfill(self, rows: list[_Job]) -> None:
-        """Derived filter columns on every row, owner-set ones too, in one write (KTD2)."""
-        fresh = [derive(row) | {"id": row["id"]} for row in rows if _stale_derived(row)]
+        """Derived filter columns on every row, owner-set ones too, in one write (KTD2).
+        Pruned rows keep theirs: their text is gone, not changed."""
+        live = [row for row in rows if not row["pruned_at"]]
+        fresh = [derive(row) | {"id": row["id"]} for row in live if _stale_derived(row)]
         if fresh:
             sets = ", ".join(f"{col}=?" for col in DERIVED)
             self.conn.executemany(
                 f"UPDATE jobs SET {sets} WHERE id=?", [tuple(f.values()) for f in fresh]
             )
+
+    def _rehash(self, rows: list[_Job]) -> None:
+        """A missing or stale `desc_hash`; a pruned row keeps the hash of its old text."""
+        live = [(text_hash(row["description"]), row) for row in rows if not row["pruned_at"]]
+        fixes = [(digest, row["id"]) for digest, row in live if digest != row["desc_hash"]]
+        if fixes:
+            self.conn.executemany("UPDATE jobs SET desc_hash=? WHERE id=?", fixes)
 
     def _rekey(self) -> int:
         jobs = {row["id"]: dict(row) for row in self.conn.execute("SELECT * FROM jobs").fetchall()}
@@ -537,7 +637,8 @@ class Database:
             self.conn.execute(
                 f"UPDATE {table} SET job_id=? WHERE job_id=?", (keep["id"], dup["id"])
             )
-        fill = {c: dup[c] for c in ("description", "experience_text") if not keep[c] and dup[c]}
+        text = () if keep["pruned_at"] else ("description", "experience_text", "desc_hash")
+        fill = {c: dup[c] for c in text if not keep[c] and dup[c]}
         early = ("found", "dropped")
         if keep["status"] in early and dup["status"] not in early:  # keep the owner's progress
             fill |= {c: dup[c] for c in ("status", "drop_reason", "track", "score", "rank_reason")}
@@ -547,6 +648,49 @@ class Database:
             keep.update(fill)
         self.conn.execute("DELETE FROM jobs WHERE id=?", (dup["id"],))
         self._event(keep["id"], keep["status"], keep["status"], f"merged job {dup['id']}")
+
+    def prune(self, days: int = PRUNE_AFTER_DAYS, now: datetime | None = None) -> int:
+        """Blank the text of jobs the rules dropped over `days` ago (R4). The hash stays, and
+        `pruned_at` keeps them from being refilled or re-judged on text they no longer have."""
+        at = now or datetime.now(UTC)
+        reasons = sorted(RULE_REASONS)
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE jobs SET description='', pruned_at=? WHERE id IN (SELECT j.id FROM jobs j"
+                " WHERE j.status='dropped' AND j.pruned_at IS NULL AND j.description!=''"
+                f" AND j.drop_reason IN ({','.join('?' * len(reasons))})"
+                f" AND COALESCE({LAST_NOTE}, '')!=? AND {LAST_AT}<?)",
+                (at.isoformat(), *reasons, OWNER, (at - timedelta(days=days)).isoformat()),
+            )
+            pruned = max(cur.rowcount, 0)
+            if pruned:
+                bump_version(self.conn)
+        return pruned
+
+    def known_urls(self, source: str) -> set[str]:
+        """Normalised URLs of every job stored from this source."""
+        rows = self.conn.execute("SELECT norm_url FROM job_links WHERE source=?", (source,))
+        return {row[0] for row in rows.fetchall()}
+
+    def fetch_validators(self) -> dict[str, tuple[str | None, str | None, str]]:
+        rows = self.conn.execute(
+            "SELECT url, etag, last_modified, body_sha256 FROM fetch_cache"
+        ).fetchall()
+        return {row[0]: (row[1], row[2], row[3]) for row in rows}
+
+    def save_validators(self, entries: Mapping[str, tuple[str | None, str | None, str]]) -> None:
+        """Kept only after a list's jobs are saved, so an unsaved list is read again."""
+        if not entries:
+            return
+        now = _now()
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO fetch_cache(url, etag, last_modified, body_sha256, saved_at)"
+                " VALUES (?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET etag=excluded.etag,"
+                " last_modified=excluded.last_modified, body_sha256=excluded.body_sha256,"
+                " saved_at=excluded.saved_at",
+                [(url, *v, now) for url, v in entries.items()],
+            )
 
     def _renorm_applications(self) -> None:
         apps = self.conn.execute(

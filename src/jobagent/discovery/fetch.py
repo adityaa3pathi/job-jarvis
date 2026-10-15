@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import socket
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -27,6 +27,7 @@ KNOWN_BOARD_HOSTS = frozenset(
 )  # fmt: skip
 MAX_REDIRECTS = 3
 MAX_BYTES = 16_000_000  # the biggest Greenhouse boards with full job text reach ~12 MB
+VALIDATORS = ("etag", "last-modified")
 Resolver = Callable[[str, int], list[str]]
 
 
@@ -99,23 +100,24 @@ class HttpFetcher:
             headers={"User-Agent": "job-apply-agent/0.1 (personal job search; low rate)"},
         )
 
-    def get(self, url: str) -> FetchResult:
+    def get(self, url: str, headers: Mapping[str, str] | None = None) -> FetchResult:
         # timeout_s bounds each read; deadline_s bounds the whole request incl. redirects
         end = self.clock() + self.deadline_s
         current = url
         for _ in range(MAX_REDIRECTS + 1):
             guard_url(current, self.allowed_hosts, self.resolver)
             timeout = min(self.timeout_s, self._remaining(end))
-            with self._client.stream("GET", current, timeout=timeout) as response:
+            with self._client.stream("GET", current, timeout=timeout, headers=headers) as response:
                 self._remaining(end)
-                if response.is_redirect:
+                if response.is_redirect and response.status_code != 304:  # 304: not changed
                     location = response.headers.get("location")
                     if not location:
                         raise FetchRefused("redirect without location")
                     current = urljoin(current, location)
                     continue
                 text = self._read_text(response, end)
-                return FetchResult(response.status_code, text, current)
+                kept = {k: response.headers[k] for k in VALIDATORS if k in response.headers}
+                return FetchResult(response.status_code, text, current, kept)
         raise FetchRefused("too many redirects")
 
     def _remaining(self, end: float) -> float:

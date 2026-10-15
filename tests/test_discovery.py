@@ -262,6 +262,18 @@ def test_good_fetch_follows_one_safe_redirect() -> None:
     assert (res.status, res.text) == (200, "hello")
 
 
+def test_conditional_get_sends_validators_and_reads_them_back() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("if-none-match") == 'W/"v1"':
+            return httpx.Response(304, headers={"etag": 'W/"v1"'})
+        return httpx.Response(200, text="[]", headers={"etag": 'W/"v1"', "x-other": "1"})
+
+    first = _fetcher(handler).get("https://api.lever.co/v0/postings/a")
+    assert (first.status, dict(first.headers)) == (200, {"etag": 'W/"v1"'})
+    again = _fetcher(handler).get("https://api.lever.co/v0/postings/a", {"If-None-Match": 'W/"v1"'})
+    assert (again.status, again.text) == (304, "")
+
+
 class _Drip(httpx.SyncByteStream):
     """Yields chunks while advancing a fake clock, like a slow server."""
 

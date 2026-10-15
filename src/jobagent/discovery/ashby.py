@@ -11,6 +11,7 @@ from jobagent.models import Posting
 
 class AshbyAdapter(Adapter[Company]):
     portal = "ashby"
+    conditional = True
 
     def url_for(self, company: Company) -> str:
         return f"https://api.ashbyhq.com/posting-api/job-board/{company.token}"

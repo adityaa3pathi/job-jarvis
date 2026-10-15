@@ -56,7 +56,7 @@ from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
-from jobagent.runs import RunTally, save_portal
+from jobagent.runs import RunTally, prune_after_run, save_portal, sweep_context
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.store import Store, profile_from_json, profile_to_json
 from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadError, doc_to_text
@@ -500,7 +500,9 @@ def create_app(cfg: WebConfig) -> FastAPI:
                             load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher,
                             load_policy(), load_searches(REPO_ROOT / "searches.yaml"),
                             on_portal_done=save,
+                            ctx=sweep_context(db, settings.detail_fetch_cap),
                         )  # fmt: skip
+                        prune_after_run(db, tally)
                     st.finish_run(run_id, "done", "", tally.as_dict())
                 except Exception as exc:  # record every failure; saved portals stay saved
                     held_elsewhere = isinstance(exc, LockHeldError)
