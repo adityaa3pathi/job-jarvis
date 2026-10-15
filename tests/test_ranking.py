@@ -281,3 +281,37 @@ def test_profile_match_shows_the_scaled_similarity(settings: Settings) -> None:
     score_found(db, FixedEmbedder())  # type: ignore[arg-type]
     reason = scores(db)[1][1]
     assert "profile match 20%" in reason and "60%" not in reason
+
+
+def test_each_run_embeds_at_most_the_new_job_cap(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.rank.EMBED_CHUNK", 2)  # the cap must hold across chunks
+    db = db_with(settings, [job(i, GOOD) for i in range(5)])
+    emb = CountingEmbedder()
+    first = score_found(db, emb, max_new_embeddings=2)
+    assert len(emb.texts) == 3 and first.left_to_embed == 3  # profile + 2 postings
+    # Jobs without a vector yet still get a rules score this run.
+    assert all(s is not None for s, _ in scores(db).values())
+    score_found(db, emb, max_new_embeddings=2)
+    score_found(db, emb, max_new_embeddings=2)
+    assert len(emb.texts) == 6 and score_found(db, emb, max_new_embeddings=2).left_to_embed == 0
+
+
+def test_fastembed_model_runs_on_one_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    seen: dict[str, Any] = {}
+
+    class FakeTextEmbedding:
+        def __init__(self, **kw: Any) -> None:
+            seen.update(kw)
+
+    monkeypatch.setitem(
+        sys.modules, "fastembed", types.SimpleNamespace(TextEmbedding=FakeTextEmbedding)
+    )
+    from jobagent.index import FastEmbedEmbedder
+
+    FastEmbedEmbedder()
+    assert seen.get("threads") == 1

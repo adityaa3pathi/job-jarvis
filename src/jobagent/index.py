@@ -107,7 +107,8 @@ class FastEmbedEmbedder:
         from fastembed import TextEmbedding  # type: ignore[import-not-found,unused-ignore]
 
         # FASTEMBED_CACHE_PATH (set in the image) holds the model, so nothing downloads at run time.
-        self._model = TextEmbedding(model_name=FASTEMBED_MODEL)
+        # One thread: on Render's small CPU an all-cores model starved the health check.
+        self._model = TextEmbedding(model_name=FASTEMBED_MODEL, threads=1)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         # One text per model pass: measured 292 MB peak vs 1.9 GB at 64, and faster on CPU.
@@ -225,12 +226,19 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
 
 
 def embed_cached(
-    embedder: Embedder, texts: Sequence[str], store: VectorStore, batch: int = 64
-) -> list[array[float]]:
-    """Vectors for `texts`; each distinct text is embedded once, ever, per model."""
+    embedder: Embedder,
+    texts: Sequence[str],
+    store: VectorStore,
+    batch: int = 64,
+    max_new: int | None = None,
+    embedded: list[int] | None = None,
+) -> list[array[float] | None]:
+    """Vectors for `texts`; each distinct text is embedded once, ever, per model.
+    With `max_new`, at most that many new texts are embedded; the rest come back None.
+    `embedded`, when given, gets the count of texts embedded by this call appended."""
     keys = [vector_key(embedder, t) for t in texts]
     stored = store.vectors(keys)
-    missing = list(dict.fromkeys(k for k in keys if k not in stored))
+    missing = list(dict.fromkeys(k for k in keys if k not in stored))[:max_new]
     text_of = dict(zip(keys, texts, strict=True))
     for start in range(0, len(missing), batch):
         part = missing[start : start + batch]
@@ -238,4 +246,6 @@ def embed_cached(
                                             strict=True)}  # fmt: skip
         store.save_vectors(embedder.name, fresh)
         stored |= fresh
-    return [unpack(stored[k]) for k in keys]
+    if embedded is not None:
+        embedded.append(len(missing))
+    return [unpack(stored[k]) if k in stored else None for k in keys]

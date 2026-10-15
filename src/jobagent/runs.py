@@ -101,6 +101,8 @@ def save_portal(
     """Save one finished portal. Closing and progress writes are bookkeeping: a failure
     is logged and noted, never raised, so later portals still get saved."""
     saved = tally.save(part, db.upsert_many)
+    portal = part.postings[0].source if part.postings else "?"
+    log.info("portal %s saved: %d postings", portal, len(part.postings))
     if saved is not None and part.fresh:
         try:
             db.save_validators(part.fresh)

@@ -309,23 +309,42 @@ class RankSummary:
     scored: int = 0
     changed: int = 0
     embedded: bool = False
+    left_to_embed: int = 0  # found jobs still waiting for a vector (filled on later runs)
 
 
 def score_found(
-    db: Database, embedder: Embedder | None, *, owner_years: int | None = None
+    db: Database,
+    embedder: Embedder | None,
+    *,
+    owner_years: int | None = None,
+    max_new_embeddings: int | None = None,
 ) -> RankSummary:
     """Tier 2: a cheap score for every found job; writes only rows whose score moved."""
     rows, profile = db.rank_rows(), db.profile_text()
     prefs = Preferences.fit(db.labels())
     sims: list[float | None] = [None] * len(rows)
+    left = 0
     if embedder is not None and profile and rows:
         heads = [f"{r['title']}\n{r['head']}" for r in rows]
+        budget = max_new_embeddings
         try:
             [me] = embed_cached(embedder, [profile[:PROFILE_CHARS]], db)
+            if me is None:
+                raise ValueError("profile vector missing")
             sims = []
             for start in range(0, len(heads), EMBED_CHUNK):  # bounds vectors held at once
-                part = embed_cached(embedder, heads[start : start + EMBED_CHUNK], db)
-                sims += [cosine(me, v) for v in part]
+                done: list[int] = []
+                part = embed_cached(
+                    embedder,
+                    heads[start : start + EMBED_CHUNK],
+                    db,
+                    max_new=budget,
+                    embedded=done,
+                )
+                if budget is not None:
+                    budget = max(0, budget - done[0])
+                sims += [cosine(me, v) if v is not None else None for v in part]
+            left = sum(1 for s in sims if s is None)
         except Exception as exc:  # a model failure must not stop the run
             log.warning("embedding failed, ranking on rules only: %s", type(exc).__name__)
             sims = [None] * len(rows)
@@ -348,7 +367,7 @@ def score_found(
         if (score, reason) != (row["score"], row["rank_reason"]):
             changed.append((score, reason, row["id"]))
     db.save_ranks(changed)
-    return RankSummary(len(rows), len(changed), any(s is not None for s in sims))
+    return RankSummary(len(rows), len(changed), any(s is not None for s in sims), left)
 
 
 class JudgeStore(LLMCache, Protocol):
@@ -419,8 +438,15 @@ def rank_jobs(
     settings: Settings,
 ) -> str:  # fmt: skip
     """All tiers after a run; returns a one-line note for the run's tally."""
-    cheap = score_found(db, embedder, owner_years=settings.ranking.owner_years)
+    log.info("ranking %s found jobs", "with the match model" if embedder else "on rules only")
+    cheap = score_found(
+        db, embedder, owner_years=settings.ranking.owner_years,
+        max_new_embeddings=settings.ranking.embed_new_per_run,
+    )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
+    if cheap.left_to_embed:
+        note += f"; {cheap.left_to_embed} wait for the match model on later runs"
+    log.info("%s", note)
     if llm is not None:
         j = judge_top(db, st, llm, top_n=settings.ranking.judge_top_n, budget=settings.llm)
         note += f"; AI judged {j.judged} ({j.calls} calls, {j.cache_hits} cached)"
