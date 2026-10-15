@@ -54,21 +54,44 @@ function JobsView() {
   const heading = useRef<HTMLHeadingElement>(null);
   const focusOnLoad = useRef(false);
 
+  // The URL lags router.replace, so changes build on the newest request, not on `filters`.
+  const latest = useRef(filters);
+  const pending = useRef<string[]>([]); // URL queries requested but not yet shown
+  const urlKey = urlQuery(filters);
+  const synced = useRef(urlKey);
+  useEffect(() => {
+    if (urlKey === synced.current) return;
+    synced.current = urlKey;
+    const i = pending.current.indexOf(urlKey);
+    pending.current = i >= 0 ? pending.current.slice(i + 1) : []; // not ours: back button, link
+    if (pending.current.length === 0) latest.current = filters;
+  }, [urlKey, filters]);
+
   const go = useCallback(
     (next: Filters) => {
+      latest.current = next;
       const qs = urlQuery(next);
+      if (qs !== synced.current || pending.current.length > 0) pending.current.push(qs);
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [router, pathname],
   );
   // Any filter or tab change starts again from page 1.
-  const update = useCallback((patch: Partial<Filters>) => go({ ...filters, ...patch, page: 1 }), [go, filters]);
+  const update = useCallback((patch: Partial<Filters>) => go({ ...latest.current, ...patch, page: 1 }), [go]);
 
   useEffect(() => {
     let current = true; // a slower reply for an older filter or page must not replace this one
     api<JobPage>(`/jobs?${key}`).then(
-      (p) => current && setData({ ...p, key }),
-      (e: Error) => current && setError(e.message),
+      (p) => {
+        if (!current) return;
+        setData({ ...p, key });
+        setError(null);
+      },
+      (e: Error) => {
+        if (!current) return;
+        focusOnLoad.current = false; // else the next unrelated load would jump to the list
+        setError(e.message);
+      },
     );
     return () => {
       current = false;
@@ -91,7 +114,8 @@ function JobsView() {
 
   // A page past the end (after filtering or marking) moves to the last real page.
   useEffect(() => {
-    if (last !== null && filters.page > last) go({ ...filters, page: last });
+    // A newer request is on its way; its own reply decides.
+    if (last !== null && filters.page > last && pending.current.length === 0) go({ ...filters, page: last });
   }, [last, filters, go]);
 
   useEffect(() => {
@@ -143,7 +167,11 @@ function JobsView() {
 
   function toPage(page: number) {
     focusOnLoad.current = true;
-    go({ ...filters, page });
+    go({ ...latest.current, page });
+  }
+
+  function step(delta: number) {
+    toPage(Math.max(1, latest.current.page + delta));
   }
 
   const shown = loaded ?? data; // older results stay visible, dimmed, while new ones load
@@ -184,7 +212,7 @@ function JobsView() {
         filters={filters}
         facets={facets?.status === filters.status ? facets : null}
         onChange={update}
-        onClear={isFiltered(filters) ? () => go({ ...DEFAULTS, size: filters.size }) : null}
+        onClear={isFiltered(filters) ? () => go({ ...DEFAULTS, size: latest.current.size }) : null}
       />
       {shown === null ? (
         <p className="text-sm text-zinc-500">Loading…</p>
@@ -224,6 +252,7 @@ function JobsView() {
             page={Math.min(filters.page, shownLast)}
             last={shownLast}
             onPage={toPage}
+            onStep={step}
           />
         </section>
       )}

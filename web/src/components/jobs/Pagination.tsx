@@ -4,9 +4,15 @@ import { pageList } from "./filters";
 
 const BTN = "min-w-9 rounded border px-2.5 py-1 text-sm";
 
-type Props = { page: number; last: number; onPage: (page: number) => void };
+// Prev/Next step from the newest requested page, which may be ahead of the one shown.
+type Props = {
+  page: number;
+  last: number;
+  onPage: (page: number) => void;
+  onStep: (delta: number) => void;
+};
 
-export function Pagination({ page, last, onPage }: Props) {
+export function Pagination({ page, last, onPage, onStep }: Props) {
   if (last <= 1) return null;
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1">
@@ -14,7 +20,7 @@ export function Pagination({ page, last, onPage }: Props) {
         type="button"
         className={`${BTN} border-zinc-300 hover:bg-zinc-100 disabled:text-zinc-400 disabled:hover:bg-transparent`}
         disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
+        onClick={() => onStep(-1)}
       >
         Prev
       </button>
@@ -40,7 +46,7 @@ export function Pagination({ page, last, onPage }: Props) {
         type="button"
         className={`${BTN} border-zinc-300 hover:bg-zinc-100 disabled:text-zinc-400 disabled:hover:bg-transparent`}
         disabled={page >= last}
-        onClick={() => onPage(page + 1)}
+        onClick={() => onStep(1)}
       >
         Next
       </button>

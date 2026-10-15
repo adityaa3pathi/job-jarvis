@@ -120,22 +120,27 @@ export function Select({
 function SearchBox({ value, onChange }: { value: string; onChange: (q: string) => void }) {
   const [draft, setDraft] = useState(value);
   const [seen, setSeen] = useState(value);
-  const [sent, setSent] = useState<string | null>(null);
-  // An outside change (Clear filters) resets the box; the echo of our own send must not.
+  const [pending, setPending] = useState<string[]>([]); // sent, URL not yet showing them
+  // An outside change (Clear filters) resets the box; a late echo of our own send must not.
   if (value !== seen) {
     setSeen(value);
-    if (value !== sent) setDraft(value);
-    setSent(null);
+    const i = pending.indexOf(value);
+    if (i >= 0) {
+      setPending(pending.slice(i + 1));
+    } else {
+      setDraft(value);
+      setPending([]);
+    }
   }
 
   useEffect(() => {
-    if (draft === value) return;
+    if (draft === value || draft === pending.at(-1)) return;
     const t = setTimeout(() => {
-      setSent(draft);
+      setPending((p) => [...p, draft]);
       onChange(draft);
     }, SEARCH_DELAY_MS);
     return () => clearTimeout(t);
-  }, [draft, value, onChange]);
+  }, [draft, value, pending, onChange]);
 
   return (
     <label className="flex min-w-48 grow flex-col gap-0.5 text-xs text-zinc-600">

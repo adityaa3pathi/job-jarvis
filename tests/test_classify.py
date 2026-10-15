@@ -50,6 +50,8 @@ def test_role_of(title: str, role: str) -> None:
         ("Gurugram", "Full Stack Developer (Hybrid)", "hybrid"),
         ("India", "AI Engineer", "unknown"),
         ("Anywhere", "AI Engineer", "remote"),
+        ("India", "AI Engineer (Work from office)", "onsite"),
+        ("London", "AI Engineer", "onsite"),
     ],
 )
 def test_work_mode_of(location: str, title: str, mode: str) -> None:

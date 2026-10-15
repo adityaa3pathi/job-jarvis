@@ -351,6 +351,16 @@ def test_re_seen_rows_with_current_fields_keep_the_shared_update(
     assert calls(db) - before <= 4
 
 
+def test_an_unchanged_re_seen_row_skips_the_classifiers(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = Database(":memory:")
+    db.upsert_posting(posting())
+    used: list[str] = []
+    monkeypatch.setattr("jobagent.db.role_of", lambda title: used.append(title) or "other")
+    monkeypatch.setattr("jobagent.db.years_asked", lambda p: used.append(p.title))
+    db.upsert_posting(posting())
+    assert used == []
+
+
 def test_re_seen_row_gets_stale_derived_fields_fixed() -> None:
     db = Database(":memory:")
     saved = db.upsert_posting(posting())
@@ -376,6 +386,10 @@ def test_new_and_old_databases_get_derived_columns_and_indexes(tmp_path: Path) -
     conn.close()
     assert {"jobs_status_source", "jobs_status_posted"} <= names
     assert set(DERIVED) <= cols
+    conn = sqlite3.connect(path)
+    links = {r[1] for r in conn.execute("PRAGMA index_list(job_links)").fetchall()}
+    conn.close()
+    assert "job_links_job" in links
 
 
 TODAY = date(2026, 10, 15)
@@ -427,6 +441,9 @@ def test_each_filter_narrows_found_jobs(monkeypatch: pytest.MonkeyPatch) -> None
     assert found(db, work_mode="remote") == {want["fs"]}
     assert found(db, city="pune") == {want["fe"], want["be"], want["mob"]}
     assert found(db, company="Acme 100% Co") == {want["fe"]}
+    assert found(db, company="acme 100% co") == {want["fe"]}
+    assert found(db, city="Pune") == {want["fe"], want["be"], want["mob"]}
+    assert found(db, city="Bengaluru") == {want["ai"]}
     assert found(db, q="billing") == {want["be"]}
     assert found(db, q="android") == {want["mob"]}
 

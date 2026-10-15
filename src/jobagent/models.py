@@ -67,6 +67,13 @@ class JobFilters(BaseModel):
     q: str | None = Field(default=None, max_length=60)
     sort: Literal["newest", "fewest_years"] = "newest"
 
+    @field_validator("city")
+    @classmethod
+    def _stored_city(cls, city: str | None) -> str | None:
+        from jobagent.classify import city_of  # classify imports this module
+
+        return None if city is None else city_of(city) or city.strip().lower()
+
     @field_validator("posted_within_days")
     @classmethod
     def _known_window(cls, days: int | None) -> int | None:

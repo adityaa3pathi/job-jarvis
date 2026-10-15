@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS events (
   old_status TEXT, new_status TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS events_job ON events(job_id);
+CREATE INDEX IF NOT EXISTS job_links_job ON job_links(job_id);
 """
 
 # Added after the first release; old tables get them by ALTER TABLE.
@@ -63,6 +64,7 @@ NEW_COLUMNS = {
     "city": "TEXT NOT NULL DEFAULT ''",
 }
 DERIVED = ("min_years", "max_years", "role", "work_mode", "city")
+DERIVED_FROM = ("title", "location", "experience_text", "description")
 # Drops the hard rules made, so a rule fix may undo them; owner and ranker drops stay.
 RULE_REASONS = frozenset(get_args(DropReason)) - {"no_track"}
 OWNER = "owner"  # the event note of a status the owner set; rules never undo it
@@ -142,7 +144,8 @@ def _where(f: JobFilters, *, by_source: bool = True) -> tuple[str, list[object]]
     for col in ("status", "source", "role", "work_mode", "city", "company"):
         value = getattr(f, col, None)
         if value is not None and (by_source or col != "source"):
-            parts.append(f"j.{col}=?")
+            nocase = " COLLATE NOCASE" if col == "company" else ""
+            parts.append(f"j.{col}=?{nocase}")
             args.append(value)
     if f.max_years is not None:
         unstated = " OR j.min_years IS NULL" if f.include_unstated else ""
@@ -160,7 +163,7 @@ def _where(f: JobFilters, *, by_source: bool = True) -> tuple[str, list[object]]
 
 def derive(job: Mapping[str, Any]) -> dict[str, object]:
     """The filter columns of a job (KTD1): years asked, role group, work mode and city."""
-    text = {c: job[c] for c in ("title", "location", "experience_text", "description")}
+    text = {c: job[c] for c in DERIVED_FROM}
     asked = years_asked(Posting.model_construct(**text))
     return {
         "min_years": asked[0] if asked else None, "max_years": asked[1] if asked else None,
@@ -342,7 +345,9 @@ class Database:
         if posting.closed and status not in ("closed", "applied"):
             changes["status"] = "closed"
             events.append((status, "closed", "source says closed"))
-        changes |= _stale_derived(row | changes)  # current rows keep the shared bump
+        # Only new text or a never-derived row can change them; recheck backfills rule changes.
+        if row["role"] == "" or any(changes.get(c, row[c]) != row[c] for c in DERIVED_FROM):
+            changes |= _stale_derived(row | changes)  # current rows keep the shared bump
         if len(changes) == 1:
             bumps.append((seen, row["id"]))
         else:

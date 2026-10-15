@@ -90,14 +90,14 @@ export function readFilters(p: URLSearchParams): Filters {
   const page = Number.parseInt(p.get("page") ?? "", 10);
   return {
     status: oneOf(p.get("status"), STATUSES, DEFAULTS.status),
-    source: (p.get("source") ?? "").toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+    source: (p.get("source") ?? "").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 40),
     role: oneOf(p.get("role"), Object.keys(ROLE_LABELS), ""),
     work_mode: oneOf(p.get("work_mode"), Object.keys(WORK_MODE_LABELS), ""),
     max_years: oneOf(p.get("max_years"), YEARS, ""),
     include_unstated: p.get("include_unstated") !== "false",
     posted_within_days: oneOf(p.get("posted_within_days"), Object.keys(DATE_LABELS), ""),
-    city: (p.get("city") ?? "").trim(),
-    company: (p.get("company") ?? "").trim(),
+    city: (p.get("city") ?? "").trim().slice(0, 60),
+    company: (p.get("company") ?? "").trim().slice(0, 200),
     q: (p.get("q") ?? "").slice(0, MAX_SEARCH),
     sort: oneOf(p.get("sort"), Object.keys(SORT_LABELS), DEFAULTS.sort),
     page: Number.isFinite(page) && page > 1 ? page : 1,
