@@ -159,6 +159,8 @@ def _rewrite_batch(
     for i, plain in plains.items():
         if i in replies:
             _apply(cmds[i], plain, replies[i], allowed, out)
+        else:
+            out.failed.append((plain, "model reply left this bullet out"))
 
 
 def _apply(cmd: Command, plain: str, new: str, allowed: set[str], out: TailorResult) -> None:

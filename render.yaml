@@ -5,13 +5,15 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    healthCheckPath: /api/health
+    healthCheckPath: /api/health/live  # liveness only: a Turso blip must not restart us
     envVars:
       - key: JOBAGENT_OWNER_HASH
         sync: false
       - key: JOBAGENT_SESSION_SECRET
         generateValue: true
       - key: JOBAGENT_CRON_TOKEN
+        sync: false
+      - key: JOBAGENT_PROXY_SECRET  # same value as on Vercel
         sync: false
       - key: GEMINI_API_KEY
         sync: false

@@ -85,6 +85,8 @@ POSITIVE = frozenset({"applied", "interview"})  # owner marks that count as a ye
 RANK_TEXT_CHARS = 1500  # the embedded head of a posting (U14)
 JUDGE_TEXT_CHARS = 4000
 PRUNE_AFTER_DAYS = 30  # owner, 15-10-2026: dropped jobs keep their text this long (R4)
+RULES_FLAG = "lists_rules_version"  # the rules the stored list validators were read under
+STALE_CLAIM = timedelta(minutes=30)  # a 'sending' digest older than this died mid-send
 # Every jobs column but the text: a batch preload reads its length and hash instead (KTD4).
 LEAN = ", ".join(
     f"j.{c}" for c in (
@@ -172,12 +174,12 @@ def text_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _add_column(conn: Any, name: str, kind: str) -> None:
-    have = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+def _add_column(conn: Any, name: str, kind: str, table: str = "jobs") -> None:
+    have = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if name in have:
         return
     try:
-        conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {kind}")
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
     except Exception as exc:  # another handle added it after our read
         if "duplicate column" not in str(exc).lower():
             raise
@@ -239,8 +241,27 @@ def _m3_ranking(conn: Any) -> None:
     conn.commit()
 
 
+def judge_key(desc_hash: str | None, profile: str) -> str:
+    """What a verdict was made on: the posting text and the profile."""
+    return f"{desc_hash or ''}:{text_hash(profile)}"
+
+
+def _m4_judge_key_and_digest_progress(conn: Any) -> None:
+    _add_column(conn, "judge_key", "TEXT")
+    _add_column(conn, "sent_chunks", "INTEGER NOT NULL DEFAULT 0", table="digests")
+    # Verdicts made before keys existed are taken as made on today's profile.
+    with conn:
+        conn.execute(
+            "UPDATE jobs SET judge_key=coalesce(desc_hash, '') || ':' || ?"
+            " WHERE judged_on IS NOT NULL AND judge_key IS NULL",
+            (text_hash(_profile_text(conn)),),
+        )
+
+
 # Run once each, in order; a step must be safe to re-run (two handles may open at once).
-MIGRATIONS: tuple[Callable[[Any], None], ...] = (_m1_columns, _m2_lean_text, _m3_ranking)
+MIGRATIONS: tuple[Callable[[Any], None], ...] = (
+    _m1_columns, _m2_lean_text, _m3_ranking, _m4_judge_key_and_digest_progress,
+)  # fmt: skip
 
 
 def schema_version(conn: Any) -> int:
@@ -261,6 +282,20 @@ def migrate(conn: Any) -> None:
                 " WHERE CAST(value AS INTEGER) < CAST(excluded.value AS INTEGER)",
                 (str(number),),
             )
+
+
+def _profile_text(conn: Any) -> str:
+    """The owner's career summary plus every confirmed profile fact (U13), when those
+    tables exist in this database; empty when there is no profile yet."""
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master").fetchall()}
+    parts: list[str] = []
+    if "profile" in have:
+        row = conn.execute("SELECT summary FROM profile WHERE id=1").fetchone()
+        parts += [row[0]] if row and row[0] else []
+    if "profile_facts" in have:
+        rows = conn.execute("SELECT text FROM profile_facts WHERE confirmed=1 ORDER BY id")
+        parts += [r[0] for r in rows.fetchall()]
+    return "\n".join(parts).strip()
 
 
 def _like(text: str) -> str:
@@ -707,6 +742,27 @@ class Database:
         ).fetchall()
         return {row[0]: (row[1], row[2], row[3]) for row in rows}
 
+    def lists_need_full_read(self) -> bool:
+        """True after a rules bump: an unchanged list is skipped before its jobs reach the
+        rules, so every list is read in full once under the new rules."""
+        row = self.conn.execute("SELECT value FROM flags WHERE name=?", (RULES_FLAG,)).fetchone()
+        return row is None or row["value"] != str(RULES_VERSION)
+
+    def forget_validators(self) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM fetch_cache")
+
+    def mark_lists_read(self) -> None:
+        """Call once a run's saves are done; until then the next run reads in full again."""
+        if not self.lists_need_full_read():
+            return
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO flags(name, value) VALUES (?, ?) ON CONFLICT(name)"
+                " DO UPDATE SET value=excluded.value",
+                (RULES_FLAG, str(RULES_VERSION)),
+            )
+
     def save_validators(self, entries: Mapping[str, tuple[str | None, str | None, str]]) -> None:
         """Kept only after a list's jobs are saved, so an unsaved list is read again."""
         if not entries:
@@ -819,7 +875,7 @@ class Database:
         """Every found job with the head of its text: all the cheap score reads."""
         rows = self.conn.execute(
             "SELECT id, title, company, source, role, work_mode, min_years, desc_hash, score,"
-            " rank_reason, judge_score, judge_reason, stack_words,"
+            " rank_reason, judge_score, judge_reason, judge_key, stack_words,"
             f" substr(description, 1, {RANK_TEXT_CHARS}) AS head FROM jobs WHERE status='found'"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -832,14 +888,16 @@ class Database:
             self.conn.executemany("UPDATE jobs SET score=?, rank_reason=? WHERE id=?", rows)
             bump_version(self.conn)
 
-    def judge_candidates(self, limit: int) -> list[dict[str, Any]]:
-        """Found jobs the AI judge never saw, best cheap score first."""
+    def judge_candidates(self, limit: int, profile: str) -> list[dict[str, Any]]:
+        """Found jobs the AI judge never saw, or saw with other posting text or another
+        profile, best cheap score first."""
         rows = self.conn.execute(
             "SELECT id, title, location, desc_hash, score, rank_reason,"
             f" substr(description, 1, {JUDGE_TEXT_CHARS}) AS head FROM jobs"
-            " WHERE status='found' AND judged_on IS NULL AND score IS NOT NULL"
+            " WHERE status='found' AND score IS NOT NULL AND (judged_on IS NULL"
+            " OR judge_key IS NOT coalesce(desc_hash, '') || ':' || ?)"
             " ORDER BY score DESC, id LIMIT ?",
-            (limit,),
+            (text_hash(profile), limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -849,13 +907,13 @@ class Database:
 
     def save_judgement(
         self, job_id: int, *, day: str, cap: int | None, reason: str, score: int | None,
-        rank_reason: str,
+        rank_reason: str, key: str,
     ) -> None:  # fmt: skip
         with self.conn:
             self.conn.execute(
                 "UPDATE jobs SET judged_on=?, judge_score=?, judge_reason=?, score=?,"
-                " rank_reason=? WHERE id=?",
-                (day, cap, reason, score, rank_reason, job_id),
+                " rank_reason=?, judge_key=? WHERE id=?",
+                (day, cap, reason, score, rank_reason, key, job_id),
             )
             bump_version(self.conn)
 
@@ -879,45 +937,65 @@ class Database:
             )
 
     def profile_text(self) -> str:
-        """The owner's career summary plus every confirmed profile fact (U13), when those
-        tables exist in this database; empty when there is no profile yet."""
-        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master").fetchall()}
-        parts: list[str] = []
-        if "profile" in have:
-            row = self.conn.execute("SELECT summary FROM profile WHERE id=1").fetchone()
-            parts += [row["summary"]] if row and row["summary"] else []
-        if "profile_facts" in have:
-            rows = self.conn.execute(
-                "SELECT text FROM profile_facts WHERE confirmed=1 ORDER BY id"
-            ).fetchall()
-            parts += [r["text"] for r in rows]
-        return "\n".join(parts).strip()
+        return _profile_text(self.conn)
 
     # --- the daily digest (U15) ---
 
     def claim_digest(self, run_id: int) -> bool:
-        """Only the first caller for a run may send; a failed send releases the claim."""
+        """Only one caller at a time may send a run's digest. A failed send leaves it
+        'partial' for a retry; a 'sending' claim older than STALE_CLAIM died mid-send."""
+        now = datetime.now(UTC)
         with self.conn:
             cur = self.conn.execute(
                 "INSERT INTO digests(run_id, status, at) VALUES (?, 'sending', ?)"
-                " ON CONFLICT(run_id) DO NOTHING",
-                (run_id, _now()),
+                " ON CONFLICT(run_id) DO UPDATE SET status='sending', at=excluded.at"
+                " WHERE digests.status='partial'"
+                " OR (digests.status='sending' AND digests.at < ?)",
+                (run_id, now.isoformat(), (now - STALE_CLAIM).isoformat()),
             )
         return cur.rowcount > 0
 
-    def release_digest(self, run_id: int) -> None:
-        with self.conn:
-            self.conn.execute("DELETE FROM digests WHERE run_id=? AND status='sending'", (run_id,))
+    def digest_progress(self, run_id: int) -> tuple[int, int]:
+        """(messages, jobs) of this run's digest already sent."""
+        row = self.conn.execute(
+            "SELECT sent_chunks, jobs FROM digests WHERE run_id=?", (run_id,)
+        ).fetchone()
+        return (int(row["sent_chunks"]), int(row["jobs"])) if row else (0, 0)
 
-    def finish_digest(self, run_id: int, job_ids: Sequence[int]) -> None:
+    def digest_chunk_sent(self, run_id: int, job_ids: Sequence[int]) -> None:
+        """Recorded after each message, so a retry resumes after the last one sent."""
         with self.conn:
             self.conn.execute(
-                "UPDATE digests SET status='sent', jobs=?, at=? WHERE run_id=?",
+                "UPDATE digests SET sent_chunks=sent_chunks + 1, jobs=jobs + ?, at=?"
+                " WHERE run_id=?",
                 (len(job_ids), _now(), run_id),
             )
             self.conn.executemany(
                 "INSERT INTO digest_jobs(job_id, run_id) VALUES (?,?) ON CONFLICT DO NOTHING",
                 [(i, run_id) for i in job_ids],
+            )
+
+    def release_digest(self, run_id: int) -> None:
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM digests WHERE run_id=? AND status='sending' AND sent_chunks=0",
+                (run_id,),
+            )
+            self.conn.execute(
+                "UPDATE digests SET status='partial' WHERE run_id=? AND status='sending'",
+                (run_id,),
+            )
+
+    def finish_digest(self, run_id: int, job_ids: Sequence[int] = ()) -> None:
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO digest_jobs(job_id, run_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                [(i, run_id) for i in job_ids],
+            )
+            self.conn.execute(
+                "UPDATE digests SET status='sent', at=?,"
+                " jobs=(SELECT COUNT(*) FROM digest_jobs WHERE run_id=?) WHERE run_id=?",
+                (_now(), run_id, run_id),
             )
 
     def digest_jobs(self, limit: int) -> list[dict[str, Any]]:

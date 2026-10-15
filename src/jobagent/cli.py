@@ -25,6 +25,7 @@ from jobagent.runs import (
     kill_switch_check,
     prune_after_run,
     rank_after_run,
+    rules_swept,
     save_portal,
     sweep_context,
 )
@@ -65,6 +66,7 @@ def discover(settings: Settings) -> int:
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
                 ctx=sweep_context(db, settings.detail_fetch_cap),
             )  # fmt: skip
+            rules_swept(db, tally)
             prune_after_run(db, tally)
             rank_after_run(
                 db, st, tally, embedder=shared_embedder(), llm=judge_llm(settings),

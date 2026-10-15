@@ -54,11 +54,72 @@ def test_vercel_client_header_is_the_preferred_key(settings: Settings) -> None:
     assert bad_login(c, **{"x-vercel-forwarded-for": "203.0.113.6", **hop}) == 401
 
 
-def test_a_global_ceiling_stops_rotating_keys(settings: Settings) -> None:
+def test_a_global_ceiling_slows_rotating_keys_but_never_refuses_the_owner(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(web_app, "GLOBAL_DELAY_S", 0.2)
     c = client_for(settings)
     codes = [bad_login(c, **{"x-vercel-forwarded-for": f"203.0.113.{i}"}) for i in range(30)]
     assert set(codes) == {401}
-    assert bad_login(c, **{"x-vercel-forwarded-for": "198.51.100.200"}) == 429
+    started = time.monotonic()
+    assert bad_login(c, **{"x-vercel-forwarded-for": "198.51.100.200"}) == 401
+    assert time.monotonic() - started >= 0.2  # past the ceiling every check is slowed
+    owner = c.post(
+        "/api/login", json={"password": PASSWORD}, headers={"x-vercel-forwarded-for": "1.2.3.4"}
+    )
+    assert owner.status_code == 200 and owner.cookies.get("jobagent_session") is not None
+
+
+def test_slowed_checks_run_one_at_a_time(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(web_app, "GLOBAL_DELAY_S", 0.0)
+    monkeypatch.setattr(web_app, "MAX_GLOBAL_FAILURES", 0)
+    live, peak, lock = [0], [0], threading.Lock()
+
+    def slow_verify(password: str, stored: str) -> bool:
+        with lock:
+            live[0] += 1
+            peak[0] = max(peak[0], live[0])
+        time.sleep(0.05)
+        with lock:
+            live[0] -= 1
+        return False
+
+    monkeypatch.setattr("jobagent.web.app.verify_password", slow_verify)
+    c = client_for(settings)
+    threads = [
+        threading.Thread(target=bad_login, args=(c,), kwargs={"x-vercel-forwarded-for": f"9.{i}"})
+        for i in range(4)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert peak[0] == 1
+
+
+def test_forwarded_headers_need_the_proxy_secret_when_one_is_set(settings: Settings) -> None:
+    c = client_for(settings, proxy_secret="proxy-s3cret")
+    # Spoofed: no secret, so every request keys on the socket address and shares a limit.
+    codes = [bad_login(c, **{"x-vercel-forwarded-for": f"203.0.113.{i}"}) for i in range(6)]
+    assert codes == [401] * 5 + [429]
+    spoofed = {"x-vercel-forwarded-for": "203.0.113.99", "x-jobagent-proxy": "wrong"}
+    assert bad_login(c, **spoofed) == 429
+    # Through the proxy: the header picks the key.
+    via = {"x-jobagent-proxy": "proxy-s3cret"}
+    assert bad_login(c, **{"x-vercel-forwarded-for": "198.51.100.1", **via}) == 401
+
+
+def test_a_missing_proxy_secret_is_logged_once(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING, logger="jobagent.web.app")
+    c = client_for(settings)
+    for _ in range(2):
+        bad_login(c, **{"x-vercel-forwarded-for": "203.0.113.57"})
+    lines = [r.getMessage() for r in caplog.records if "JOBAGENT_PROXY_SECRET" in r.getMessage()]
+    assert len(lines) == 1
 
 
 def test_the_resolved_key_is_logged_once_with_the_last_octet_masked(
@@ -192,6 +253,35 @@ def test_health_is_503_when_the_database_is_down(
     assert res.status_code == 503
     assert res.json()["ok"] is False and res.json()["db"] == "down"
     assert c.get("/api/health/live").status_code == 200
+
+
+def test_a_hung_database_check_is_reused_not_stacked(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c = client_for(settings)
+    release, pings = threading.Event(), []
+
+    def hung(*_: Any) -> None:
+        pings.append(1)
+        release.wait(5)
+
+    monkeypatch.setattr(web_app, "HEALTH_TIMEOUT_S", 0.05)
+    monkeypatch.setattr("jobagent.web.app.db_ping", hung)
+    assert [c.get("/api/health").status_code for _ in range(3)] == [503] * 3
+    assert len(pings) == 1
+    release.set()
+    for _ in range(100):
+        if c.get("/api/health").status_code == 200:
+            break
+        time.sleep(0.02)
+    assert c.get("/api/health").status_code == 200
+
+
+def test_render_checks_liveness_not_the_database() -> None:
+    import yaml
+
+    blueprint = yaml.safe_load((Path(__file__).parents[1] / "render.yaml").read_text())
+    assert blueprint["services"][0]["healthCheckPath"] == "/api/health/live"
 
 
 # --- logs ---

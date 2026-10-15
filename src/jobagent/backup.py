@@ -45,12 +45,18 @@ def dump_sql(conn: Any) -> Iterator[str]:
 
 
 def backup(conn: Any, out: Path) -> int:
-    """Write the dump to `out`; returns the number of lines written."""
-    lines = 0
-    with _private(out) as raw, gzip.open(raw, "wt", encoding="utf-8", newline="") as f:
-        for line in dump_sql(conn):
-            f.write(line)
-            lines += 1
+    """Write the dump to `out`; returns the number of lines written. It goes to a temp file
+    first, so a dump that fails midway never replaces the last good backup."""
+    lines, part = 0, out.with_name(out.name + ".part")
+    try:
+        with _private(part) as raw, gzip.open(raw, "wt", encoding="utf-8", newline="") as f:
+            for line in dump_sql(conn):
+                f.write(line)
+                lines += 1
+        os.replace(part, out)
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
     return lines
 
 

@@ -40,6 +40,7 @@ class RankingSettings(BaseModel):
     judge_top_n: int = Field(default=30, ge=0)  # new found jobs the AI judge sees per IST day
     digest_top_n: int = Field(default=10, ge=1, le=50)
     owner_years: int | None = Field(default=None, ge=0)  # unset: no years term in the ceiling
+    embed_new_per_run: int = Field(default=300, ge=0)  # model vectors per run; rest wait a run
 
 
 class Settings(BaseModel):

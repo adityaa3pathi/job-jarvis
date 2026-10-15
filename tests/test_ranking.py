@@ -233,3 +233,85 @@ def test_embedder_loads_once_per_process_across_threads(monkeypatch: pytest.Monk
         got = list(pool.map(lambda _: index.shared_embedder(), range(8)))
     assert len(loads) == 1 and all(g is got[0] for g in got)
     assert index.shared_embedder() is got[0]
+
+
+def test_a_new_profile_or_posting_text_gets_a_fresh_verdict(settings: Settings) -> None:
+    db = db_with(settings, [job(1, GOOD), job(2, GOOD)])
+    score_found(db, None)
+    st = Store(settings.db_path)
+    first = judge_reply(1)
+    assert judge_top(db, st, first, top_n=10, budget=LLMSettings()).judged == 2
+    assert judge_top(db, st, first, top_n=10, budget=LLMSettings()).judged == 0
+    # A reposted job with new text: only that one is judged again.
+    db.upsert_many([job(1, GOOD + " Now with MCP.", posted_date="2026-10-14")])
+    score_found(db, None)
+    again = judge_reply(5)
+    assert judge_top(db, st, again, top_n=10, budget=LLMSettings()).judged == 1
+    assert len(again.calls) == 1 and "Now with MCP" in again.calls[0][1]
+    # A new profile: the old caps stop counting and both are judged again.
+    st.save_profile(summary=PROFILE + " Also Go.")
+    score_found(db, None)
+    assert all("AI judge" not in reason for _, reason in scores(db).values())
+    newer = judge_reply(5)
+    assert judge_top(db, st, newer, top_n=10, budget=LLMSettings()).judged == 2
+
+
+def test_the_daily_cap_bounds_re_judging(settings: Settings) -> None:
+    db = db_with(settings, [job(i, GOOD) for i in range(1, 4)])
+    score_found(db, None)
+    st = Store(settings.db_path)
+    assert judge_top(db, st, judge_reply(1), top_n=3, budget=LLMSettings()).judged == 3
+    st.save_profile(summary=PROFILE + " Also Go.")
+    score_found(db, None)
+    assert judge_top(db, st, judge_reply(1), top_n=3, budget=LLMSettings()).judged == 0
+
+
+class FixedEmbedder:
+    """Cosine 0.6 between the profile and every job."""
+
+    name = "fixed-2d"
+    sim_range = (0.5, 1.0)
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] if t.startswith("AI engineer.") else [0.6, 0.8] for t in texts]
+
+
+def test_profile_match_shows_the_scaled_similarity(settings: Settings) -> None:
+    db = db_with(settings, [job(1, GOOD)])
+    score_found(db, FixedEmbedder())  # type: ignore[arg-type]
+    reason = scores(db)[1][1]
+    assert "profile match 20%" in reason and "60%" not in reason
+
+
+def test_each_run_embeds_at_most_the_new_job_cap(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.rank.EMBED_CHUNK", 2)  # the cap must hold across chunks
+    db = db_with(settings, [job(i, GOOD) for i in range(5)])
+    emb = CountingEmbedder()
+    first = score_found(db, emb, max_new_embeddings=2)
+    assert len(emb.texts) == 3 and first.left_to_embed == 3  # profile + 2 postings
+    # Jobs without a vector yet still get a rules score this run.
+    assert all(s is not None for s, _ in scores(db).values())
+    score_found(db, emb, max_new_embeddings=2)
+    score_found(db, emb, max_new_embeddings=2)
+    assert len(emb.texts) == 6 and score_found(db, emb, max_new_embeddings=2).left_to_embed == 0
+
+
+def test_fastembed_model_runs_on_one_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    seen: dict[str, Any] = {}
+
+    class FakeTextEmbedding:
+        def __init__(self, **kw: Any) -> None:
+            seen.update(kw)
+
+    monkeypatch.setitem(
+        sys.modules, "fastembed", types.SimpleNamespace(TextEmbedding=FakeTextEmbedding)
+    )
+    from jobagent.index import FastEmbedEmbedder
+
+    FastEmbedEmbedder()
+    assert seen.get("threads") == 1

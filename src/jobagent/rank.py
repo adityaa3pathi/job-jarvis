@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from jobagent.db import Database, text_hash, today_ist
+from jobagent.db import Database, judge_key, text_hash, today_ist
 from jobagent.dedupe import normalize_company
 from jobagent.facts import FactSheet, Track
 from jobagent.index import Embedder, cosine, embed_cached
@@ -309,23 +309,42 @@ class RankSummary:
     scored: int = 0
     changed: int = 0
     embedded: bool = False
+    left_to_embed: int = 0  # found jobs still waiting for a vector (filled on later runs)
 
 
 def score_found(
-    db: Database, embedder: Embedder | None, *, owner_years: int | None = None
+    db: Database,
+    embedder: Embedder | None,
+    *,
+    owner_years: int | None = None,
+    max_new_embeddings: int | None = None,
 ) -> RankSummary:
     """Tier 2: a cheap score for every found job; writes only rows whose score moved."""
     rows, profile = db.rank_rows(), db.profile_text()
     prefs = Preferences.fit(db.labels())
     sims: list[float | None] = [None] * len(rows)
+    left = 0
     if embedder is not None and profile and rows:
         heads = [f"{r['title']}\n{r['head']}" for r in rows]
+        budget = max_new_embeddings
         try:
             [me] = embed_cached(embedder, [profile[:PROFILE_CHARS]], db)
+            if me is None:
+                raise ValueError("profile vector missing")
             sims = []
             for start in range(0, len(heads), EMBED_CHUNK):  # bounds vectors held at once
-                part = embed_cached(embedder, heads[start : start + EMBED_CHUNK], db)
-                sims += [cosine(me, v) for v in part]
+                done: list[int] = []
+                part = embed_cached(
+                    embedder,
+                    heads[start : start + EMBED_CHUNK],
+                    db,
+                    max_new=budget,
+                    embedded=done,
+                )
+                if budget is not None:
+                    budget = max(0, budget - done[0])
+                sims += [cosine(me, v) if v is not None else None for v in part]
+            left = sum(1 for s in sims if s is None)
         except Exception as exc:  # a model failure must not stop the run
             log.warning("embedding failed, ranking on rules only: %s", type(exc).__name__)
             sims = [None] * len(rows)
@@ -338,15 +357,17 @@ def score_found(
         scaled = None
         if sim is not None and embedder is not None:
             scaled = _scaled(embedder, sim)
-            why.append(f"profile match {round(100 * max(sim, 0))}%")
+            why.append(f"profile match {round(100 * scaled)}%")
+        # A verdict on other posting text or another profile no longer counts.
+        current = row["judge_key"] == judge_key(row["desc_hash"], profile)
         score, reason = with_judge(
             cheap_score(ceiling, scaled, pref), "; ".join([*why, *([liked] if liked else [])]),
-            row["judge_score"], row["judge_reason"] or "",
+            row["judge_score"] if current else None, row["judge_reason"] or "",
         )  # fmt: skip
         if (score, reason) != (row["score"], row["rank_reason"]):
             changed.append((score, reason, row["id"]))
     db.save_ranks(changed)
-    return RankSummary(len(rows), len(changed), any(s is not None for s in sims))
+    return RankSummary(len(rows), len(changed), any(s is not None for s in sims), left)
 
 
 class JudgeStore(LLMCache, Protocol):
@@ -373,15 +394,16 @@ class JudgeSummary:
 def judge_top(
     db: Database, st: JudgeStore, llm: LLM, *, top_n: int, budget: LLMSettings
 ) -> JudgeSummary:
-    """Tier 3: the AI judge on the best never-judged found jobs, at most `top_n` per IST day,
-    inside the daily AI budget. Verdicts are cached by posting and profile hash."""
+    """Tier 3: the AI judge on the best found jobs not judged on their current text and
+    profile, at most `top_n` per IST day, inside the daily AI budget. Verdicts are cached
+    by posting and profile hash."""
     out, profile = JudgeSummary(), db.profile_text()
     day = today_ist().isoformat()
     left = top_n - db.judged_on(day)
     if not profile or left <= 0:
         return out
     me = data_block("candidate", profile[:PROFILE_CHARS])
-    for job in db.judge_candidates(left):
+    for job in db.judge_candidates(left, profile):
         clean, _ = clean_posting_text(f"{job['title']}\n{job['head']}")
         key = cache_key(JUDGE_STEP, JUDGE_VERSION, model_id(llm),
                         job["desc_hash"] or text_hash(clean), text_hash(profile))  # fmt: skip
@@ -403,7 +425,10 @@ def judge_top(
             st.cache_put(key, JUDGE_STEP, verdict.model_dump_json())
         cap, why = verdict.score * 20, _clean_reason(verdict.reasons[0])
         score, reason = with_judge(job["score"], job["rank_reason"] or "", cap, why)
-        db.save_judgement(job["id"], day=day, cap=cap, reason=why, score=score, rank_reason=reason)
+        db.save_judgement(
+            job["id"], day=day, cap=cap, reason=why, score=score, rank_reason=reason,
+            key=judge_key(job["desc_hash"], profile),
+        )  # fmt: skip
         out.judged += 1
     return out
 
@@ -413,8 +438,15 @@ def rank_jobs(
     settings: Settings,
 ) -> str:  # fmt: skip
     """All tiers after a run; returns a one-line note for the run's tally."""
-    cheap = score_found(db, embedder, owner_years=settings.ranking.owner_years)
+    log.info("ranking %s found jobs", "with the match model" if embedder else "on rules only")
+    cheap = score_found(
+        db, embedder, owner_years=settings.ranking.owner_years,
+        max_new_embeddings=settings.ranking.embed_new_per_run,
+    )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
+    if cheap.left_to_embed:
+        note += f"; {cheap.left_to_embed} wait for the match model on later runs"
+    log.info("%s", note)
     if llm is not None:
         j = judge_top(db, st, llm, top_n=settings.ranking.judge_top_n, budget=settings.llm)
         note += f"; AI judged {j.judged} ({j.calls} calls, {j.cache_hits} cached)"

@@ -101,6 +101,8 @@ def save_portal(
     """Save one finished portal. Closing and progress writes are bookkeeping: a failure
     is logged and noted, never raised, so later portals still get saved."""
     saved = tally.save(part, db.upsert_many)
+    portal = part.postings[0].source if part.postings else "?"
+    log.info("portal %s saved: %d postings", portal, len(part.postings))
     if saved is not None and part.fresh:
         try:
             db.save_validators(part.fresh)
@@ -125,11 +127,22 @@ def sweep_context(db: Database, detail_cap: int) -> SweepContext:
     """Read once before a run: each list's validators and the stored Greenhouse URLs, so
     unchanged lists are skipped and job text is fetched for new jobs only (KTD3)."""
     stored = db.known_urls("greenhouse")
+    if db.lists_need_full_read():  # new rules: old validators would skip their re-judging
+        db.forget_validators()
     return SweepContext(
         validators={url: Validators(*v) for url, v in db.fetch_validators().items()},
         known=lambda url: normalize_url(url) in stored,
         detail_cap=detail_cap,
     )
+
+
+def rules_swept(db: Database, tally: RunTally) -> None:
+    """Once a run's saves are done, its lists were read under today's rules."""
+    try:
+        db.mark_lists_read()
+    except Exception as exc:  # the next run only reads every list in full again
+        log.exception("recording the rules version failed")
+        tally.notes.append(f"recording the rules version failed: {type(exc).__name__}: {exc}")
 
 
 def prune_after_run(db: Database, tally: RunTally) -> None:

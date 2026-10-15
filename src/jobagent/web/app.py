@@ -65,6 +65,7 @@ from jobagent.runs import (
     digest_after_run,
     prune_after_run,
     rank_after_run,
+    rules_swept,
     save_portal,
     sweep_context,
 )
@@ -74,8 +75,11 @@ from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadErro
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_WINDOW_S = 900
-MAX_GLOBAL_FAILURES = 30  # across all keys, so rotating addresses cannot brute-force
+MAX_GLOBAL_FAILURES = 30  # across all keys; past it every check is slowed, never refused
 GLOBAL_WINDOW_S = 3600
+GLOBAL_DELAY_S = 2.0  # one slowed check at a time: about 1800 guesses an hour at most
+GLOBAL_WAIT_S = 30.0
+PROXY_HEADER = "x-jobagent-proxy"  # set by the web app's middleware; proves Vercel sent it
 LOGIN_CHECKS = 2  # scrypt needs 16 MB each; a burst must not exhaust 512 MB
 LOGIN_WAIT_S = 3.0
 HEALTH_TIMEOUT_S = 3.0
@@ -112,6 +116,7 @@ class WebConfig:
     cron_token: str = ""
     ping: Callable[[str], object] = field(default=lambda url: httpx.get(url, timeout=30))
     ping_every_s: float = PING_EVERY_S
+    proxy_secret: str = ""
     task_deadline_s: float = TASK_DEADLINE_S
     shutdown_wait_s: float = SHUTDOWN_WAIT_S
     embedder: Callable[[], Embedder | None] = shared_embedder  # loaded on the first run
@@ -267,9 +272,13 @@ def _not_modified(request: Request, response: Response, version: int) -> Respons
     return None
 
 
-def login_key(request: Request) -> tuple[str, str]:
+def login_key(request: Request, proxy_secret: str = "") -> tuple[str, str]:
     """Who is logging in, and which header said so. Browsers reach us through Vercel, whose
-    edge writes the client address; in X-Forwarded-For the right-most hop is Vercel itself."""
+    edge writes the client address; in X-Forwarded-For the right-most hop is Vercel itself.
+    With a proxy secret set, those headers count only on requests that carry it."""
+    sent = request.headers.get(PROXY_HEADER, "")
+    if proxy_secret and not hmac.compare_digest(sent.encode(), proxy_secret.encode()):
+        return (request.client.host if request.client else "?"), "client"
     vercel = request.headers.get("x-vercel-forwarded-for", "").split(",")[0].strip()
     if vercel:
         return vercel, "x-vercel-forwarded-for"
@@ -292,22 +301,32 @@ def db_ping(db: Database) -> None:
     db.conn.execute("SELECT 1").fetchone()
 
 
-def _db_up(handles: _Handles[Database], timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
-    """A hung Turso call must not hang the health check, so it runs on its own thread."""
-    up: list[bool] = []
+class _DbProbe:
+    """A hung Turso call must not hang the health check, so it runs on its own thread; while
+    one still runs, later checks wait on it instead of stacking threads and connections."""
 
-    def check() -> None:
+    def __init__(self, handles: _Handles[Database]) -> None:
+        self.handles, self.lock = handles, threading.Lock()
+        self.thread: threading.Thread | None = None
+        self.up: list[bool] = []
+
+    def _check(self, up: list[bool]) -> None:
         try:
-            with handles.borrow() as db:
+            with self.handles.borrow() as db:
                 db_ping(db)
             up.append(True)
         except Exception as exc:
             log.warning("health: database check failed: %s", short_cause(exc))
 
-    thread = threading.Thread(target=check, daemon=True)
-    thread.start()
-    thread.join(timeout_s)
-    return bool(up)
+    def __call__(self, timeout_s: float) -> bool:
+        with self.lock:
+            if self.thread is None or not self.thread.is_alive():
+                self.up = []
+                self.thread = threading.Thread(target=self._check, args=(self.up,), daemon=True)
+                self.thread.start()
+            thread, up = self.thread, self.up
+        thread.join(timeout_s)
+        return bool(up)
 
 
 def _jobs_db(request: Request) -> Iterator[Database]:
@@ -358,6 +377,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
     all_failures: list[float] = []
     failures_lock = threading.Lock()
     checks = threading.BoundedSemaphore(LOGIN_CHECKS)
+    slowed = threading.BoundedSemaphore(1)
+    db_up = _DbProbe(jobs_db)
+    if not cfg.proxy_secret:
+        log.warning("JOBAGENT_PROXY_SECRET is not set: forwarded client headers are taken as sent")
     key_logged = threading.Event()
     discover_state = _DiscoverState()
     closing = threading.Event()
@@ -382,7 +405,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.get("/api/health")
     def health() -> JSONResponse:
-        up = _db_up(jobs_db)
+        up = db_up(HEALTH_TIMEOUT_S)
         body = {"ok": up, "db": "ok" if up else "down", "version": __version__}
         return JSONResponse(body, status_code=200 if up else 503)
 
@@ -414,10 +437,19 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 if at in seen:
                     seen.remove(at)
 
+    def _check_password(password: str, who: str, at: float) -> bool:
+        if not checks.acquire(timeout=LOGIN_WAIT_S):
+            _forget(who, at)
+            raise HTTPException(429, "login is busy, try again in a moment")
+        try:
+            return verify_password(password, cfg.owner_hash)
+        finally:
+            checks.release()
+
     @app.post("/api/login")
     def login(body: Login, request: Request, response: Response) -> dict[str, bool]:
         # Per client, so strangers cannot lock the owner out (KTD8).
-        now, (who, source) = time.time(), login_key(request)
+        now, (who, source) = time.time(), login_key(request, cfg.proxy_secret)
         if not key_logged.is_set():
             key_logged.set()
             log.info("login key comes from %s: %s", source, mask_ip(who))
@@ -429,18 +461,21 @@ def create_app(cfg: WebConfig) -> FastAPI:
             all_failures[:] = [t for t in all_failures if now - t < GLOBAL_WINDOW_S]
             if len(failures.get(who, [])) >= MAX_LOGIN_FAILURES:
                 raise HTTPException(429, "too many attempts, wait 15 minutes")
-            if len(all_failures) >= MAX_GLOBAL_FAILURES:
-                raise HTTPException(429, "too many failed logins lately, wait an hour")
+            slow = len(all_failures) >= MAX_GLOBAL_FAILURES
             # Counted before the check, so a burst cannot all slip past the limit.
             failures.setdefault(who, []).append(now)
             all_failures.append(now)
-        if not checks.acquire(timeout=LOGIN_WAIT_S):
+        # Past the global ceiling a correct password still works, only slower.
+        if slow and not slowed.acquire(timeout=GLOBAL_WAIT_S):
             _forget(who, now)
             raise HTTPException(429, "login is busy, try again in a moment")
         try:
-            ok = verify_password(body.password, cfg.owner_hash)
+            if slow:
+                time.sleep(GLOBAL_DELAY_S)
+            ok = _check_password(body.password, who, now)
         finally:
-            checks.release()
+            if slow:
+                slowed.release()
         if not ok:
             raise HTTPException(401, "wrong password")
         _forget(who, now)
@@ -515,6 +550,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                             on_portal_done=save,
                             ctx=sweep_context(db, settings.detail_fetch_cap),
                         )  # fmt: skip
+                        rules_swept(db, tally)
                         prune_after_run(db, tally)
                         rank_after_run(
                             db, st, tally, embedder=cfg.embedder(), llm=cfg.thinker(),
@@ -1029,6 +1065,7 @@ def app_from_env() -> FastAPI:
             writer=lambda: GeminiLLM.from_settings(settings.llm, 0.5),
             cookie_secure=os.environ.get("JOBAGENT_COOKIE_SECURE", "1") != "0",
             cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
+            proxy_secret=os.environ.get("JOBAGENT_PROXY_SECRET", ""),
             task_deadline_s=float(os.environ.get("JOBAGENT_TASK_DEADLINE_S", TASK_DEADLINE_S)),
         )
     )
