@@ -78,13 +78,13 @@ def calls(db: Database) -> int:
     return conn.calls["execute"]
 
 
-def test_existing_posting_costs_at_most_two_calls(counting: list[CountingConn]) -> None:
+def test_existing_posting_costs_at_most_three_calls(counting: list[CountingConn]) -> None:
     db = Database(":memory:")
     db.upsert_posting(posting())
     for again in (posting(), posting(posted_date=date(2026, 10, 1))):
         before = calls(db)
         db.upsert_posting(again)
-        assert calls(db) - before <= 2, again
+        assert calls(db) - before <= 3, again  # read, write, one data-version bump
 
 
 def test_closing_known_jobs_costs_two_calls_each_plus_the_shared_read(
@@ -95,7 +95,8 @@ def test_closing_known_jobs_costs_two_calls_each_plus_the_shared_read(
     before = calls(db)
     results = db.upsert_many([posting(i, closed=True) for i in range(600)])
     assert {r.status for r in results} == {"closed"}
-    assert calls(db) - before <= 2 * 600 + 2  # update + status event each; two chunked reads
+    # Update + status event each; two chunked reads; one data-version bump.
+    assert calls(db) - before <= 2 * 600 + 3
 
 
 def test_batch_reads_known_rows_once_and_commits_once(counting: list[CountingConn]) -> None:
@@ -104,7 +105,7 @@ def test_batch_reads_known_rows_once_and_commits_once(counting: list[CountingCon
     before, commits = calls(db), counting[0].calls["commit"]
     results = db.upsert_many([posting(i) for i in range(1000)])
     assert {r.outcome for r in results} == {"duplicate"}
-    assert calls(db) - before <= 4  # two chunked reads, one bulk seen-date update
+    assert calls(db) - before <= 4  # two chunked reads, seen-date update, version bump
     assert counting[0].calls["commit"] - commits == 1
 
 

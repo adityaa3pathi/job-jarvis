@@ -705,3 +705,140 @@ def test_a_task_past_its_deadline_writes_nothing_afterwards(
         assert st.builds(session_id) == []
     finally:
         st.close()
+
+
+# --- HTTP caching (U1) ---
+
+CACHED_READS = ("/api/jobs", "/api/jobs/facets", "/api/profile", "/api/coach", "/api/builds")
+
+
+def acme(n: str, company: str = "Acme") -> Posting:
+    return Posting(source="hirist", url=f"https://www.hirist.tech/j/{n}", company=company,
+                   title="AI Engineer", location="Pune")  # fmt: skip
+
+
+def etag(c: TestClient, path: str) -> str:
+    res = c.get(path)
+    assert res.status_code == 200, res.text
+    assert res.headers["cache-control"] == "private, no-cache"
+    return str(res.headers["etag"])
+
+
+def test_same_read_twice_is_not_modified(web: TestClient, settings: Settings) -> None:
+    save_jobs(settings, [acme("e-1")])
+    for path in CACHED_READS:
+        tag = etag(web, path)
+        assert tag.startswith('W/"')
+        again = web.get(path, headers={"If-None-Match": tag})
+        assert (again.status_code, again.content) == (304, b""), path
+        assert again.headers["etag"] == tag
+        assert again.headers["cache-control"] == "private, no-cache"
+    assert etag(web, "/api/jobs?city=pune") != etag(web, "/api/jobs")
+
+
+def test_session_view_is_not_modified_until_its_chat_changes(web: TestClient) -> None:
+    web.put("/api/profile/summary", json={"summary": SUMMARY})
+    sid = start_session(web)
+    tag = etag(web, f"/api/coach/{sid}")
+    assert web.get(f"/api/coach/{sid}", headers={"If-None-Match": tag}).status_code == 304
+    done(web, web.post(f"/api/coach/{sid}/chat", json={"message": "What am I missing?"}))
+    assert etag(web, f"/api/coach/{sid}") != tag
+
+
+def test_every_data_write_changes_the_etag(web: TestClient, settings: Settings) -> None:
+    from jobagent.db import Database
+
+    tags = [etag(web, "/api/jobs")]
+    (job_id,) = save_jobs(settings, [acme("w-1")])
+    tags.append(etag(web, "/api/jobs"))
+    save_jobs(settings, [acme("w-1")])  # seen again: the seen date moves
+    tags.append(etag(web, "/api/jobs"))
+    web.post(f"/api/jobs/{job_id}/mark", json={"status": "applied"})
+    tags.append(etag(web, "/api/jobs"))
+    db = Database(settings.db_path)
+    db.recheck()
+    db.close()
+    tags.append(etag(web, "/api/jobs"))
+    web.put("/api/profile/summary", json={"summary": SUMMARY})
+    tags.append(etag(web, "/api/jobs"))
+    assert len(set(tags)) == len(tags)
+
+
+def test_run_progress_and_kill_switch_keep_the_etag(web: TestClient, settings: Settings) -> None:
+    from jobagent.web.store import Store
+
+    tag = etag(web, "/api/jobs/facets")
+    st = Store(settings.db_path)
+    run_id = st.start_run()
+    st.update_run(run_id, {"read": 3})
+    st.finish_run(run_id, "done", "", {"read": 3})
+    st.close()
+    web.post("/api/kill-switch/on")
+    assert web.get("/api/jobs/facets", headers={"If-None-Match": tag}).status_code == 304
+
+
+def test_a_new_ist_day_answers_in_full(web: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import date
+
+    tag = etag(web, "/api/jobs?posted_within_days=1")
+    monkeypatch.setattr("jobagent.db.today_ist", lambda: date(2099, 1, 1))
+    res = web.get("/api/jobs?posted_within_days=1", headers={"If-None-Match": tag})
+    assert res.status_code == 200 and res.headers["etag"] != tag
+
+
+def test_discover_status_is_never_stored(web: TestClient) -> None:
+    res = web.get("/api/discover")
+    assert res.headers["cache-control"] == "no-store" and "etag" not in res.headers
+
+
+def test_facets_and_source_counts_are_cached_until_a_write(
+    web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.db import Database
+
+    calls: list[str] = []
+    for name in ("facets", "source_counts"):
+        real = getattr(Database, name)
+
+        def spy(self: Database, *a: Any, _real: Any = real, _name: str = name) -> Any:
+            calls.append(_name)
+            return _real(self, *a)
+
+        monkeypatch.setattr(Database, name, spy)
+    for _ in range(3):
+        web.get("/api/jobs/facets?status=found")
+        web.get("/api/jobs?q=python")
+        web.get("/api/jobs?q=python&offset=50")  # another page, same counts
+    assert sorted(calls) == ["facets", "source_counts"]
+    save_jobs(settings, [acme("f-1")])
+    web.get("/api/jobs/facets?status=found")
+    web.get("/api/jobs?q=python")
+    assert sorted(calls) == ["facets", "facets", "source_counts", "source_counts"]
+
+
+def test_large_replies_are_gzipped(web: TestClient, settings: Settings) -> None:
+    save_jobs(settings, [acme(f"g-{i}", f"Co{i}") for i in range(30)])
+    big = web.get("/api/jobs", headers={"Accept-Encoding": "gzip"})
+    assert big.headers.get("content-encoding") == "gzip"
+    small = web.get("/api/profile", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in small.headers
+
+
+def test_startup_reports_and_restores_a_missing_job_links_index(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from jobagent.db import Database
+
+    save_jobs(settings, [])
+    monkeypatch.setattr("jobagent.db.SCHEMA", "")  # as a schema run that skipped the index
+    db = Database(settings.db_path)
+    db.conn.execute("DROP INDEX job_links_job")
+    db.conn.commit()
+    db.close()
+    with caplog.at_level("WARNING"):
+        client_for(settings)
+    db = Database(settings.db_path, schema=False)
+    names = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    db.close()
+    assert "job_links_job" in names
+    assert "job_links_job" in caplog.text

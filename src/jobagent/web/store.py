@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from jobagent.db import bump_version, data_version
 from jobagent.lock import STALE_AFTER_S
 from jobagent.resume.jd import JDProfile, SkillNeed
 from jobagent.runs import read_kill_switch, write_kill_switch
@@ -82,6 +83,9 @@ class Store:
     def close(self) -> None:
         self.conn.close()
 
+    def data_version(self) -> int:
+        return data_version(self.conn)
+
     def profile(self) -> dict[str, str]:
         row = self.conn.execute("SELECT summary, base_tex, updated_at FROM profile").fetchone()
         return dict(row) if row else {"summary": "", "base_tex": "", "updated_at": ""}
@@ -99,6 +103,7 @@ class Store:
                     _now(),
                 ),
             )
+            bump_version(self.conn)
 
     def add_session(
         self, *, url: str, title: str, company: str, jd_text: str, profile: str, report: str
@@ -109,6 +114,7 @@ class Store:
                 " profile_json, report_json) VALUES (?,?,?,?,?,?,?)",
                 (_now(), url, title, company, jd_text, profile, report),
             )
+            bump_version(self.conn)
         return int(cur.lastrowid or 0)
 
     def sessions(self) -> list[dict[str, Any]]:
@@ -129,6 +135,7 @@ class Store:
                 "INSERT INTO messages(session_id, role, text, at) VALUES (?,?,?,?)",
                 (session_id, role, text, _now()),
             )
+            bump_version(self.conn)
 
     def messages(self, session_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -142,6 +149,7 @@ class Store:
                 "INSERT INTO facts(session_id, text, at) VALUES (?,?,?)",
                 (session_id, text, _now()),
             )
+            bump_version(self.conn)
 
     def facts(self, session_id: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -155,6 +163,7 @@ class Store:
                 "UPDATE facts SET confirmed=? WHERE id=? AND session_id=?",
                 (int(confirmed), fact_id, session_id),
             )
+            bump_version(self.conn)
         return cur.rowcount == 1
 
     def add_build(self, session_id: int, tex: str, report: str) -> int:
@@ -163,6 +172,7 @@ class Store:
                 "INSERT INTO resume_builds(session_id, tex, report, at) VALUES (?,?,?,?)",
                 (session_id, tex, report, _now()),
             )
+            bump_version(self.conn)
         return int(cur.lastrowid or 0)
 
     def builds(self, session_id: int | None = None) -> list[dict[str, Any]]:

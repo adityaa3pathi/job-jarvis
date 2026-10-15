@@ -51,7 +51,10 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_job ON events(job_id);
 CREATE INDEX IF NOT EXISTS job_links_job ON job_links(job_id);
+CREATE TABLE IF NOT EXISTS flags (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+# Indexes a page read cannot do without; checked at app startup (efficiency audit #1).
+INDEXES = {"job_links_job": "CREATE INDEX IF NOT EXISTS job_links_job ON job_links(job_id)"}
 
 # Added after the first release; old tables get them by ALTER TABLE.
 NEW_COLUMNS = {
@@ -133,6 +136,20 @@ def today_ist() -> date:
     return datetime.now(IST).date()
 
 
+def bump_version(conn: Any) -> None:
+    """Call inside the write's own transaction, so readers never see new data on an old tag."""
+    conn.execute(
+        "INSERT INTO flags(name, value) VALUES ('data_version', '1') ON CONFLICT(name)"
+        " DO UPDATE SET value=CAST(value AS INTEGER) + 1"
+    )
+
+
+def data_version(conn: Any) -> int:
+    """Changes whenever anything a page shows changes (KTD1); run progress does not."""
+    row = conn.execute("SELECT value FROM flags WHERE name='data_version'").fetchone()
+    return int(row["value"]) if row else 0
+
+
 def _like(text: str) -> str:
     return "%" + re.sub(r"([\\%_])", r"\\\1", text) + "%"
 
@@ -187,6 +204,18 @@ class Database:
     def close(self) -> None:
         self.conn.close()
 
+    def data_version(self) -> int:
+        return data_version(self.conn)
+
+    def ensure_indexes(self) -> list[str]:
+        """Create any missing index in INDEXES; returns the names that were missing."""
+        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master").fetchall()}
+        missing = [name for name in INDEXES if name not in have]
+        with self.conn:
+            for name in missing:
+                self.conn.execute(INDEXES[name])
+        return missing
+
     def _add_columns(self) -> None:
         have = {row[1] for row in self.conn.execute("PRAGMA table_info(jobs)").fetchall()}
         for name, kind in NEW_COLUMNS.items():
@@ -222,6 +251,8 @@ class Database:
                 self.conn.executemany(
                     "UPDATE jobs SET seen_date=?, missed_runs=0 WHERE id=?", bumps
                 )
+            if out:
+                bump_version(self.conn)
         return out
 
     def _known(
@@ -395,6 +426,7 @@ class Database:
                 )
                 note = f"gone from {after_runs} clean runs"
                 self._events([(i, "found", "closed", note) for i in closing])
+                bump_version(self.conn)
         return len(closing)
 
     def recheck(self) -> RecheckSummary:
@@ -430,6 +462,7 @@ class Database:
                 )
             self._events(events)
             self._backfill(every)
+            bump_version(self.conn)
         return RecheckSummary(
             rechecked=len(rows),
             undropped=sum(e[2] == "found" for e in events),
@@ -556,6 +589,7 @@ class Database:
         old = self.conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0]
         self.conn.execute("UPDATE jobs SET status=? WHERE id=?", (status, job_id))
         self._event(job_id, old, status, note)
+        bump_version(self.conn)
 
     def set_status(self, job_id: int, status: JobStatus, note: str = "") -> None:
         with self.conn:
@@ -577,6 +611,7 @@ class Database:
                 " drop_reason=COALESCE(?, drop_reason) WHERE id=?",
                 (track, score, reason, drop_reason, job_id),
             )
+            bump_version(self.conn)
             if drop_reason:
                 self._set_status(job_id, "dropped", drop_reason)
             elif score is not None:

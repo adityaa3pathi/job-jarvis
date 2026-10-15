@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
@@ -12,7 +13,8 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections import OrderedDict
+from collections.abc import Callable, Hashable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -22,9 +24,11 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
+from jobagent import db as jobs_module
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
 from jobagent.db import OWNER, Database
 from jobagent.discovery import discover_all
@@ -55,6 +59,10 @@ MAX_PDFS = 8
 UPLOAD_PATHS = ("/api/profile/summary-file", "/api/profile/tex")
 MULTIPART_SLACK = 64_000
 PING_EVERY_S = 300  # Render spins a free service down after 15 idle minutes
+REVALIDATE = "private, no-cache"  # owner data: never in a shared cache, always re-checked
+GZIP_MIN_BYTES = 1000
+COUNTS_TTL_S = 600.0
+COUNTS_MAX = 128
 log = logging.getLogger(__name__)
 OwnerMark = Literal["found", "applied", "dropped", "interview", "rejected"]
 
@@ -183,6 +191,47 @@ class _Handles[T: _Closable]:
         handle.close()
 
 
+class _TTLCache:
+    """A few recent facet and count results. Keys carry the data version, so a write
+    makes old entries unreachable; the TTL and size cap only bound memory."""
+
+    def __init__(self, ttl_s: float = COUNTS_TTL_S, size: int = COUNTS_MAX) -> None:
+        self._ttl, self._size = ttl_s, size
+        self._items: OrderedDict[Hashable, tuple[float, Any]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: Hashable, make: Callable[[], Any]) -> Any:
+        now = time.monotonic()
+        with self._lock:
+            hit = self._items.get(key)
+            if hit and now - hit[0] < self._ttl:
+                return hit[1]
+        value = make()
+        with self._lock:
+            self._items[key] = (now, value)
+            self._items.move_to_end(key)
+            while len(self._items) > self._size:
+                self._items.popitem(last=False)
+        return value
+
+
+def _etag(request: Request, version: int) -> str:
+    # The IST date is in the tag: "posted within N days" shifts at midnight with no write.
+    query = hashlib.sha256(f"{request.url.path}?{request.url.query}".encode()).hexdigest()
+    return f'W/"{version}-{jobs_module.today_ist().isoformat()}-{query[:16]}"'
+
+
+def _not_modified(request: Request, response: Response, version: int) -> Response | None:
+    """Tag the reply; a 304 when the browser already holds this version. Read the version
+    before the data, so a write in between can only make the tag older, never newer."""
+    tag = _etag(request, version)
+    response.headers.update({"ETag": tag, "Cache-Control": REVALIDATE})
+    held = {t.strip() for t in request.headers.get("if-none-match", "").split(",")}
+    if tag in held:
+        return Response(status_code=304, headers={"ETag": tag, "Cache-Control": REVALIDATE})
+    return None
+
+
 def _jobs_db(request: Request) -> Iterator[Database]:
     handles: _Handles[Database] = request.app.state.jobs_db
     with handles.borrow() as db:
@@ -204,6 +253,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
     if not cfg.owner_hash or not cfg.session_secret:
         raise RuntimeError("JOBAGENT_OWNER_HASH and JOBAGENT_SESSION_SECRET must be set")
     app = FastAPI(title="job-agent", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(GZipMiddleware, minimum_size=GZIP_MIN_BYTES)
     app.state.settings = cfg.settings
     settings = cfg.settings
     ensure_data_dir(settings)
@@ -214,6 +264,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
     )
     stores = _Handles(lambda: Store(settings.db_path, schema=False), Store(settings.db_path))
     app.state.jobs_db, app.state.stores = jobs_db, stores
+    with jobs_db.borrow() as db:
+        for name in db.ensure_indexes():
+            log.warning("index %s was missing; created it", name)
+    counts = _TTLCache()
     failures: dict[str, list[float]] = {}
     failures_lock = threading.Lock()
     discover_state = _DiscoverState()
@@ -278,14 +332,27 @@ def create_app(cfg: WebConfig) -> FastAPI:
     # --- jobs and discovery ---
 
     @app.get("/api/jobs", dependencies=[Owner])
-    def jobs(db: DB, query: Annotated[JobsQuery, Query()]) -> dict[str, Any]:
+    def jobs(
+        db: DB, query: Annotated[JobsQuery, Query()], request: Request, response: Response
+    ) -> Any:
+        version = db.data_version()
+        if hit := _not_modified(request, response, version):
+            return hit
         rows, total = db.query_jobs(query, limit=query.limit, offset=query.offset)
-        return {"items": [dict(r) for r in rows], "total": total,
-                "sources": db.source_counts(query)}  # fmt: skip
+        # Counts ignore the page, the sort and the source tab, so one entry serves them all.
+        filters = query.model_dump(exclude={"source", "sort", "limit", "offset"})
+        key = ("sources", version, jobs_module.today_ist(), *sorted(filters.items()))
+        sources = counts.get(key, lambda: db.source_counts(query))
+        return {"items": [dict(r) for r in rows], "total": total, "sources": sources}
 
     @app.get("/api/jobs/facets", dependencies=[Owner])
-    def job_facets(db: DB, status: ListStatus = "found") -> dict[str, Any]:
-        return db.facets(status)
+    def job_facets(
+        db: DB, request: Request, response: Response, status: ListStatus = "found"
+    ) -> Any:
+        version = db.data_version()
+        if hit := _not_modified(request, response, version):
+            return hit
+        return counts.get(("facets", version, status), lambda: db.facets(status))
 
     @app.post("/api/jobs/{job_id}/mark", dependencies=[Owner])
     def mark(job_id: int, body: Mark, db: DB) -> dict[str, bool]:
@@ -372,11 +439,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return start_discover()
 
     @app.get("/api/cron/discover", dependencies=[Depends(cron)])
-    def cron_discover_status() -> dict[str, Any]:
+    def cron_discover_status(response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
         return discover_view()
 
     @app.get("/api/discover", dependencies=[Owner])
-    def discover_status() -> dict[str, Any]:
+    def discover_status(response: Response) -> dict[str, Any]:
+        # Run state lives in memory and moves with the clock: no version can tag it.
+        response.headers["Cache-Control"] = "no-store"
         return discover_view()
 
     @app.get("/api/searches", dependencies=[Owner])
@@ -393,7 +463,9 @@ def create_app(cfg: WebConfig) -> FastAPI:
     # --- profile ---
 
     @app.get("/api/profile", dependencies=[Owner])
-    def get_profile(st: ST) -> dict[str, Any]:
+    def get_profile(st: ST, request: Request, response: Response) -> Any:
+        if hit := _not_modified(request, response, st.data_version()):
+            return hit
         p = st.profile()
         return {
             "summary": p["summary"],
@@ -552,11 +624,15 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return submit(work)
 
     @app.get("/api/coach", dependencies=[Owner])
-    def coach_list(st: ST) -> list[dict[str, Any]]:
+    def coach_list(st: ST, request: Request, response: Response) -> Any:
+        if hit := _not_modified(request, response, st.data_version()):
+            return hit
         return st.sessions()
 
     @app.get("/api/coach/{session_id}", dependencies=[Owner])
-    def coach_get(session_id: int, st: ST) -> dict[str, Any]:
+    def coach_get(session_id: int, st: ST, request: Request, response: Response) -> Any:
+        if hit := _not_modified(request, response, st.data_version()):
+            return hit
         return _session_view(st, session_id)
 
     @app.post("/api/coach/{session_id}/chat", dependencies=[Owner])
@@ -612,7 +688,9 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return submit(work)
 
     @app.get("/api/builds", dependencies=[Owner])
-    def builds(st: ST) -> list[dict[str, Any]]:
+    def builds(st: ST, request: Request, response: Response) -> Any:
+        if hit := _not_modified(request, response, st.data_version()):
+            return hit
         return st.builds()
 
     def _build(st: Store, build_id: int) -> Any:
