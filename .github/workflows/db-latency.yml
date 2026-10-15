@@ -1,0 +1,31 @@
+# Measures database round-trip time from GitHub's runner (read-only).
+name: db-latency
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/db-latency.yml"]
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra turso
+      - name: Time 20 round trips
+        run: |
+          uv run python - <<'PY'
+          import time
+          from jobagent.sqlconn import connect
+          c = connect("x.sqlite3")
+          ts = []
+          for _ in range(20):
+              t = time.perf_counter(); c.execute("SELECT 1").fetchone(); ts.append(time.perf_counter() - t)
+          ts.sort()
+          print("round trip ms: min %d median %d max %d" % (ts[0]*1000, ts[10]*1000, ts[-1]*1000))
+          PY
