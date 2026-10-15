@@ -23,9 +23,8 @@ def test_unknown_portal_is_off(policy: Policy) -> None:
 
 
 def test_defaults_match_research_table(policy: Policy) -> None:
-    assert policy.rule("linkedin").mode == "off"
     assert policy.rule("indeed_india").mode == "off"
-    for name in ("naukri", "foundit", "wellfound", "hirist", "cutshort"):
+    for name in ("linkedin", "naukri", "foundit", "wellfound", "hirist", "cutshort"):
         assert policy.rule(name).mode == "discover_only"
     assert policy.rule("lever").mode == "discover_only"
     for name in ("greenhouse", "ashby", "workable"):
@@ -238,6 +237,27 @@ def test_failed_read_keeps_the_last_known_kill_switch(policy: Policy, clock: Fak
     assert policy.stopped("discover") and len(calls) == 3  # retried on the next check
     clock.now += 5
     assert not policy.stopped("discover") and not policy.stop_unread
+
+
+def test_a_remembered_off_is_trusted_for_applying_only_while_recent(
+    policy: Policy, clock: FakeClock
+) -> None:
+    policy.stop_check, calls = flaky_check(False, None)
+    assert not policy.stopped("apply")
+    clock.now += 5
+    assert not policy.stopped("apply") and len(calls) == 2  # 5 s old: still trusted
+    clock.now += 25
+    assert policy.stopped("apply") and policy.stopped("submit")  # 30 s without a read
+    assert not policy.stopped("discover")  # discovery keeps the last known OFF
+
+
+def test_a_fresh_read_after_a_gap_trusts_off_again(policy: Policy, clock: FakeClock) -> None:
+    policy.stop_check, _ = flaky_check(False, None, False)
+    assert not policy.stopped("submit")
+    clock.now += 30
+    assert policy.stopped("submit")
+    clock.now += 5
+    assert not policy.stopped("submit")
 
 
 def test_kill_switch_set_by_cli_is_seen_by_policy(

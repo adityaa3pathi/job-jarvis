@@ -15,13 +15,14 @@ class Row(Mapping[str, Any]):
     """Matches sqlite3.Row: read by column name or by position."""
 
     def __init__(self, names: Sequence[str], values: Sequence[Any]) -> None:
-        self._names = list(names)
+        # Turso may qualify ("j.key") or upper-case ("KEY") plain column names.
+        self._names = [_name(n).lower() for n in names]
         self._values = list(values)
 
     def __getitem__(self, key: str | int) -> Any:
         if isinstance(key, int):
             return self._values[key]
-        return self._values[self._names.index(key)]
+        return self._values[self._names.index(key.lower())]
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._names)

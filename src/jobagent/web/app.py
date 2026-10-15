@@ -132,17 +132,33 @@ class WebConfig:
     github_transport: httpx.BaseTransport | None = None
 
 
-def dispatch_discover(token: str, repo: str, transport: httpx.BaseTransport | None) -> None:
-    """Start the daily-discover workflow on main; GitHub answers 204 when it is queued."""
-    url = f"{GITHUB_API}/repos/{repo}/actions/workflows/{DISCOVER_WORKFLOW}/dispatches"
-    headers = {
+def _github_headers(token: str) -> dict[str, str]:
+    return {
         "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }  # fmt: skip
+
+
+def dispatch_discover(token: str, repo: str, transport: httpx.BaseTransport | None) -> None:
+    """Start the daily-discover workflow on main; GitHub answers 204 when it is queued."""
+    url = f"{GITHUB_API}/repos/{repo}/actions/workflows/{DISCOVER_WORKFLOW}/dispatches"
     with httpx.Client(transport=transport, timeout=15) as client:
-        res = client.post(url, json={"ref": "main"}, headers=headers)
+        res = client.post(url, json={"ref": "main"}, headers=_github_headers(token))
     if res.status_code != 204:
         raise RuntimeError(f"GitHub answered {res.status_code}")
+
+
+ACTIVE_RUN = frozenset({"queued", "in_progress", "requested", "waiting", "pending"})
+
+
+def github_run_active(token: str, repo: str, transport: httpx.BaseTransport | None) -> bool:
+    """A daily-discover run queued or going on GitHub, started by anyone."""
+    url = f"{GITHUB_API}/repos/{repo}/actions/workflows/{DISCOVER_WORKFLOW}/runs"
+    with httpx.Client(transport=transport, timeout=15) as client:
+        res = client.get(url, params={"per_page": 10}, headers=_github_headers(token))
+    if res.status_code != 200:
+        raise RuntimeError(f"GitHub answered {res.status_code}")
+    return any(r.get("status") in ACTIVE_RUN for r in res.json().get("workflow_runs") or [])
 
 
 def keep_awake(
@@ -189,6 +205,7 @@ class _DiscoverState:
     running: bool = False
     guard: threading.Lock = field(default_factory=threading.Lock)
     dispatched_at: float | None = None  # when we last started the GitHub run
+    owned: set[int] = field(default_factory=set)  # runs rows this process wrote
 
     def awaiting_runner(self, runs: dict[str, dict[str, Any] | None]) -> bool:
         """A dispatched run counts as running until the runner's runs row appears."""
@@ -566,6 +583,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                     lock.acquire()
                     held = True
                     run_id = this_run = st.start_run()
+                    discover_state.owned.add(run_id)
                     keep_awake(stop_ping, cfg.ping, cfg.ping_every_s)
                     with jobs_db.borrow() as db:
 
@@ -616,12 +634,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
     def discover_view() -> dict[str, Any]:
         with stores.borrow() as st:
             runs = st.runs()
-        # A "running" row counts only while another live process holds the lock;
-        # after a restart the row is a leftover and must not block a new run.
+        # A fresh "running" row we did not write is a run elsewhere (a runner, or this
+        # server before a restart); runs() reads it as failed once past STALE_RUN_S.
         current = runs["current"]
-        elsewhere = current is not None and RunLock(settings.lock_file).held_elsewhere()
-        if on_github:  # the runner holds its own lock; its fresh "running" row is the signal
-            elsewhere = current is not None or discover_state.awaiting_runner(runs)
+        elsewhere = (
+            (current is not None and current["id"] not in discover_state.owned)
+            or RunLock(settings.lock_file).held_elsewhere()
+            or (on_github and discover_state.awaiting_runner(runs))
+        )
         running = discover_state.running or elsewhere
         return {
             "running": running,
@@ -631,11 +651,11 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     def start_here() -> dict[str, Any]:
         with discover_state.guard:
-            started = not discover_state.running
+            if (view := discover_view())["running"]:
+                return {"started": False, **view}
             discover_state.running = True
-        if started:
-            threading.Thread(target=_discover, daemon=True).start()
-        return {"started": started, **discover_view()}
+        threading.Thread(target=_discover, daemon=True).start()
+        return {"started": True, **discover_view()}
 
     def start_on_github() -> dict[str, Any]:
         """Render's small CPU cannot run discovery and answer its health check at once."""
@@ -643,6 +663,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
             if (view := discover_view())["running"]:
                 return {"started": False, **view, "via": "github"}
             try:
+                if github_run_active(cfg.github_token, cfg.github_repo, cfg.github_transport):
+                    return {"started": False, **view, "running": True, "via": "github"}
                 dispatch_discover(cfg.github_token, cfg.github_repo, cfg.github_transport)
             except Exception as exc:
                 log.exception("starting the GitHub discovery run failed")
@@ -663,8 +685,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.post("/api/cron/discover", dependencies=[Depends(cron)])
     def cron_discover() -> dict[str, Any]:
-        # The fallback: always runs in this process. The daily run now lives on GitHub.
-        return start_here()
+        # The fallback trigger; the daily run itself is scheduled on GitHub.
+        return start_discover()
 
     @app.post("/api/cron/digest", dependencies=[Depends(cron)])
     def cron_digest(db: DB) -> dict[str, Any]:

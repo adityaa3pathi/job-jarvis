@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from jobagent.discovery import ADAPTERS, BOARD_ADAPTERS, discover_all
-from jobagent.discovery.base import BoardSearch, FetchResult, load_searches
+from jobagent.discovery.base import BoardSearch, Company, FetchResult, load_searches
 from jobagent.discovery.fetch import KNOWN_BOARD_HOSTS
 from jobagent.policy import Policy, engage_kill_switch
 from tests.test_discovery import FIX, GH, FakeFetcher, ok
@@ -294,3 +294,95 @@ def test_kill_switch_mid_run_is_noted(policy: Policy) -> None:
     res = discover_all([], StopAfterFirst(pages), policy, [search])
     assert len(res.postings) == 25
     assert res.notes == ["jobgether: ai engineer: stopped by kill switch after page 1"]
+
+
+# --- LinkedIn logged-out job list (plan U2) ---
+
+LI_SEARCH = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+
+
+def test_linkedin_reads_guest_cards_and_strips_tracking(policy: Policy) -> None:
+    jobs = run("linkedin", "python developer", "linkedin.html", policy)
+    assert [(p.title, p.company, p.location) for p in jobs] == [
+        ("Python Developer", "Infosys", "Bengaluru East, Karnataka, India"),
+        ("Python Developer | Django/Flask | 5-12 Years", "Tata Consultancy Services",
+         "Bengaluru, Karnataka, India"),
+        ("Python Developer", "Algorithus", "Greater Lucknow Area"),
+    ]  # fmt: skip
+    assert [p.posted_date for p in jobs] == [
+        date(2026, 10, 10), date(2026, 10, 8), date(2026, 10, 9),
+    ]  # fmt: skip
+    assert jobs[0].url == "https://in.linkedin.com/jobs/view/python-developer-at-infosys-4468058393"
+    assert jobs[2].url == "https://in.linkedin.com/jobs/view/python-developer-4476243793"
+    assert {p.source for p in jobs} == {"linkedin"}
+
+
+def test_linkedin_reads_three_pages_of_ten_at_most() -> None:
+    adapter = BOARD_ADAPTERS["linkedin"]
+    urls = adapter.page_urls(BoardSearch(board="linkedin", term="ai engineer"))
+    assert urls == [
+        f"{LI_SEARCH}?keywords=ai+engineer&location=India&start={n}" for n in (0, 10, 20)
+    ]
+    assert adapter.paged and adapter.page_size == 10 and not adapter.expect_json
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (999, ""),
+        (429, ""),
+        (200, '<html><head><title>Sign Up | LinkedIn</title></head><body class="authwall">'),
+    ],
+)
+def test_a_blocked_linkedin_page_stops_the_board_for_the_run(
+    policy: Policy, status: int, body: str
+) -> None:
+    first = BoardSearch(board="linkedin", term="python developer")
+    rest = [BoardSearch(board="linkedin", term=t) for t in ("ai engineer", "react developer")]
+    jg = BoardSearch(board="jobgether", term="full stack developer")
+    jg_url = BOARD_ADAPTERS["jobgether"].url_for(jg)
+    url = BOARD_ADAPTERS["linkedin"].url_for(first)
+    f = FakeFetcher(
+        {url: FetchResult(status, body, url), jg_url: ok("boards/jobgether.json", jg_url)}
+    )
+    res = discover_all([], f, policy, [first, *rest, jg])
+    assert [c for c in f.calls if "linkedin" in c] == [url]
+    assert [u.company for u in res.unreachable] == ["linkedin: python developer"]
+    assert "linkedin: blocked, 2 remaining targets skipped" in res.notes
+    assert len(res.postings) == 2  # other boards go on
+
+
+def test_a_block_on_any_board_skips_its_remaining_targets(policy: Policy) -> None:
+    a, b = (BoardSearch(board="hirist", term=t) for t in ("ai engineer", "python developer"))
+    url = BOARD_ADAPTERS["hirist"].url_for(a)
+    f = FakeFetcher({url: FetchResult(429, "", url)})
+    res = discover_all([], f, policy, [a, b])
+    assert f.calls == [url] and res.partial
+    assert res.notes == ["hirist: blocked, 1 remaining target skipped"]
+
+
+def test_a_429_on_one_company_board_never_skips_the_other_companies(policy: Policy) -> None:
+    busy = Company(name="Busy", ats="greenhouse", token="busy")
+    busy_url, later_url = (ADAPTERS["greenhouse"].url_for(c) for c in (busy, GH))
+    f = FakeFetcher({
+        busy_url: FetchResult(429, "", busy_url),
+        later_url: ok("api/greenhouse_acme.json", later_url),
+    })  # fmt: skip
+    res = discover_all([busy, GH], f, policy)
+    assert later_url in f.calls and res.postings
+    assert [u.company for u in res.unreachable] == ["Busy"]
+    assert not any("blocked" in n for n in res.notes)
+
+
+def test_an_ordinary_error_does_not_stop_the_board(policy: Policy) -> None:
+    a, b = (BoardSearch(board="hirist", term=t) for t in ("ai engineer", "python developer"))
+    f = FakeFetcher({})  # 404 on both
+    discover_all([], f, policy, [a, b])
+    assert len(f.calls) == 2
+
+
+def test_linkedin_searches_load_and_hosts_are_allowed() -> None:
+    searches = load_searches(REPO / "searches.yaml")
+    linkedin = [s.term for s in searches if s.board == "linkedin"]
+    assert linkedin and linkedin == [s.term for s in searches if s.board == "jobgether"]
+    assert {"www.linkedin.com", "in.linkedin.com"} <= KNOWN_BOARD_HOSTS

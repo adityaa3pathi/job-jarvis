@@ -17,6 +17,7 @@ Mode = Literal["apply_automatically", "discover_only", "off"]
 Action = Literal["discover", "apply", "submit"]
 STOP_READ_TRIES = 3  # Turso reads fail under load; a run's first check tries this often
 STOP_RETRY_WAIT_S = 0.5
+STOP_TRUST_S = 30.0  # applying trusts a remembered OFF only this long without a fresh read
 log = logging.getLogger(__name__)
 
 
@@ -70,6 +71,7 @@ class Policy:
     stop_unread: bool = False  # discovery went ahead without a kill switch reading
     _stop_at: float | None = None
     _stop_known: bool | None = None
+    _stop_read_at: float | None = None  # the last read that worked
     _stop_lock: threading.Lock = field(default_factory=threading.Lock)
 
     @classmethod
@@ -83,8 +85,9 @@ class Policy:
         return self.portals.get(portal.lower(), PortalRule())
 
     def stopped(self, action: Action = "submit") -> bool:
-        """A failed DB read keeps the last known value. Never read at all: discovery runs
-        (and the run is told), while applying and submitting stay halted."""
+        """A failed DB read keeps the last known value; for applying and submitting only
+        while it is under STOP_TRUST_S old. Never read at all: only discovery runs (and
+        the run is told)."""
         if self.stop_file.exists():
             return True
         if self.stop_check is None:
@@ -95,10 +98,13 @@ class Policy:
                 first = self._stop_at is None
                 self._stop_at = now
                 value = self._read_stop(STOP_READ_TRIES if first else 1)
-                self._stop_known = self._stop_known if value is None else value
+                if value is not None:
+                    self._stop_known, self._stop_read_at = value, now
             if self._stop_known is None:
                 self.stop_unread = True
                 return action != "discover"
+            if action != "discover" and self._stop_read_at is not None:
+                return self._stop_known or now - self._stop_read_at >= STOP_TRUST_S
             return self._stop_known
 
     def _read_stop(self, tries: int) -> bool | None:

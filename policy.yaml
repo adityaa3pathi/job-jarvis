@@ -2,7 +2,7 @@
 global:
   dry_run: true
 portals:
-  linkedin: {mode: "off", live: false, discover: false, notes: "High risk: terms ban bots, active lawsuits"}
+  linkedin: {mode: discover_only, live: false, discover: true, discover_pause_s: 12, notes: "High risk: terms ban bots, robots.txt disallows all; owner chose 15-10-2026 to read the logged-out job list only, slow, read-only, never log in or apply"}
   indeed_india: {mode: "off", live: false, discover: false, notes: "High risk: bots on Indeed Apply banned"}
   naukri: {mode: discover_only, live: false, discover: false, notes: "High: bot shield, terms unreadable"}
   foundit: {mode: discover_only, live: false, discover: false, notes: "High: 403 to plain requests"}

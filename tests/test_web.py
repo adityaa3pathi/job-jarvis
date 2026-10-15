@@ -312,9 +312,15 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
 
 
 def github_client(
-    settings: Settings, calls: list[httpx.Request], status: int = 204, **extra: Any
-) -> TestClient:
+    settings: Settings, calls: list[httpx.Request], status: int = 204,
+    runs: list[dict[str, Any]] | None = None, **extra: Any,
+) -> TestClient:  # fmt: skip
+    """`calls` gets the dispatches; `runs` is what GitHub lists for the workflow."""
+
     def answer(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            assert request.url.path == "/repos/owner/jobs/actions/workflows/discover.yml/runs"
+            return httpx.Response(200, json={"workflow_runs": runs or []})
         calls.append(request)
         return httpx.Response(status)
 
@@ -373,15 +379,35 @@ def test_a_refused_dispatch_is_an_error_and_leaves_nothing_running(settings: Set
     assert not c.get("/api/discover").json()["running"]
 
 
-def test_cron_trigger_still_runs_in_process_with_github_set(
+def test_cron_trigger_starts_the_github_run_when_github_is_set(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[httpx.Request] = []
-    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: DiscoveryResult())
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran here"))
     c = github_client(settings, calls, cron_token="cron-123")
-    ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
-    assert ok.json()["started"] and calls == []
-    assert wait_discover(c)["last"]["status"] == "done"
+    ok = c.post("/api/cron/discover", headers=CRON).json()
+    assert ok["started"] and ok["via"] == "github" and len(calls) == 1
+
+
+@pytest.mark.parametrize("status", ["in_progress", "queued"])
+def test_a_github_run_already_going_is_not_started_twice(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, status: str
+) -> None:
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran here"))
+    calls: list[httpx.Request] = []
+    c = github_client(settings, calls, runs=[{"status": status}, {"status": "completed"}])
+    body = c.post("/api/discover").json()
+    assert (body["started"], body["running"], body["via"]) == (False, True, "github")
+    assert calls == []
+
+
+def test_only_finished_github_runs_let_a_new_one_start(settings: Settings) -> None:
+    calls: list[httpx.Request] = []
+    c = github_client(settings, calls, runs=[{"status": "completed"}])
+    assert c.post("/api/discover").json()["started"] and len(calls) == 1
+
+
+CRON = {"Authorization": "Bearer cron-123"}
 
 
 def wait_discover(c: TestClient) -> dict[str, Any]:
@@ -481,11 +507,34 @@ def test_a_run_left_running_too_long_reads_as_failed(web: TestClient, settings: 
     from jobagent.web.store import Store
 
     st = Store(settings.db_path)
-    st.start_run(started_at=time.time() - 31 * 60)
+    st.start_run(started_at=time.time() - 51 * 60)  # past the workflow's 45-min timeout
     st.close()
     state = web.get("/api/discover").json()
     assert state["running"] is False and state["current"] is None
     assert state["last"]["status"] == "failed" and "did not finish" in state["last"]["error"]
+
+
+def test_a_run_inside_the_workflow_timeout_still_reads_as_running(
+    web: TestClient, settings: Settings
+) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    st.start_run(started_at=time.time() - 44 * 60)
+    st.close()
+    assert web.get("/api/discover").json()["running"] is True
+
+
+def test_starting_a_run_keeps_another_process_fresh_running_row(settings: Settings) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    old = st.start_run(started_at=time.time() - 51 * 60)
+    other = st.start_run(started_at=time.time() - 10 * 60)
+    st.start_run()
+    status = dict(st.conn.execute("SELECT id, status FROM runs").fetchall())
+    st.close()
+    assert (status[old], status[other]) == ("failed", "running")
 
 
 def test_a_recent_run_from_another_process_shows_as_running(
@@ -502,13 +551,51 @@ def test_a_recent_run_from_another_process_shows_as_running(
     assert state["running"] is True and state["current"]["status"] == "running"
 
 
-def test_a_leftover_running_row_without_a_live_lock_does_not_block(
+def test_a_fresh_running_row_from_another_process_blocks_an_in_process_start(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    st = Store(settings.db_path)
+    st.start_run()  # another process (a runner, or this server before a restart); no lock here
+    st.close()
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran"))
+    c = client_for(settings, cron_token="cron-123")
+    assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
+    state = c.get("/api/discover").json()
+    assert state["running"] is True and state["current"]["status"] == "running"
+    for path, headers in (("/api/discover", {}), ("/api/cron/discover", CRON)):
+        body = c.post(path, headers=headers).json()
+        assert (body["started"], body["running"]) == (False, True)
+
+
+def test_our_own_unfinished_row_never_blocks_the_next_run(
+    web: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    real, calls = Store.finish_run, []
+
+    def flaky(self: Store, *a: Any) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("turso hiccup")
+        real(self, *a)
+
+    monkeypatch.setattr(Store, "finish_run", flaky)
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: DiscoveryResult())
+    assert web.post("/api/discover").json()["started"]
+    wait_discover(web)  # the row still says running: its finish could not be written
+    assert web.post("/api/discover").json()["started"]
+
+
+def test_a_leftover_running_row_past_the_limit_does_not_block(
     web: TestClient, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from jobagent.web.store import Store
 
     st = Store(settings.db_path)
-    st.start_run()  # the server restarted mid-run: the row says running, no lock is held
+    st.start_run(started_at=time.time() - 51 * 60)
     st.close()
     assert web.get("/api/discover").json()["running"] is False
     monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: DiscoveryResult())
