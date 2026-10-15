@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from jobagent.discovery import ADAPTERS, BOARD_ADAPTERS, discover_all
-from jobagent.discovery.base import BoardSearch, FetchResult, load_searches
+from jobagent.discovery.base import BoardSearch, Company, FetchResult, load_searches
 from jobagent.discovery.fetch import KNOWN_BOARD_HOSTS
 from jobagent.policy import Policy, engage_kill_switch
 from tests.test_discovery import FIX, GH, FakeFetcher, ok
@@ -359,6 +359,19 @@ def test_a_block_on_any_board_skips_its_remaining_targets(policy: Policy) -> Non
     res = discover_all([], f, policy, [a, b])
     assert f.calls == [url] and res.partial
     assert res.notes == ["hirist: blocked, 1 remaining target skipped"]
+
+
+def test_a_429_on_one_company_board_never_skips_the_other_companies(policy: Policy) -> None:
+    busy = Company(name="Busy", ats="greenhouse", token="busy")
+    busy_url, later_url = (ADAPTERS["greenhouse"].url_for(c) for c in (busy, GH))
+    f = FakeFetcher({
+        busy_url: FetchResult(429, "", busy_url),
+        later_url: ok("api/greenhouse_acme.json", later_url),
+    })  # fmt: skip
+    res = discover_all([busy, GH], f, policy)
+    assert later_url in f.calls and res.postings
+    assert [u.company for u in res.unreachable] == ["Busy"]
+    assert not any("blocked" in n for n in res.notes)
 
 
 def test_an_ordinary_error_does_not_stop_the_board(policy: Policy) -> None:

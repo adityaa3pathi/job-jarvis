@@ -24,7 +24,8 @@ _BLOCK_MARKERS = (
     "complete the captcha", "are you a robot", "unusual traffic",
     "authwall", "sign up | linkedin", "sign in | linkedin", "linkedin login",
 )  # fmt: skip
-_BLOCK_STATUSES = frozenset({429, 999})  # rate limit; LinkedIn's bot refusal
+BOT_REFUSAL = 999  # LinkedIn's
+RATE_LIMITED = 429
 WALL = "bot wall or captcha page"
 
 
@@ -148,6 +149,7 @@ class DiscoveryResult:
     unchanged: list[str] = field(default_factory=list)  # targets not swept: same as last save
     fresh: dict[str, Validators] = field(default_factory=dict)  # to keep once the save works
     blocked: bool = False  # the site refused us: its other targets wait for the next run
+    rate_limited: bool = False  # a 429: stops a search board, but one company board only
 
     def extend(self, other: DiscoveryResult) -> None:
         self.postings += other.postings
@@ -160,6 +162,7 @@ class DiscoveryResult:
         self.portal = self.portal or other.portal
         self.partial = self.partial or other.partial
         self.blocked = self.blocked or other.blocked
+        self.rate_limited = self.rate_limited or other.rate_limited
 
 
 class Postings(list[Posting]):
@@ -277,7 +280,8 @@ class Adapter[T: Target]:
                 continue
             if error := http_error(result):
                 out.unreachable.append(Unreachable(target.name, url, error))
-                out.blocked = result.status in _BLOCK_STATUSES
+                out.blocked = result.status == BOT_REFUSAL
+                out.rate_limited = result.status == RATE_LIMITED
                 break
             # Wall markers count only on pages with no jobs; real pages may say "captcha" in CSS.
             try:

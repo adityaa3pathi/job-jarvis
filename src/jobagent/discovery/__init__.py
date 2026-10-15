@@ -76,7 +76,8 @@ def discover_all(
                 out.extend(task())
             except Exception as exc:  # one target's error must never lose the portal's other jobs
                 out.unreachable.append(Unreachable(name, "", f"{type(exc).__name__}: {exc}"))
-            if out.blocked and (left := len(tasks) - done):
+            stop = out.blocked or (out.rate_limited and portal in BOARD_ADAPTERS)
+            if stop and (left := len(tasks) - done):
                 # A refusal is sticky: asking again in the same run only invites a ban
                 noun = "target" if left == 1 else "targets"
                 out.notes.append(f"{portal}: blocked, {left} remaining {noun} skipped")

@@ -13,7 +13,6 @@ from typing import Any, Literal
 
 from jobagent.db import bump_version, data_version
 from jobagent.llm import Usage
-from jobagent.lock import STALE_AFTER_S
 from jobagent.resume.jd import JDProfile, SkillNeed
 from jobagent.runs import read_kill_switch, write_kill_switch
 from jobagent.sqlconn import connect
@@ -51,7 +50,8 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE TABLE IF NOT EXISTS flags (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 RunStatus = Literal["running", "done", "failed"]
-STALE_RUN_ERROR = "run did not finish (server restarted or stuck for 30 min)"
+STALE_RUN_S = 50 * 60  # above the daily-discover workflow's 45-min timeout
+STALE_RUN_ERROR = "run did not finish (server restarted or stuck for 50 min)"
 
 
 def _now() -> str:
@@ -74,7 +74,7 @@ def _run_view(row: sqlite3.Row, now: float) -> dict[str, Any]:
         **json.loads(row["counts_json"]), "id": row["id"], "status": row["status"],
         "started_at": row["started_at"], "finished_at": row["finished_at"], "error": row["error"],
     }  # fmt: skip
-    if view["status"] == "running" and now - row["started_at"] >= STALE_AFTER_S:
+    if view["status"] == "running" and now - row["started_at"] >= STALE_RUN_S:
         view.update(status="failed", error=STALE_RUN_ERROR)
     return view
 
@@ -244,12 +244,14 @@ class Store:
     # --- discovery runs ---
 
     def start_run(self, started_at: float | None = None) -> int:
-        """Call while holding the run lock: any other "running" row is a leftover."""
+        """Older "running" rows are closed only once stale: the lock is per machine,
+        so a fresh one may belong to a run on another machine."""
         now = time.time() if started_at is None else started_at
         with self.conn:
             self.conn.execute(
-                "UPDATE runs SET status='failed', error=?, finished_at=? WHERE status='running'",
-                (STALE_RUN_ERROR, now),
+                "UPDATE runs SET status='failed', error=?, finished_at=?"
+                " WHERE status='running' AND started_at <= ?",
+                (STALE_RUN_ERROR, now, now - STALE_RUN_S),
             )
             cur = self.conn.execute(
                 "INSERT INTO runs(started_at, status) VALUES (?, 'running')", (now,)
