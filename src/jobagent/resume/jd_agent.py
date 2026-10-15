@@ -18,7 +18,7 @@ from jobagent.resume.jd import (
     work_mode,
 )
 from jobagent.resume.ontology import all_terms, mention
-from jobagent.sanitize import clean_posting_text
+from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
 PROMPT_VERSION = "jd-2"
 STEP = "jd_analysis"
@@ -98,14 +98,17 @@ def _analyze(text: str, flagged: bool, llm: LLM) -> JDProfile:
         years_min=verified_years(lead.years_min, text),
         work_mode=work_mode(text),
         domain=lead.domain.strip()[:80],
-        responsibilities=[r.strip()[:200] for r in lead.responsibilities if r.strip()][
-            :MAX_RESPONSIBILITIES
-        ],
+        responsibilities=duties(lead.responsibilities)[:MAX_RESPONSIBILITIES],
         skills=skills,
         implicit_skills=implicit_from([lead], text),
         injection_flagged=flagged,
         rounds=calls,
     )
+
+
+def duties(lines: list[str]) -> list[str]:
+    """Job duties only: a line about the candidate's own skills is never kept as a fact."""
+    return [r.strip()[:200] for r in lines if r.strip() and not states_candidate_fact(r)]
 
 
 def _fallback(text: str, title: str, flagged: bool) -> JDProfile:

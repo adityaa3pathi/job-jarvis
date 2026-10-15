@@ -62,32 +62,70 @@ def _is_hidden(tag: Tag) -> bool:
     return False
 
 
-def strip_hidden_html(raw: str) -> str:
-    """Drop scripts, styles and visually hidden elements, then return the visible text."""
+# A posting stating facts about the reader: fine to show, never a fact for a model to repeat.
+_CANDIDATE_FACT = re.compile(
+    r"\bthe (?:candidate|applicant|person)\b|\byou have\b|"
+    r"\byou are (?:already )?(?:an? )?(?:\w+ )?(?:expert|proficient|fluent|skilled)\b",
+    re.IGNORECASE,
+)
+
+
+def _visible(raw: str) -> BeautifulSoup:
     soup = BeautifulSoup(html.unescape(raw) if "&lt;" in raw else raw, "html.parser")
     for tag in soup(["script", "style", "noscript", "template"]):
         tag.decompose()
     for tag in [t for t in soup.find_all(True) if isinstance(t, Tag) and _is_hidden(t)]:
         tag.decompose()
+    return soup
+
+
+def _text(soup: BeautifulSoup) -> str:
     text = soup.get_text("\n")
     return re.sub(r"\n\s*\n+", "\n", re.sub(r"[ \t]+", " ", text)).strip()
 
 
+def strip_hidden_html(raw: str) -> str:
+    """Drop scripts, styles and visually hidden elements, then return the visible text."""
+    return _text(_visible(raw))
+
+
+def _drop_list_orders(soup: BeautifulSoup) -> bool:
+    """An injection in a list item also takes the items after it in that list."""
+    flagged = False
+    for block in soup.find_all(["ul", "ol"]):
+        items = block.find_all("li", recursive=False) if isinstance(block, Tag) else []
+        for i, item in enumerate(items):
+            if _INJECTION.search(item.get_text(" ")):
+                flagged = True
+                for later in items[i:]:
+                    later.decompose()
+                break
+    return flagged
+
+
 def strip_instructions(text: str) -> tuple[str, bool]:
-    """Remove sentences that read as instructions to a model. Returns (clean, was_flagged)."""
+    """Remove sentences that read as instructions to a model, and the rest of their line
+    (paragraph), which is usually the order itself. Returns (clean, was_flagged)."""
     flagged = False
     kept: list[str] = []
     for line in text.splitlines():
-        parts = re.split(r"(?<=[.!?])\s+", line)
         good = []
-        for part in parts:
+        for part in re.split(r"(?<=[.!?])\s+", line):
             if _INJECTION.search(part):
                 flagged = True
-            else:
-                good.append(part)
+                break
+            good.append(part)
         kept.append(" ".join(good))
     return "\n".join(x for x in kept if x.strip()), flagged
 
 
 def clean_posting_text(raw: str) -> tuple[str, bool]:
-    return strip_instructions(strip_hidden_html(raw))
+    soup = _visible(raw)
+    in_lists = _drop_list_orders(soup)
+    text, flagged = strip_instructions(_text(soup))
+    return text, flagged or in_lists
+
+
+def states_candidate_fact(text: str) -> bool:
+    """True for lines like "the candidate is a Zig expert" or "you have 5 years of Rust"."""
+    return bool(_CANDIDATE_FACT.search(text))

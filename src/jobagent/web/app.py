@@ -39,7 +39,7 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
-from jobagent.index import Embedder, load_embedder
+from jobagent.index import Embedder, shared_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
@@ -114,7 +114,7 @@ class WebConfig:
     ping_every_s: float = PING_EVERY_S
     task_deadline_s: float = TASK_DEADLINE_S
     shutdown_wait_s: float = SHUTDOWN_WAIT_S
-    embedder: Callable[[], Embedder | None] = load_embedder  # loaded once, on the first run
+    embedder: Callable[[], Embedder | None] = shared_embedder  # loaded on the first run
     digest_sender: Callable[[], Sender | None] = field(default=lambda: sender_from_env(os.environ))
 
 
@@ -491,13 +491,6 @@ def create_app(cfg: WebConfig) -> FastAPI:
         db.mark(job_id, body.status)  # also the ranking's training label (U14)
         return {"ok": True}
 
-    embedders: list[Embedder | None] = []
-
-    def embedder() -> Embedder | None:
-        if not embedders:  # a model load is slow: once per process, and runs never overlap
-            embedders.append(cfg.embedder())
-        return embedders[0]
-
     def _discover() -> None:
         lock, tally, stop_ping = RunLock(settings.lock_file), RunTally(), threading.Event()
         held, run_id = False, None
@@ -524,7 +517,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                         )  # fmt: skip
                         prune_after_run(db, tally)
                         rank_after_run(
-                            db, st, tally, embedder=embedder(), llm=cfg.thinker(),
+                            db, st, tally, embedder=cfg.embedder(), llm=cfg.thinker(),
                             settings=settings,
                         )  # fmt: skip
                     st.finish_run(run_id, "done", "", tally.as_dict())

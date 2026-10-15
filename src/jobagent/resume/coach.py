@@ -11,9 +11,10 @@ from pydantic import BaseModel, Field
 
 from jobagent.llm import LLM, LLMCache, LLMError, ask, cache_key, data_block, model_id, short_cause
 from jobagent.resume.jd import JDProfile
+from jobagent.resume.jd_agent import duties
 from jobagent.resume.match import Coverage
 from jobagent.resume.pipeline import _prep_line
-from jobagent.sanitize import clean_posting_text
+from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
 MAX_JD_CHARS = 50_000
 PROMPT_VERSION = "coach-3"
@@ -176,7 +177,8 @@ def shared_prefix(profile: JDProfile, digest: str) -> str:
     """JOB then PROFILE: identical for the report and every chat turn on one session."""
     job = json.dumps(
         {"title": profile.role_title, "level": profile.level, "years_min": profile.years_min,
-         "work_mode": profile.work_mode, "responsibilities": profile.responsibilities[:12]}
+         "work_mode": profile.work_mode,
+         "responsibilities": duties(profile.responsibilities)[:12]}
     )  # fmt: skip
     return f"{data_block('JOB', job)}\n\n{data_block('PROFILE', digest)}\n\n"
 
@@ -329,7 +331,10 @@ def _run_lookup(call: Lookup, tools: ChatTools, state: _TurnState) -> Any:
     if call.name == "quote_posting":
         state.read_posting = True
         clean, _ = clean_posting_text(tools.posting)
-        sentences = [s.strip()[:300] for s in _SENTENCE.split(clean) if s.strip()]
+        sentences = [
+            s.strip()[:300] for s in _SENTENCE.split(clean)
+            if s.strip() and not states_candidate_fact(s)
+        ]  # fmt: skip
         return best_lines(call.arg, sentences, 3)
     if call.name == "past_sessions":
         return _past(call.arg, tools.sessions)

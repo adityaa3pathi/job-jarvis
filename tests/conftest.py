@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from jobagent import index
 from jobagent.config import REPO_ROOT, Settings, load_settings
 from jobagent.policy import Policy
 
@@ -41,3 +42,9 @@ def policy(settings: Settings, clock: FakeClock) -> Policy:
 @pytest.fixture(scope="session")
 def facts_path() -> Path:
     return REPO_ROOT / "facts.example.yaml"
+
+
+@pytest.fixture(autouse=True)
+def no_model_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Runs in tests rank without the real model, even where the embed extra is installed."""
+    monkeypatch.setattr(index, "_shared", [None])

@@ -26,6 +26,9 @@ agent = [
 turso = [
     "libsql>=0.1",
 ]
+embed = [
+    "fastembed>=0.7,<0.10",
+]
 
 [project.scripts]
 job-agent = "jobagent.cli:main"

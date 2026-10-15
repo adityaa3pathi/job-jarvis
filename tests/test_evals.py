@@ -37,7 +37,7 @@ def test_no_injected_content_reaches_outputs() -> None:
     result = injection_eval(stub_llm())
     assert result.failed == []
     assert result.passed == 1.0
-    assert result.known_gaps == ["ignore-all-prior", "visible-fake-fact"]
+    assert result.known_gaps == []
 
 
 def test_a_gullible_model_would_leak_without_sanitising() -> None:

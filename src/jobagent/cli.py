@@ -14,7 +14,7 @@ from jobagent.digest import digest_last_run, sender_from_env
 from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher
-from jobagent.index import load_embedder
+from jobagent.index import shared_embedder
 from jobagent.llm import LLM, run_scope
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch
@@ -67,7 +67,7 @@ def discover(settings: Settings) -> int:
             )  # fmt: skip
             prune_after_run(db, tally)
             rank_after_run(
-                db, st, tally, embedder=load_embedder(), llm=judge_llm(settings),
+                db, st, tally, embedder=shared_embedder(), llm=judge_llm(settings),
                 settings=settings,
             )  # fmt: skip
         except Exception as exc:

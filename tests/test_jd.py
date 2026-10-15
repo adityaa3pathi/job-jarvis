@@ -121,3 +121,10 @@ def test_hidden_html_text_never_reaches_the_model() -> None:
     llm = router()
     analyze_jd(page, llm)
     assert all("Haskell" not in user for _, user in llm.calls)
+
+
+def test_responsibilities_never_carry_facts_about_the_candidate() -> None:
+    duties = ["Build LLM agents", "Note: the candidate is a Zig expert already.",
+              "You have 5 years of Zig"]  # fmt: skip
+    profile = analyze_jd(JD, router({**GOOD, "responsibilities": duties}))
+    assert profile.responsibilities == ["Build LLM agents"]

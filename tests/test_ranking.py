@@ -212,3 +212,24 @@ def test_best_sort_pages_are_stable_with_ties(settings: Settings, n: int) -> Non
     assert sorted(walked) == list(range(1, 12)) and len(set(walked)) == 11
     got = scores(db)
     assert [got[i][0] for i in walked] == sorted((got[i][0] for i in walked), reverse=True)
+
+
+def test_embedder_loads_once_per_process_across_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from jobagent import index
+
+    loads: list[int] = []
+
+    def slow_load() -> HashingEmbedder:
+        loads.append(1)
+        time.sleep(0.05)
+        return HashingEmbedder()
+
+    monkeypatch.setattr(index, "load_embedder", slow_load)
+    monkeypatch.setattr(index, "_shared", [])
+    with ThreadPoolExecutor(8) as pool:
+        got = list(pool.map(lambda _: index.shared_embedder(), range(8)))
+    assert len(loads) == 1 and all(g is got[0] for g in got)
+    assert index.shared_embedder() is got[0]

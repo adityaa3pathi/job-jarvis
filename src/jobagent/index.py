@@ -6,6 +6,7 @@ import hashlib
 import logging
 import math
 import re
+import threading
 from array import array
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -187,6 +188,19 @@ def load_embedder() -> Embedder | None:
     except Exception as exc:  # ImportError, a failed download, a broken model file
         log.warning("embedding model unavailable, ranking without it: %s", type(exc).__name__)
         return None
+
+
+_shared: list[Embedder | None] = []
+_shared_lock = threading.Lock()
+
+
+def shared_embedder() -> Embedder | None:
+    """`load_embedder` once per process, even from many threads; the model (about 100 MB
+    in memory) is then reused by every run. A failed load stays None until a restart."""
+    with _shared_lock:
+        if not _shared:
+            _shared.append(load_embedder())
+        return _shared[0]
 
 
 def vector_key(embedder: Embedder, text: str) -> str:
