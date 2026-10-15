@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +35,18 @@ PROFILE = JDProfile(
 )
 
 
+def bullets_in(user: str) -> list[tuple[int, str]]:
+    """The numbered bullets sent in one batched rewrite prompt."""
+    block = user.split('<data name="bullets">\n', 1)[1].split("\n</data>", 1)[0]
+    return [(int(m[1]), m[2]) for m in re.finditer(r"^(\d+)\. (.*)$", block, re.M)]
+
+
+def same_text_for_every_bullet(text: str) -> StubLLM:
+    return StubLLM(lambda s, u: {"items": [{"id": i, "text": text} for i, _ in bullets_in(u)]})
+
+
 def run(reply: Any = None, add_gaps: bool = True, llm: Any = None):  # type: ignore[no-untyped-def]
-    llm = llm or StubLLM(lambda s, u: reply or {"text": "unused"})
+    llm = llm or same_text_for_every_bullet((reply or {"text": "unused"})["text"])
     resume = parse(SAMPLE)
     return tailor_resume(resume, CARDS, PROFILE, match_profile(PROFILE, CARDS), llm, add_gaps)
 

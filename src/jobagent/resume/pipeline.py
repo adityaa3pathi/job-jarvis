@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
-from jobagent.llm import LLM, short_cause
+from jobagent.llm import LLM, LLMCache, model_id, short_cause
 from jobagent.resume.evidence import EvidenceCard
 from jobagent.resume.jd import JDProfile, SkillNeed, fit_check
 from jobagent.resume.jd_agent import analyze_jd
@@ -32,6 +32,7 @@ class _CountingLLM:
 
     def __init__(self, inner: LLM) -> None:
         self.inner = inner
+        self.model = model_id(inner)
         self.calls = 0
         self.errors: list[str] = []
 
@@ -132,11 +133,12 @@ def run_tailor(
     add_gaps: bool = True,
     years_have: float | None = None,
     profile: JDProfile | None = None,
+    cache: LLMCache | None = None,
 ) -> Outcome:
     """Pass `profile` when the JD was already analysed, to skip a second model round."""
     resume = parse(latex_text)
     counted = _CountingLLM(llm)
-    profile = profile or analyze_jd(jd_text, counted)
+    profile = profile or analyze_jd(jd_text, counted, cache)
     coverage = match_profile(profile, cards)
     tailored = tailor_resume(resume, cards, profile, coverage, writer_llm or llm, add_gaps)
     explicit = profile.skills

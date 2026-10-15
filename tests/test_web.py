@@ -30,11 +30,9 @@ ADVICE = {
 
 
 def fake(system: str, user: str) -> Any:
-    if "check a skill list" in system:
-        return {"missing": [], "unsupported": []}
-    if "Rewrite one resume bullet" in system:
-        return {"text": "unchanged"}
-    if "latest message" in system:
+    if "Rewrite each resume bullet" in system:
+        return {"items": []}
+    if "latest message" in user:
         return {"reply": "Terraform is the main gap.", "new_facts": ["I used Terraform at Acme"]}
     if "career coach" in system:
         return ADVICE

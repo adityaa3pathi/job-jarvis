@@ -27,10 +27,8 @@ EXTRACT: dict[str, Any] = {
 
 
 def fake(system: str, user: str) -> Any:
-    if "check a skill list" in system:
-        return {"missing": [], "unsupported": []}
-    if "Rewrite one resume bullet" in system:
-        return {"text": "unchanged"}
+    if "Rewrite each resume bullet" in system:
+        return {"items": []}
     return EXTRACT
 
 
@@ -126,7 +124,7 @@ def test_report_lists_skills_removed_from_the_resume() -> None:
 
 def test_report_says_when_bullet_rewrites_failed() -> None:
     def broken_writer(system: str, user: str) -> Any:
-        if "Rewrite one resume bullet" in system:
+        if "Rewrite each resume bullet" in system:
             raise TimeoutError("stubbed timeout")
         return fake(system, user)
 
@@ -139,7 +137,7 @@ def test_report_says_when_job_analysis_calls_failed() -> None:
     seen: list[int] = []
 
     def flaky(system: str, user: str) -> Any:
-        if "List what it asks for" in system:
+        if "list what it asks for" in system:
             seen.append(1)
             if len(seen) == 1:
                 raise TimeoutError("stubbed timeout")

@@ -11,7 +11,7 @@ from jobagent.resume.jd import (
     weight,
     work_mode,
 )
-from jobagent.resume.jd_agent import MAX_ROUNDS, PASSES, analyze_jd
+from jobagent.resume.jd_agent import analyze_jd
 
 JD = """Senior AI Engineer (Hybrid, Pune)
 We need 4+ years of experience. Strong Python and FastAPI are required.
@@ -37,13 +37,8 @@ GOOD: dict[str, Any] = {
 }
 
 
-def router(extract: Any = None, critic: Any = None) -> StubLLM:
-    def respond(system: str, user: str) -> Any:
-        if "check a skill list" in system:
-            return critic or {"missing": [], "unsupported": []}
-        return extract or GOOD
-
-    return StubLLM(respond)
+def router(extract: Any = None) -> StubLLM:
+    return StubLLM(lambda system, user: extract or GOOD)
 
 
 def test_full_read_of_the_posting() -> None:
@@ -75,51 +70,6 @@ def test_repeated_and_title_skills_weigh_more() -> None:
 def test_skill_not_in_the_posting_is_dropped() -> None:
     extra = {**GOOD, "skills": [*GOOD["skills"], {"name": "Haskell", "importance": "must"}]}
     assert "Haskell" not in analyze_jd(JD, router(extract=extra)).must_have
-
-
-def test_voting_drops_a_skill_only_one_pass_saw() -> None:
-    calls = {"n": 0}
-
-    def respond(system: str, user: str) -> Any:
-        if "check a skill list" in system:
-            return {"missing": [], "unsupported": []}
-        calls["n"] += 1
-        extra = [{"name": "Langfuse", "importance": "must"}] if calls["n"] == 1 else []
-        base = [s for s in GOOD["skills"] if s["name"] != "Langfuse"]
-        return {**GOOD, "skills": base + extra}
-
-    profile = analyze_jd(JD, StubLLM(respond))
-    assert "Langfuse" not in profile.must_have + profile.nice_to_have
-
-
-def test_importance_follows_the_majority() -> None:
-    calls = {"n": 0}
-
-    def respond(system: str, user: str) -> Any:
-        if "check a skill list" in system:
-            return {"missing": [], "unsupported": []}
-        calls["n"] += 1
-        flip = "must" if calls["n"] == 1 else "nice"
-        skills = [
-            {"name": "Langfuse", "importance": flip},
-            {"name": "Python", "importance": "must"},
-        ]
-        return {**GOOD, "skills": skills}
-
-    profile = analyze_jd(JD, StubLLM(respond))
-    assert "Langfuse" in profile.nice_to_have
-
-
-def test_critic_miss_triggers_one_more_round_and_is_kept() -> None:
-    thin = {**GOOD, "skills": [s for s in GOOD["skills"] if s["name"] != "RAG"]}
-    llm = router(extract=thin, critic={"missing": ["RAG", "Haskell"], "unsupported": []})
-    profile = analyze_jd(JD, llm)
-    assert profile.rounds == MAX_ROUNDS
-    assert "RAG" in profile.nice_to_have  # found by the critic, not by the extractor
-    assert "Haskell" not in profile.nice_to_have + profile.must_have
-    extract_calls = [c for c in llm.calls if "check a skill list" not in c[0]]
-    assert len(extract_calls) == PASSES * MAX_ROUNDS
-    assert any("Also check for: RAG" in u for _, u in extract_calls)
 
 
 def test_implicit_skills_are_separate_and_never_must_have() -> None:

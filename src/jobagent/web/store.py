@@ -7,11 +7,12 @@ import json
 import sqlite3
 import time
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
 from jobagent.db import bump_version, data_version
+from jobagent.llm import Usage
 from jobagent.lock import STALE_AFTER_S
 from jobagent.resume.jd import JDProfile, SkillNeed
 from jobagent.runs import read_kill_switch, write_kill_switch
@@ -247,3 +248,73 @@ class Store:
         current = next((v for v in views if v["status"] == "running"), None)
         last = next((v for v in views if v["status"] != "running"), None)
         return {"current": current, "last": last}
+
+    # --- AI cache and usage (U5) ---
+
+    _llm_ready = False
+
+    def _llm_tables(self) -> None:
+        """Created on first use, so the schema above stays untouched by this section."""
+        if not self._llm_ready:
+            self.conn.executescript(LLM_SCHEMA)
+            self._llm_ready = True
+
+    def cache_get(self, key: str) -> str | None:
+        self._llm_tables()
+        row = self.conn.execute("SELECT value FROM llm_cache WHERE key=?", (key,)).fetchone()
+        return str(row["value"]) if row else None
+
+    def cache_put(self, key: str, step: str, value: str) -> None:
+        self._llm_tables()
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO llm_cache(key, step, value, at) VALUES (?,?,?,?)"
+                " ON CONFLICT(key) DO UPDATE SET value=excluded.value, at=excluded.at",
+                (key, step, value, _now()),
+            )
+
+    def add_usage(self, usage: Usage) -> None:
+        self._llm_tables()
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO llm_usage(at, day, step, model, tokens_in, tokens_out,"
+                " tokens_cached, ms) VALUES (?,?,?,?,?,?,?,?)",
+                (_now(), ist_day(), usage.step, usage.model, usage.tokens_in, usage.tokens_out,
+                 usage.tokens_cached, usage.ms),
+            )  # fmt: skip
+
+    def usage_today(self, day: str | None = None) -> dict[str, int]:
+        """Calls and tokens (in + out) used on one IST day, today by default."""
+        self._llm_tables()
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS calls, COALESCE(SUM(tokens_in + tokens_out), 0) AS tokens"
+            " FROM llm_usage WHERE day=?",
+            (day or ist_day(),),
+        ).fetchone()
+        return {"calls": int(row["calls"]), "tokens": int(row["tokens"])}
+
+    def usage_rows(self, day: str | None = None) -> list[dict[str, Any]]:
+        self._llm_tables()
+        rows = self.conn.execute(
+            "SELECT * FROM llm_usage WHERE day=? ORDER BY id", (day or ist_day(),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+LLM_SCHEMA = """
+CREATE TABLE IF NOT EXISTS llm_cache (
+  key TEXT PRIMARY KEY, step TEXT NOT NULL, value TEXT NOT NULL, at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, day TEXT NOT NULL, step TEXT NOT NULL,
+  model TEXT NOT NULL, tokens_in INTEGER NOT NULL, tokens_out INTEGER NOT NULL,
+  tokens_cached INTEGER NOT NULL, ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS llm_usage_day ON llm_usage(day);
+"""
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def ist_day(now: datetime | None = None) -> str:
+    """The budget resets at midnight IST, the owner's day."""
+    return (now or datetime.now(UTC)).astimezone(IST).date().isoformat()

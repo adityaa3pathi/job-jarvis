@@ -18,11 +18,21 @@ class ConfigError(Exception):
     """Raised when startup must be refused."""
 
 
+MAX_OUTPUT_TOKENS = {
+    "jd_extract": 1200, "jd_repair": 1200, "coach_report": 800, "coach_chat": 400,
+    "rewrite_bullets": 3000, "profile_digest": 1200,
+}  # fmt: skip
+
+
 class LLMSettings(BaseModel):
     provider: str = "gemini"
     model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 30.0
     send_contact_details: bool = False
+    max_output_tokens: dict[str, int] = Field(default_factory=lambda: dict(MAX_OUTPUT_TOKENS))
+    thinking_budget: int | None = None  # off: the field name for this model is unconfirmed
+    daily_token_budget: int = Field(default=1_000_000, ge=0)  # 0 means no limit
+    daily_call_budget: int = Field(default=200, ge=0)  # 0 means no limit
 
 
 class Settings(BaseModel):

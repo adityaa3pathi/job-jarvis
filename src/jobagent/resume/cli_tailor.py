@@ -33,8 +33,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def build_llms() -> tuple[LLM, LLM]:
-    model = load_settings().llm.model
-    return GeminiLLM(model, temperature=0.5), GeminiLLM(model, temperature=0.0)
+    """(thinker, writer): extraction at temperature 0, bullet rewrites at 0.5, as on the web."""
+    llm = load_settings().llm
+    return GeminiLLM.from_settings(llm, 0.0), GeminiLLM.from_settings(llm, 0.5)
 
 
 def collect_cards(summary: Path | None, repos: list[str]) -> list[EvidenceCard]:

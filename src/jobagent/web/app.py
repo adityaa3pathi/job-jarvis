@@ -35,11 +35,18 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
-from jobagent.llm import LLM, LLMError
+from jobagent.llm import LLM, LLMError, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
 from jobagent.policy import Policy, clear_kill_switch
-from jobagent.resume.coach import MAX_JD_CHARS, CoachReport, Message, build_report, reply
+from jobagent.resume.coach import (
+    MAX_JD_CHARS,
+    CoachReport,
+    Message,
+    build_report,
+    profile_digest,
+    reply,
+)
 from jobagent.resume.evidence import cards_from_summary
 from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
@@ -528,7 +535,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
         def body() -> None:
             try:
-                with stores.borrow() as st:
+                with stores.borrow() as st, usage_sink(st.add_usage):
                     finish(task, 0, "", work(st, cancelled))
             except _Abandoned:
                 log.warning("background task %s ended after its deadline; nothing saved", task_id)
@@ -561,6 +568,23 @@ def create_app(cfg: WebConfig) -> FastAPI:
             return asdict(task)
 
     # --- coach ---
+
+    def _ai_budget(st: Store) -> None:
+        """Refuse a new AI task once today's budget (IST day) is used up."""
+        llm, used = settings.llm, st.usage_today()
+        over = [
+            f"{used[kind]:,} of {limit:,} {kind}"
+            for kind, limit in (
+                ("tokens", llm.daily_token_budget),
+                ("calls", llm.daily_call_budget),
+            )
+            if limit and used[kind] >= limit
+        ]
+        if over:
+            raise HTTPException(
+                429, f"Daily AI budget reached ({'; '.join(over)} used today). "
+                "New AI tasks start again after midnight IST.",
+            )  # fmt: skip
 
     def _session(st: Store, session_id: int) -> Any:
         row = st.session(session_id)
@@ -604,14 +628,16 @@ def create_app(cfg: WebConfig) -> FastAPI:
         summary = st.profile()["summary"]
         if not summary:
             raise HTTPException(400, "add your career summary on the Profile page first")
+        _ai_budget(st)
         jd_text, title, company = _jd_from(body)
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
                 thinker = cfg.thinker()
-                profile = analyze_jd(jd_text, thinker)
-                cards = cards_from_summary(summary)
-                report = build_report(profile, match_profile(profile, cards), summary, thinker)
+                profile = analyze_jd(jd_text, thinker, cache=st)
+                cards, digest = cards_from_summary(summary), profile_digest(summary, thinker, st)
+                coverage = match_profile(profile, cards)
+                report = build_report(profile, coverage, digest, thinker, cache=st)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
             _still_wanted(cancelled)
@@ -638,12 +664,16 @@ def create_app(cfg: WebConfig) -> FastAPI:
     @app.post("/api/coach/{session_id}/chat", dependencies=[Owner])
     def chat(session_id: int, body: ChatIn, st: ST) -> dict[str, str]:
         row = _session(st, session_id)
+        _ai_budget(st)
         history = [Message(m["role"], m["text"]) for m in st.messages(session_id)]
         report, summary = CoachReport.from_json(row["report_json"]), st.profile()["summary"]
+        job = profile_from_json(row["profile_json"])
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
-                turn = reply(report, summary, history, body.message, cfg.thinker())
+                llm = cfg.thinker()
+                digest = profile_digest(summary, llm, st)
+                turn = reply(report, digest, history, body.message, llm, job=job)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
             _still_wanted(cancelled)
@@ -669,6 +699,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         prof = st.profile()
         if not prof["base_tex"]:
             raise HTTPException(400, "upload your base resume .tex on the Profile page first")
+        _ai_budget(st)
         confirmed = [f["text"] for f in st.facts(session_id) if f["confirmed"]]
         cards = cards_from_summary("\n".join([prof["summary"], *confirmed]))
         jd_text, profile = row["jd_text"], profile_from_json(row["profile_json"])
@@ -783,14 +814,13 @@ def app_from_env() -> FastAPI:
 
     configure_logging(Redactor.from_environment())  # task tracebacks reach the host's logs
     settings = load_settings()
-    model = settings.llm.model
     return create_app(
         WebConfig(
             settings=settings,
             owner_hash=os.environ.get("JOBAGENT_OWNER_HASH", ""),
             session_secret=os.environ.get("JOBAGENT_SESSION_SECRET", ""),
-            thinker=lambda: GeminiLLM(model, temperature=0.0),
-            writer=lambda: GeminiLLM(model, temperature=0.5),
+            thinker=lambda: GeminiLLM.from_settings(settings.llm, 0.0),
+            writer=lambda: GeminiLLM.from_settings(settings.llm, 0.5),
             cookie_secure=os.environ.get("JOBAGENT_COOKIE_SECURE", "1") != "0",
             cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
             task_deadline_s=float(os.environ.get("JOBAGENT_TASK_DEADLINE_S", TASK_DEADLINE_S)),
