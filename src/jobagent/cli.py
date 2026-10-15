@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Any, TextIO
 
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir, load_settings
@@ -120,15 +121,47 @@ def recheck(settings: Settings) -> int:
     return 0
 
 
+def backup(settings: Settings, out: Path) -> int:
+    """Dump the configured database (Turso when TURSO_DATABASE_URL is set) to gzipped SQL."""
+    from jobagent.backup import backup as dump
+    from jobagent.sqlconn import connect
+
+    conn = connect(settings.db_path)
+    try:
+        lines = dump(conn, out)
+    finally:
+        conn.close()
+    sys.stdout.write(f"backed up {lines} lines to {out} ({out.stat().st_size} bytes)\n")
+    return 0
+
+
+def restore(dump: Path, target: Path) -> int:
+    from jobagent.backup import restore as load
+
+    try:
+        load(dump, target)
+    except FileExistsError as exc:
+        sys.stdout.write(f"not restored: {exc}\n")
+        return 1
+    sys.stdout.write(f"restored {dump} into {target}\n")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="job-agent")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("status", "stop", "resume", "discover", "recheck", "hash-password"):
         sub.add_parser(name)
     cli_tailor.add_arguments(sub.add_parser("tailor"))
+    sub.add_parser("backup").add_argument("out", type=Path)
+    restore_args = sub.add_parser("restore")
+    restore_args.add_argument("dump", type=Path)
+    restore_args.add_argument("target", type=Path)
     args = parser.parse_args(argv)
     if args.command == "tailor":
         return cli_tailor.run(args)
+    if args.command == "restore":
+        return restore(args.dump, args.target)
     if args.command == "hash-password":
         from getpass import getpass
 
@@ -139,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     if args.command == "discover":
         return discover(settings)
+    if args.command == "backup":
+        return backup(settings, args.out)
     if args.command == "recheck":
         return recheck(settings)
     return kill_switch(settings, args.command)
