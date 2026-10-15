@@ -21,7 +21,7 @@ from typing import Annotated, Any, Literal, Protocol
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -33,6 +33,7 @@ from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
 from jobagent.llm import LLM, LLMError
 from jobagent.lock import LockHeldError, RunLock
+from jobagent.models import JobFilters, ListStatus
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume.coach import MAX_JD_CHARS, CoachReport, Message, build_report, reply
 from jobagent.resume.evidence import cards_from_summary
@@ -121,6 +122,11 @@ class _DiscoverState:
 
 class Login(BaseModel):
     password: str = Field(max_length=200)
+
+
+class JobsQuery(JobFilters):
+    limit: int = Field(default=50, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
 
 
 class Mark(BaseModel):
@@ -272,8 +278,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
     # --- jobs and discovery ---
 
     @app.get("/api/jobs", dependencies=[Owner])
-    def jobs(db: DB, status: str | None = None, source: str | None = None) -> list[dict[str, Any]]:
-        return [dict(r) for r in db.list_jobs(status=status, source=source)]
+    def jobs(db: DB, query: Annotated[JobsQuery, Query()]) -> dict[str, Any]:
+        rows, total = db.query_jobs(query, limit=query.limit, offset=query.offset)
+        return {"items": [dict(r) for r in rows], "total": total,
+                "sources": db.source_counts(query)}  # fmt: skip
+
+    @app.get("/api/jobs/facets", dependencies=[Owner])
+    def job_facets(db: DB, status: ListStatus = "found") -> dict[str, Any]:
+        return db.facets(status)
 
     @app.post("/api/jobs/{job_id}/mark", dependencies=[Owner])
     def mark(job_id: int, body: Mark, db: DB) -> dict[str, bool]:

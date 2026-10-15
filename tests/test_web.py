@@ -201,10 +201,89 @@ def test_owner_can_mark_a_job(web: TestClient, settings: Settings) -> None:
                 title="Full Stack Developer", location="Bengaluru")
     ).job_id  # fmt: skip
     db.close()
-    assert web.get("/api/jobs").json()[0]["url"] == "https://www.hirist.tech/j/x-1"
+    assert web.get("/api/jobs").json()["items"][0]["url"] == "https://www.hirist.tech/j/x-1"
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "applied"}).status_code == 200
-    assert web.get("/api/jobs?status=applied").json()[0]["id"] == job_id
+    assert web.get("/api/jobs?status=applied").json()["items"][0]["id"] == job_id
     assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "hacked"}).status_code == 422
+
+
+def save_jobs(settings: Settings, postings: list[Posting]) -> list[int]:
+    from jobagent.db import Database
+
+    db = Database(settings.db_path)
+    ids = [r.job_id for r in db.upsert_many(postings)]
+    db.close()
+    return ids
+
+
+JOB_FIELDS = {
+    "id", "company", "title", "location", "experience_text", "posted_date", "seen_date",
+    "source", "status", "drop_reason", "score", "url", "min_years", "max_years", "role",
+    "work_mode", "city",
+}  # fmt: skip
+
+
+def test_jobs_are_filtered_paged_and_counted_per_source(
+    web: TestClient, settings: Settings
+) -> None:
+    ids = save_jobs(settings, [
+        *(Posting(source="hirist", url=f"https://www.hirist.tech/j/a-{i}", company=f"Co{i}",
+                  title="AI Engineer", location="Pune", experience_text="1-2 yrs")
+          for i in range(5)),
+        Posting(source="cutshort", url="https://cutshort.io/job/b", company="Acme",
+                title="Frontend Developer", location="Remote"),
+    ])  # fmt: skip
+    body = web.get("/api/jobs").json()
+    assert (body["total"], body["sources"]) == (6, {"hirist": 5, "cutshort": 1})
+    assert set(body["items"][0]) == JOB_FIELDS
+    page = web.get("/api/jobs?source=hirist&limit=2&offset=4").json()
+    assert ([j["id"] for j in page["items"]], page["total"]) == ([ids[0]], 5)
+    assert page["sources"] == {"hirist": 5, "cutshort": 1}
+    walked = [
+        j["id"]
+        for offset in range(0, 6, 2)
+        for j in web.get(f"/api/jobs?limit=2&offset={offset}").json()["items"]
+    ]
+    assert sorted(walked) == sorted(ids)
+    past = web.get("/api/jobs?limit=2&offset=40").json()
+    assert (past["items"], past["total"]) == ([], 6)
+    one = web.get("/api/jobs?role=frontend&work_mode=remote&q=front&include_unstated=false"
+                  "&max_years=3&posted_within_days=1").json()  # fmt: skip
+    assert (one["total"], one["sources"]) == (0, {})
+    one = web.get("/api/jobs?role=frontend&work_mode=remote&q=front&max_years=3"
+                  "&posted_within_days=1&sort=fewest_years").json()  # fmt: skip
+    assert [(j["company"], j["role"], j["city"]) for j in one["items"]] == [
+        ("Acme", "frontend", "")
+    ]
+    assert one["sources"] == {"cutshort": 1}
+    assert web.get("/api/jobs?city=pune&company=Co3").json()["total"] == 1
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "status=ranked", "source=Bad%20Name", "role=devops", "work_mode=moon", "max_years=31",
+        "max_years=-1", "include_unstated=maybe", "posted_within_days=2", "sort=random",
+        "limit=0", "limit=101", "offset=-1", f"q={'x' * 61}", f"city={'x' * 61}",
+    ],
+)  # fmt: skip
+def test_bad_job_filters_are_refused(web: TestClient, query: str) -> None:
+    assert web.get(f"/api/jobs?{query}").status_code == 422
+
+
+def test_job_facets_list_companies_and_cities(web: TestClient, settings: Settings) -> None:
+    save_jobs(settings, [
+        Posting(source="hirist", url=f"https://www.hirist.tech/j/c-{i}", company="Acme",
+                title=f"AI Engineer {i}", location=loc)
+        for i, loc in enumerate(["Pune", "Bengaluru", "Bangalore", "Remote"])
+    ])  # fmt: skip
+    body = web.get("/api/jobs/facets?status=found").json()
+    assert body == {
+        "companies": [{"name": "Acme", "count": 4}],
+        "cities": [{"name": "bangalore", "count": 2}, {"name": "pune", "count": 1}],
+    }
+    assert web.get("/api/jobs/facets?status=applied").json() == {"companies": [], "cities": []}
+    assert web.get("/api/jobs/facets?status=ranked").status_code == 422
 
 
 def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -267,7 +346,7 @@ def test_discover_saves_each_portal_and_keeps_them_after_a_crash(
         assert "portal 3 died" in last["error"] and last["new"] == 3
     else:
         assert (last["read"], last["new"]) == (3, 3)
-    assert {j["source"] for j in web.get("/api/jobs").json()} == {"hirist", "greenhouse"}
+    assert {j["source"] for j in web.get("/api/jobs").json()["items"]} == {"hirist", "greenhouse"}
 
 
 def logged_in(settings: Settings) -> TestClient:
@@ -401,7 +480,7 @@ def test_a_failed_progress_write_never_loses_later_portals(
     last = wait_discover(web)["last"]
     assert (last["status"], last["read"]) == ("done", 3)
     assert any("OSError: turso hiccup" in n for n in last["notes"])
-    assert {j["source"] for j in web.get("/api/jobs").json()} == {"hirist", "greenhouse"}
+    assert {j["source"] for j in web.get("/api/jobs").json()["items"]} == {"hirist", "greenhouse"}
 
 
 def test_kill_switch_survives_a_restart_and_reaches_the_run(

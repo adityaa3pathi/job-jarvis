@@ -5,20 +5,21 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, get_args
 
+from jobagent.classify import city_of, role_of, work_mode_of
 from jobagent.dedupe import (
     dedupe_key,
     normalize_company,
     normalize_title,
     normalize_url,
 )
-from jobagent.models import DropReason, JobStatus, Posting
-from jobagent.rules import RULES_VERSION, check_hard_rules
+from jobagent.models import DropReason, JobFilters, JobStatus, Posting
+from jobagent.rules import RULES_VERSION, check_hard_rules, years_asked
 from jobagent.sqlconn import connect
 
 SCHEMA = """
@@ -27,9 +28,13 @@ CREATE TABLE IF NOT EXISTS jobs (
   location TEXT NOT NULL, experience_text TEXT NOT NULL, stack_words TEXT NOT NULL,
   description TEXT NOT NULL, posted_date TEXT, seen_date TEXT NOT NULL, source TEXT NOT NULL,
   track TEXT, status TEXT NOT NULL, drop_reason TEXT, score INTEGER, rank_reason TEXT,
-  rules_version INTEGER NOT NULL DEFAULT 1, missed_runs INTEGER NOT NULL DEFAULT 0
+  rules_version INTEGER NOT NULL DEFAULT 1, missed_runs INTEGER NOT NULL DEFAULT 0,
+  min_years INTEGER, max_years INTEGER, role TEXT NOT NULL DEFAULT '',
+  work_mode TEXT NOT NULL DEFAULT '', city TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS jobs_key ON jobs(key);
+CREATE INDEX IF NOT EXISTS jobs_status_source ON jobs(status, source);
+CREATE INDEX IF NOT EXISTS jobs_status_posted ON jobs(status, posted_date);
 CREATE TABLE IF NOT EXISTS job_links (
   job_id INTEGER NOT NULL REFERENCES jobs(id), source TEXT NOT NULL, url TEXT NOT NULL,
   norm_url TEXT NOT NULL UNIQUE
@@ -51,7 +56,13 @@ CREATE INDEX IF NOT EXISTS events_job ON events(job_id);
 NEW_COLUMNS = {
     "rules_version": "INTEGER NOT NULL DEFAULT 1",
     "missed_runs": "INTEGER NOT NULL DEFAULT 0",
+    "min_years": "INTEGER",
+    "max_years": "INTEGER",
+    "role": "TEXT NOT NULL DEFAULT ''",
+    "work_mode": "TEXT NOT NULL DEFAULT ''",
+    "city": "TEXT NOT NULL DEFAULT ''",
 }
+DERIVED = ("min_years", "max_years", "role", "work_mode", "city")
 # Drops the hard rules made, so a rule fix may undo them; owner and ranker drops stay.
 RULE_REASONS = frozenset(get_args(DropReason)) - {"no_track"}
 OWNER = "owner"  # the event note of a status the owner set; rules never undo it
@@ -91,6 +102,20 @@ _Job = dict[str, Any]  # a jobs row read up front, kept current as the batch wri
 CHUNK = 500  # stays under SQLite's limit on `?` marks in one statement
 
 
+IST = timezone(timedelta(hours=5, minutes=30))
+DAY = "substr(COALESCE(NULLIF(j.posted_date, ''), j.seen_date), 1, 10)"
+# The id tie-break keeps pages from overlapping or skipping when sort keys are equal.
+ORDERS = {
+    "newest": f"{DAY} DESC, j.id DESC",
+    "fewest_years": f"j.min_years IS NULL, j.min_years, {DAY} DESC, j.id DESC",
+}
+JOB_COLUMNS = (
+    "j.id, j.company, j.title, j.location, j.experience_text, j.posted_date, j.seen_date,"
+    " j.source, j.status, j.drop_reason, j.score,"
+    " (SELECT url FROM job_links l WHERE l.job_id=j.id ORDER BY rowid LIMIT 1) AS url,"
+    " j.min_years, j.max_years, j.role, j.work_mode, j.city"
+)
+
 FULL_LIST_SOURCES = frozenset({"greenhouse", "lever", "ashby", "workable"})
 
 
@@ -100,6 +125,52 @@ def _now() -> str:
 
 def _chunks(items: list[str]) -> list[list[str]]:
     return [items[i : i + CHUNK] for i in range(0, len(items), CHUNK)]
+
+
+def today_ist() -> date:
+    return datetime.now(IST).date()
+
+
+def _like(text: str) -> str:
+    return "%" + re.sub(r"([\\%_])", r"\\\1", text) + "%"
+
+
+def _where(f: JobFilters, *, by_source: bool = True) -> tuple[str, list[object]]:
+    """SQL conditions for the filters, values bound as parameters only (KTD3)."""
+    parts: list[str] = ["1=1"]
+    args: list[object] = []
+    for col in ("status", "source", "role", "work_mode", "city", "company"):
+        value = getattr(f, col, None)
+        if value is not None and (by_source or col != "source"):
+            parts.append(f"j.{col}=?")
+            args.append(value)
+    if f.max_years is not None:
+        unstated = " OR j.min_years IS NULL" if f.include_unstated else ""
+        parts.append(f"(j.min_years<=?{unstated})")
+        args.append(f.max_years)
+    if f.posted_within_days:  # days, not hours: "1" is today or yesterday in IST
+        parts.append(f"{DAY}>=?")
+        args.append((today_ist() - timedelta(days=f.posted_within_days)).isoformat())
+    if f.q:
+        cols = ("j.title", "j.company", "j.description")
+        parts.append("(" + " OR ".join(f"{c} LIKE ? ESCAPE '\\'" for c in cols) + ")")
+        args += [_like(f.q)] * len(cols)
+    return " AND ".join(parts), args
+
+
+def derive(job: Mapping[str, Any]) -> dict[str, object]:
+    """The filter columns of a job (KTD1): years asked, role group, work mode and city."""
+    text = {c: job[c] for c in ("title", "location", "experience_text", "description")}
+    asked = years_asked(Posting.model_construct(**text))
+    return {
+        "min_years": asked[0] if asked else None, "max_years": asked[1] if asked else None,
+        "role": role_of(job["title"]), "work_mode": work_mode_of(job["location"], job["title"]),
+        "city": city_of(job["location"]),
+    }  # fmt: skip
+
+
+def _stale_derived(job: Mapping[str, Any]) -> dict[str, object]:
+    return {c: v for c, v in derive(job).items() if job[c] != v}
 
 
 class Database:
@@ -191,6 +262,7 @@ class Database:
             "posted_date": posted, "seen_date": seen, "source": posting.source,
             "status": status, "drop_reason": reason, "rules_version": RULES_VERSION,
         }  # fmt: skip
+        row |= derive(row)
         cur = self.conn.execute(
             f"INSERT INTO jobs({', '.join(row)}) VALUES ({','.join('?' * len(row))})",
             tuple(row.values()),
@@ -270,6 +342,7 @@ class Database:
         if posting.closed and status not in ("closed", "applied"):
             changes["status"] = "closed"
             events.append((status, "closed", "source says closed"))
+        changes |= _stale_derived(row | changes)  # current rows keep the shared bump
         if len(changes) == 1:
             bumps.append((seen, row["id"]))
         else:
@@ -327,9 +400,10 @@ class Database:
             self._renorm_applications()
             recheckable = RULE_REASONS - {"closed"}  # no fresh source says it reopened
             sql = f"SELECT {LAST_NOTE} AS last_note, j.* FROM jobs j ORDER BY id"
+            every = [dict(row) for row in self.conn.execute(sql).fetchall()]
             rows = [
-                dict(row)
-                for row in self.conn.execute(sql).fetchall()
+                row
+                for row in every
                 if row["last_note"] != OWNER
                 and (
                     row["status"] == "found"
@@ -350,12 +424,22 @@ class Database:
                     "UPDATE jobs SET status=?, drop_reason=?, rules_version=? WHERE id=?", updates
                 )
             self._events(events)
+            self._backfill(every)
         return RecheckSummary(
             rechecked=len(rows),
             undropped=sum(e[2] == "found" for e in events),
             dropped=sum(e[1] == "found" for e in events),
             merged=merged,
         )
+
+    def _backfill(self, rows: list[_Job]) -> None:
+        """Derived filter columns on every row, owner-set ones too, in one write (KTD2)."""
+        fresh = [derive(row) | {"id": row["id"]} for row in rows if _stale_derived(row)]
+        if fresh:
+            sets = ", ".join(f"{col}=?" for col in DERIVED)
+            self.conn.executemany(
+                f"UPDATE jobs SET {sets} WHERE id=?", [tuple(f.values()) for f in fresh]
+            )
 
     def _rekey(self) -> int:
         jobs = {row["id"]: dict(row) for row in self.conn.execute("SELECT * FROM jobs").fetchall()}
@@ -500,20 +584,42 @@ class Database:
     def list_jobs(
         self, *, status: str | None = None, source: str | None = None, limit: int = 200
     ) -> list[sqlite3.Row]:
-        """Newest first, with the first link for each job."""
-        sql = (
-            "SELECT j.id, j.company, j.title, j.location, j.experience_text, j.posted_date,"
-            " j.seen_date, j.source, j.status, j.drop_reason, j.score, j.rank_reason,"
-            " (SELECT url FROM job_links l WHERE l.job_id=j.id ORDER BY rowid LIMIT 1) AS url"
-            " FROM jobs j WHERE 1=1"
-        )
-        args: list[object] = []
-        if status:
-            sql, args = sql + " AND j.status=?", [*args, status]
-        if source:
-            sql, args = sql + " AND j.source=?", [*args, source]
-        sql += " ORDER BY COALESCE(j.posted_date, j.seen_date) DESC, j.id DESC LIMIT ?"
-        return self.conn.execute(sql, (*args, limit)).fetchall()
+        """Newest first, any status unless given; kept for older callers."""
+        filters = JobFilters(source=source).model_copy(update={"status": status})
+        return self.query_jobs(filters, limit=limit, offset=0)[0]
+
+    def query_jobs(
+        self, filters: JobFilters, *, limit: int, offset: int
+    ) -> tuple[list[sqlite3.Row], int]:
+        """One page of matching jobs, with the first link of each, and the match count."""
+        where, args = _where(filters)
+        order = ORDERS[filters.sort]
+        rows = self.conn.execute(
+            f"SELECT {JOB_COLUMNS} FROM jobs j WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
+            (*args, limit, offset),
+        ).fetchall()
+        total = self.conn.execute(f"SELECT COUNT(*) FROM jobs j WHERE {where}", args).fetchone()
+        return rows, int(total[0])
+
+    def source_counts(self, filters: JobFilters) -> dict[str, int]:
+        """Matches per source under every filter but the source, for the portal tabs (R1)."""
+        where, args = _where(filters, by_source=False)
+        rows = self.conn.execute(
+            f"SELECT j.source, COUNT(*) AS n FROM jobs j WHERE {where} GROUP BY j.source", args
+        ).fetchall()
+        return {row["source"]: int(row["n"]) for row in rows}
+
+    def facets(self, status: str) -> dict[str, list[dict[str, Any]]]:
+        """Companies (top 200) and cities (top 60) with jobs in this status, by count."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for name, col, top in (("companies", "company", 200), ("cities", "city", 60)):
+            rows = self.conn.execute(
+                f"SELECT {col} AS name, COUNT(*) AS n FROM jobs WHERE status=? AND {col}!=''"
+                f" GROUP BY {col} ORDER BY n DESC, {col} LIMIT ?",
+                (status, top),
+            ).fetchall()
+            out[name] = [{"name": row["name"], "count": int(row["n"])} for row in rows]
+        return out
 
     def links(self, job_id: int) -> list[sqlite3.Row]:
         return self.conn.execute(

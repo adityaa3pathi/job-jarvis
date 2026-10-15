@@ -13,7 +13,7 @@ import pytest
 from jobagent import cli
 from jobagent.config import Settings, ensure_data_dir
 from jobagent.db import Database
-from jobagent.models import Posting
+from jobagent.models import JobFilters, Posting
 
 
 class CountingConn:
@@ -293,3 +293,212 @@ def test_owner_drop_is_not_undone_by_recheck() -> None:
     db.set_status(saved.job_id, "dropped", "owner")
     db.recheck()
     assert db.get_job(saved.job_id)["status"] == "dropped"
+
+
+DERIVED = ("min_years", "max_years", "role", "work_mode", "city")
+
+
+def derived(db: Database, job_id: int) -> tuple[Any, ...]:
+    job = db.get_job(job_id)
+    return tuple(job[c] for c in DERIVED)
+
+
+def test_a_saved_posting_gets_all_derived_fields() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting(title="Full Stack Developer", location="Bengaluru / Remote"))
+    assert derived(db, saved.job_id) == (2, 3, "full_stack", "remote", "bangalore")
+    plain = db.upsert_posting(posting(2, experience_text="", location="Pune"))
+    assert derived(db, plain.job_id) == (None, None, "ai_ml", "onsite", "pune")
+
+
+def test_recheck_fills_derived_fields_on_every_status() -> None:
+    db = Database(":memory:")
+    ids = [db.upsert_posting(posting(i)).job_id for i in range(1, 5)]
+    db.set_status(ids[1], "applied", "owner")
+    db.set_status(ids[2], "dropped", "owner")
+    db.set_status(ids[3], "rejected")
+    with db.conn:
+        db.conn.execute(
+            "UPDATE jobs SET min_years=NULL, max_years=NULL, role='', work_mode='', city=''"
+        )
+    db.recheck()
+    for job_id in ids:
+        assert derived(db, job_id) == (2, 3, "ai_ml", "onsite", "bangalore")
+    assert [db.get_job(i)["status"] for i in ids] == ["found", "applied", "dropped", "rejected"]
+
+
+def test_recheck_writes_derived_fields_in_one_call(counting: list[CountingConn]) -> None:
+    db = Database(":memory:")
+    db.upsert_many([posting(i) for i in range(50)])
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET role=''")
+    before = calls(db)
+    db.recheck()
+    first = calls(db) - before
+    before = calls(db)
+    db.recheck()
+    assert first - (calls(db) - before) == 1  # the one backfill write; none when current
+
+
+def test_re_seen_rows_with_current_fields_keep_the_shared_update(
+    counting: list[CountingConn],
+) -> None:
+    db = Database(":memory:")
+    db.upsert_many([posting(i) for i in range(300)])
+    db.recheck()
+    before = calls(db)
+    db.upsert_many([posting(i) for i in range(300)])
+    assert calls(db) - before <= 4
+
+
+def test_re_seen_row_gets_stale_derived_fields_fixed() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting())
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET role='', city=''")
+    db.upsert_posting(posting())
+    assert derived(db, saved.job_id) == (2, 3, "ai_ml", "onsite", "bangalore")
+
+
+def test_a_repost_with_a_new_title_updates_the_role() -> None:
+    db = Database(":memory:")
+    saved = db.upsert_posting(posting())
+    db.upsert_posting(posting(title="Frontend Developer", posted_date=date(2026, 10, 1)))
+    assert db.get_job(saved.job_id)["role"] == "frontend"
+
+
+def test_new_and_old_databases_get_derived_columns_and_indexes(tmp_path: Path) -> None:
+    path = tmp_path / "jobs.db"
+    Database(path).close()
+    conn = sqlite3.connect(path)
+    names = {r[1] for r in conn.execute("PRAGMA index_list(jobs)").fetchall()}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    conn.close()
+    assert {"jobs_status_source", "jobs_status_posted"} <= names
+    assert set(DERIVED) <= cols
+
+
+TODAY = date(2026, 10, 15)
+
+
+def seeded(monkeypatch: pytest.MonkeyPatch) -> tuple[Database, dict[str, int]]:
+    """Six found jobs and one applied, with today fixed at 15-10-2026 IST."""
+    monkeypatch.setattr("jobagent.db.today_ist", lambda: TODAY)
+    db = Database(":memory:")
+    specs = {
+        "ai": posting(1, title="AI Engineer", location="Bengaluru", experience_text="1-2 yrs",
+                      posted_date=date(2026, 10, 14)),
+        "fs": posting(2, title="Full Stack Developer", location="Remote",
+                      experience_text="3-5 yrs", source="cutshort",
+                      url="https://cutshort.io/job/2", posted_date=date(2026, 10, 13)),
+        "fe": posting(3, title="Frontend Developer", location="Pune", experience_text="",
+                      company="Acme 100% Co", source="greenhouse",
+                      url="https://boards.greenhouse.io/acme/jobs/3"),
+        "be": posting(4, title="Backend Engineer", location="Hybrid - Pune",
+                      experience_text="", posted_date=date(2026, 9, 1),
+                      description="Go services. You own billing_v2."),
+        "mob": posting(5, title="Android Developer", location="Pune", experience_text="2+ years",
+                       posted_date=date(2026, 10, 10)),
+        "ml": posting(6, title="ML Engineer", location="Mumbai", experience_text="0-1 yrs",
+                      posted_date=date(2026, 10, 15)),
+        "done": posting(7, title="AI Engineer", location="Bengaluru",
+                        posted_date=date(2026, 10, 15)),
+    }  # fmt: skip
+    ids = {name: db.upsert_many([p], now="2026-10-14T20:00:00+00:00")[0].job_id
+           for name, p in specs.items()}  # fmt: skip
+    db.set_status(ids["done"], "applied", "owner")
+    return db, ids
+
+
+def found(db: Database, **kw: Any) -> set[int]:
+    rows, total = db.query_jobs(JobFilters(**kw), limit=100, offset=0)
+    assert total == len(rows)
+    return {r["id"] for r in rows}
+
+
+def test_each_filter_narrows_found_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    want = {k: ids[k] for k in ids}
+    assert found(db) == {want[k] for k in ("ai", "fs", "fe", "be", "mob", "ml")}
+    assert found(db, status="applied") == {want["done"]}
+    assert found(db, source="cutshort") == {want["fs"]}
+    assert found(db, role="backend") == {want["be"]}
+    assert found(db, work_mode="hybrid") == {want["be"]}
+    assert found(db, work_mode="remote") == {want["fs"]}
+    assert found(db, city="pune") == {want["fe"], want["be"], want["mob"]}
+    assert found(db, company="Acme 100% Co") == {want["fe"]}
+    assert found(db, q="billing") == {want["be"]}
+    assert found(db, q="android") == {want["mob"]}
+
+
+def test_years_filter_with_and_without_unstated(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    stated = {ids["ai"], ids["mob"], ids["ml"]}
+    assert found(db, max_years=2) == stated | {ids["fe"], ids["be"]}
+    assert found(db, max_years=2, include_unstated=False) == stated
+    assert found(db, max_years=0, include_unstated=False) == {ids["ml"]}
+
+
+def test_date_window_counts_days_in_ist(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    # "fe" has no posted date, so its seen date (14-10) counts.
+    assert found(db, posted_within_days=1) == {ids["ai"], ids["ml"], ids["fe"]}
+    assert found(db, posted_within_days=3) == {ids["ai"], ids["ml"], ids["fe"], ids["fs"]}
+    assert ids["be"] not in found(db, posted_within_days=30)
+
+
+def test_filters_combine(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    assert found(db, city="pune", max_years=3, include_unstated=False) == {ids["mob"]}
+    assert found(db, city="pune", posted_within_days=7, q="developer") == {ids["fe"], ids["mob"]}
+    assert found(db, role="ai_ml", source="hirist", posted_within_days=1) == {ids["ai"], ids["ml"]}
+
+
+def test_search_treats_wildcards_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    assert found(db, q="100%") == {ids["fe"]}
+    assert found(db, q="%") == {ids["fe"]}
+    assert found(db, q="Co_") == set()
+    assert found(db, q="billing_v2") == {ids["be"]}
+
+
+def test_source_counts_ignore_the_source_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, _ = seeded(monkeypatch)
+    counts = db.source_counts(JobFilters(source="cutshort"))
+    assert counts == {"hirist": 4, "cutshort": 1, "greenhouse": 1}
+    assert db.source_counts(JobFilters(role="frontend")) == {"greenhouse": 1}
+
+
+def test_paging_walks_every_job_once_in_each_sort(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, _ = seeded(monkeypatch)
+    with db.conn:  # equal sort keys everywhere, so only the id tie-break orders them
+        db.conn.execute("UPDATE jobs SET posted_date='2026-10-01', min_years=NULL WHERE id > 3")
+    every = found(db)
+    for sort in ("newest", "fewest_years"):
+        walked: list[int] = []
+        for offset in range(0, 8, 2):
+            rows, total = db.query_jobs(JobFilters(sort=sort), limit=2, offset=offset)
+            assert total == len(every)
+            walked += [r["id"] for r in rows]
+        assert sorted(walked) == sorted(every), sort
+    rows, total = db.query_jobs(JobFilters(), limit=2, offset=50)
+    assert (rows, total) == ([], len(every))
+
+
+def test_sorts_order_newest_and_fewest_years(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, ids = seeded(monkeypatch)
+    rows, _ = db.query_jobs(JobFilters(), limit=3, offset=0)
+    assert [r["id"] for r in rows] == [ids["ml"], ids["fe"], ids["ai"]]
+    rows, _ = db.query_jobs(JobFilters(sort="fewest_years"), limit=10, offset=0)
+    assert [r["min_years"] for r in rows] == [0, 1, 2, 3, None, None]
+    assert [r["id"] for r in rows][-2:] == [ids["fe"], ids["be"]]  # newest first among NULLs
+
+
+def test_facets_list_companies_and_cities_by_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    db, _ = seeded(monkeypatch)
+    got = db.facets("found")
+    assert got["cities"][0] == {"name": "pune", "count": 3}
+    assert {c["name"] for c in got["cities"]} == {"pune", "bangalore", "mumbai"}
+    assert {"name": "Acme 100% Co", "count": 1} in got["companies"]
+    assert len(got["companies"]) == 6
+    assert db.facets("applied")["cities"] == [{"name": "bangalore", "count": 1}]
