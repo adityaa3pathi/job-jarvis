@@ -67,8 +67,8 @@ def probe_linkedin(out: Path) -> Probe:
 def probe_browser(sites: dict[str, str], out: Path) -> list[Probe]:
     """Logged out, one tab, slow, no stealth: what a plain Chromium sees."""
     try:
-        from playwright.sync_api import (
-            sync_playwright,  # type: ignore[import-not-found,unused-ignore]
+        from playwright.sync_api import (  # type: ignore[import-not-found,unused-ignore]
+            sync_playwright,
         )
     except ImportError:
         return [Probe(s, "browser", None, "", 0, False, "playwright not installed") for s in sites]
