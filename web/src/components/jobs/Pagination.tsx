@@ -18,7 +18,7 @@ export function Pagination({ page, last, onPage, onStep }: Props) {
     <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1">
       <button
         type="button"
-        className={`${BTN} border-zinc-300 hover:bg-zinc-100 disabled:text-zinc-400 disabled:hover:bg-transparent`}
+        className={`${BTN} border-border-strong hover:bg-surface-muted disabled:text-ink-faint disabled:hover:bg-transparent`}
         disabled={page <= 1}
         onClick={() => onStep(-1)}
       >
@@ -26,7 +26,7 @@ export function Pagination({ page, last, onPage, onStep }: Props) {
       </button>
       {pageList(page, last).map((n, i) =>
         n === "gap" ? (
-          <span key={`gap-${i}`} aria-hidden="true" className="px-1 text-zinc-500">
+          <span key={`gap-${i}`} aria-hidden="true" className="px-1 text-ink-faint">
             …
           </span>
         ) : (
@@ -35,7 +35,7 @@ export function Pagination({ page, last, onPage, onStep }: Props) {
             type="button"
             aria-label={`Page ${n}`}
             aria-current={n === page ? "page" : undefined}
-            className={`${BTN} ${n === page ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 hover:bg-zinc-100"}`}
+            className={`${BTN} ${n === page ? "border-accent bg-accent text-accent-ink" : "border-border-strong hover:bg-surface-muted"}`}
             onClick={() => n !== page && onPage(n)}
           >
             {n}
@@ -44,7 +44,7 @@ export function Pagination({ page, last, onPage, onStep }: Props) {
       )}
       <button
         type="button"
-        className={`${BTN} border-zinc-300 hover:bg-zinc-100 disabled:text-zinc-400 disabled:hover:bg-transparent`}
+        className={`${BTN} border-border-strong hover:bg-surface-muted disabled:text-ink-faint disabled:hover:bg-transparent`}
         disabled={page >= last}
         onClick={() => onStep(1)}
       >

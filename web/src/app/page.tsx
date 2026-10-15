@@ -12,7 +12,8 @@ import {
   type JobFacets,
   type JobPage,
 } from "@/lib/api";
-import { Button, ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, StateNote } from "@/components/ui";
+import { Ornament } from "@/components/Ornament";
 import { FilterBar, Select } from "@/components/jobs/FilterBar";
 import { JobCard } from "@/components/jobs/JobCard";
 import { Pagination } from "@/components/jobs/Pagination";
@@ -32,7 +33,7 @@ const fmt = (n: number) => n.toLocaleString("en-IN");
 export default function JobsPage() {
   // Reading the URL's filters needs a Suspense boundary under cacheComponents.
   return (
-    <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+    <Suspense fallback={<StateNote story="Unrolling the scrolls…">Loading…</StateNote>}>
       <JobsView />
     </Suspense>
   );
@@ -181,7 +182,7 @@ function JobsView() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">Jobs</h1>
+        <h1 className="mr-auto font-display text-xl font-semibold">Jobs</h1>
         <Button
           disabled={discover?.running}
           onClick={async () => {
@@ -196,8 +197,9 @@ function JobsView() {
           {discover?.running ? "Searching boards…" : "Find new jobs"}
         </Button>
       </div>
+      <Ornament />
       {discover?.running ? (
-        <p className="text-sm text-zinc-600">
+        <p className="text-sm text-ink-muted">
           Searching boards
           {discover.current
             ? ` since ${istDateTime(discover.current.started_at)}: read ${discover.current.read ?? 0}, ${discover.current.new ?? 0} new so far.`
@@ -215,7 +217,7 @@ function JobsView() {
         onClear={isFiltered(filters) ? () => go({ ...DEFAULTS, size: latest.current.size }) : null}
       />
       {shown === null ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
+        <StateNote story="Unrolling the scrolls…">Loading…</StateNote>
       ) : (
         <section aria-busy={!loaded} className="flex flex-col gap-2">
           <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -224,7 +226,7 @@ function JobsView() {
                 {fmt(shown.total)} {shown.total === 1 ? "job matches" : "jobs match"}
               </h2>
               {shown.items.length > 0 && (
-                <p className="text-sm text-zinc-600">
+                <p className="text-sm text-ink-muted">
                   Showing {fmt(first + 1)}–{fmt(first + shown.items.length)} of {fmt(shown.total)}
                   {!loaded && " · updating…"}
                 </p>
@@ -238,11 +240,13 @@ function JobsView() {
             />
           </div>
           {shown.items.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              {shown.total === 0 && loaded ? "No jobs match these filters." : "Loading…"}
-            </p>
+            shown.total === 0 && loaded ? (
+              <StateNote story="The scrolls are empty: no jobs match these filters.">No jobs match these filters.</StateNote>
+            ) : (
+              <StateNote story="Unrolling the scrolls…">Loading…</StateNote>
+            )
           ) : (
-            <ul className={`flex flex-col gap-2 ${loaded ? "" : "opacity-60"}`}>
+            <ul className={`page-turn flex flex-col gap-2 ${loaded ? "" : "opacity-60"}`}>
               {shown.items.map((j) => (
                 <JobCard key={j.id} job={j} status={filters.status} onMark={mark} />
               ))}
@@ -265,7 +269,7 @@ function RunSummary({ run }: { run: DiscoverRun }) {
   const drops = Object.entries(run.drop_reasons ?? {});
   const problems = [...(run.unreachable ?? []), ...(run.skipped ?? []), ...(run.notes ?? [])];
   return (
-    <div className="text-sm text-zinc-600">
+    <div className="sparkle text-sm text-ink-muted">
       <p>
         Last search {run.status === "failed" ? "failed" : "finished"} {istDateTime(run.finished_at ?? run.started_at)}
         : read {run.read ?? 0} jobs, {run.new ?? 0} new
@@ -282,7 +286,7 @@ function RunSummary({ run }: { run: DiscoverRun }) {
               </li>
             ))}
             {problems.map((line, i) => (
-              <li key={`n-${i}`} className="text-amber-700">
+              <li key={`n-${i}`} className="text-warning">
                 {line}
               </li>
             ))}

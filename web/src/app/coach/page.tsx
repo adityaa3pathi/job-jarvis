@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { api, ApiError, istDate, runTask, TaskAborted, type SessionRow } from "@/lib/api";
 import { Button, Card, ErrorNote } from "@/components/ui";
+import { Ornament } from "@/components/Ornament";
 
 function NewCoach() {
   const params = useSearchParams();
@@ -54,7 +55,7 @@ function NewCoach() {
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`rounded px-3 py-1 text-sm ${tab === t ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}
+            className={`rounded px-3 py-1 text-sm ${tab === t ? "bg-accent text-accent-ink" : "bg-surface-muted"}`}
           >
             {t === "link" ? "Paste link" : "Paste JD text"}
           </button>
@@ -64,7 +65,7 @@ function NewCoach() {
         <input
           aria-label="Job link"
           placeholder="https://…"
-          className="w-full rounded border border-zinc-300 px-3 py-2"
+          className="w-full rounded border border-border-strong px-3 py-2"
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -75,7 +76,7 @@ function NewCoach() {
         <textarea
           aria-label="Job description"
           placeholder="Paste the full job description here"
-          className="h-56 w-full rounded border border-zinc-300 p-2 text-sm"
+          className="h-56 w-full rounded border border-border-strong p-2 text-sm"
           value={jdText}
           onChange={(e) => setJdText(e.target.value)}
         />
@@ -84,14 +85,14 @@ function NewCoach() {
         <input
           aria-label="Job title (optional)"
           placeholder="Job title (optional)"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <input
           aria-label="Company (optional)"
           placeholder="Company (optional)"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
         />
@@ -127,7 +128,7 @@ function PastSessions() {
             <Link href={`/coach/${r.id}`} className="hover:underline">
               {r.title || "Untitled role"} {r.company && `· ${r.company}`}
             </Link>
-            <span className="ml-auto text-zinc-500">{istDate(r.created_at)}</span>
+            <span className="ml-auto text-ink-faint">{istDate(r.created_at)}</span>
           </li>
         ))}
       </ul>
@@ -138,7 +139,8 @@ function PastSessions() {
 export default function CoachPage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Coach</h1>
+      <h1 className="font-display text-xl font-semibold">Coach</h1>
+      <Ornament />
       <Suspense>
         <NewCoach />
       </Suspense>

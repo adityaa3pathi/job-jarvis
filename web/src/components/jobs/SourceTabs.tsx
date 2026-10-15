@@ -32,11 +32,11 @@ function Tab({ label, count, on, onClick }: { label: string; count: number; on: 
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        on ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-100"
+      className={`ribbon rounded-full border px-3 py-1 text-sm ${
+        on ? "border-accent bg-accent text-accent-ink" : "border-border-strong bg-surface-raised text-ink hover:bg-surface-muted"
       }`}
     >
-      {label} <span className={on ? "text-zinc-300" : "text-zinc-500"}>{count.toLocaleString("en-IN")}</span>
+      {label} <span className={on ? "text-accent-ink/75" : "text-ink-faint"}>{count.toLocaleString("en-IN")}</span>
     </button>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, istDate } from "@/lib/api";
 import { Button, Card, ErrorNote } from "@/components/ui";
+import { Ornament } from "@/components/Ornament";
 
 type Profile = { summary: string; has_tex: boolean; updated_at: string };
 
@@ -49,11 +50,12 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Profile</h1>
+      <h1 className="font-display text-xl font-semibold">Profile</h1>
+      <Ornament />
       <ErrorNote message={error} />
-      {note && <p className="text-sm text-green-800">{note}</p>}
+      {note && <p className="text-sm text-success">{note}</p>}
       <Card title="Career summary">
-        <p className="mb-2 text-sm text-zinc-600">
+        <p className="mb-2 text-sm text-ink-muted">
           Upload a PDF, DOCX, MD or TXT, or edit the text. Every line here counts as true about you, so keep it honest.
         </p>
         <input
@@ -65,7 +67,7 @@ export default function ProfilePage() {
         />
         <textarea
           aria-label="Career summary text"
-          className="h-72 w-full rounded border border-zinc-300 p-2 font-mono text-sm"
+          className="h-72 w-full rounded border border-border-strong p-2 font-mono text-sm"
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
         />
@@ -78,12 +80,12 @@ export default function ProfilePage() {
             Save summary
           </Button>
           {profile?.updated_at && (
-            <span className="text-xs text-zinc-500">Last saved {istDate(profile.updated_at)}</span>
+            <span className="text-xs text-ink-faint">Last saved {istDate(profile.updated_at)}</span>
           )}
         </div>
       </Card>
       <Card title="Base resume (.tex)">
-        <p className="mb-2 text-sm text-zinc-600">
+        <p className="mb-2 text-sm text-ink-muted">
           {profile?.has_tex ? "A base resume is saved. Upload again to replace it." : "No base resume yet. Upload your LaTeX resume."}
         </p>
         <input

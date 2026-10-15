@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { api, istDate, post, runTask, TaskAborted, type Session } from "@/lib/api";
 import { PdfLink } from "@/components/PdfLink";
 import { ReportView } from "@/components/ReportView";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Button, Card, ErrorNote, StateNote } from "@/components/ui";
 
 function CoachSession() {
   const { id } = useParams<{ id: string }>();
@@ -77,16 +77,16 @@ function CoachSession() {
     }
   }
 
-  if (!session) return error ? <ErrorNote message={error} /> : <p className="text-sm text-zinc-500">Loading…</p>;
+  if (!session) return error ? <ErrorNote message={error} /> : <StateNote story="Turning to the right page…">Loading…</StateNote>;
   const pending = session.facts.filter((f) => !f.confirmed);
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">
-          {session.title || "Untitled role"} {session.company && <span className="text-zinc-500">· {session.company}</span>}
+          {session.title || "Untitled role"} {session.company && <span className="text-ink-faint">· {session.company}</span>}
         </h1>
         {session.source_url && (
-          <a className="text-sm text-zinc-500 underline" href={session.source_url} target="_blank" rel="noreferrer">
+          <a className="text-sm text-ink-faint underline" href={session.source_url} target="_blank" rel="noreferrer">
             Open job posting
           </a>
         )}
@@ -96,7 +96,7 @@ function CoachSession() {
       <Card title="Talk it through">
         <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
           {session.messages.length === 0 && (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-faint">
               Ask anything: “Is my React work enough?”, “How do I explain the gap in Terraform?”. Tell the coach about
               experience your summary misses; you confirm it before it goes on a resume.
             </p>
@@ -105,7 +105,7 @@ function CoachSession() {
             <div
               key={i}
               className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
-                m.role === "user" ? "self-end bg-zinc-900 text-white" : "self-start bg-zinc-100"
+                m.role === "user" ? "self-end bg-accent text-accent-ink" : "self-start bg-surface-muted"
               }`}
             >
               {m.text}
@@ -116,7 +116,7 @@ function CoachSession() {
         <form onSubmit={send} className="mt-3 flex gap-2">
           <input
             aria-label="Message"
-            className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+            className="flex-1 rounded border border-border-strong px-3 py-2 text-sm"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type a message"
@@ -127,11 +127,11 @@ function CoachSession() {
 
       {session.facts.length > 0 && (
         <Card title="New facts from the chat">
-          <p className="mb-2 text-sm text-zinc-600">Only confirmed facts are used on your resume.</p>
+          <p className="mb-2 text-sm text-ink-muted">Only confirmed facts are used on your resume.</p>
           <ul className="flex flex-col gap-2 text-sm">
             {session.facts.map((f) => (
               <li key={f.id} className="flex items-center gap-2">
-                <span className={f.confirmed ? "" : "text-zinc-500"}>{f.text}</span>
+                <span className={f.confirmed ? "" : "text-ink-faint"}>{f.text}</span>
                 <Button variant="ghost" className="ml-auto" onClick={() => confirm(f.id, !f.confirmed)}>
                   {f.confirmed ? "Undo" : "This is true"}
                 </Button>
@@ -150,20 +150,20 @@ function CoachSession() {
             {busy === "resume" ? "Building… (1–2 minutes)" : "Build my resume"}
           </Button>
           {pending.length > 0 && (
-            <span className="text-sm text-amber-800">{pending.length} fact(s) not confirmed yet; they will be left out.</span>
+            <span className="text-sm text-warning">{pending.length} fact(s) not confirmed yet; they will be left out.</span>
           )}
         </div>
         <div className="mt-2">
           <ErrorNote message={error} />
         </div>
         {lastReport && (
-          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded bg-zinc-50 p-3 text-xs">{lastReport}</pre>
+          <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded bg-surface p-3 text-xs">{lastReport}</pre>
         )}
         {session.builds.length > 0 && (
           <ul className="mt-3 flex flex-col gap-1 text-sm">
             {session.builds.map((b) => (
               <li key={b.id} className="flex gap-3">
-                <span className="text-zinc-500">{istDate(b.at)}</span>
+                <span className="text-ink-faint">{istDate(b.at)}</span>
                 <PdfLink buildId={b.id} />
                 <a className="underline" href={`/api/builds/${b.id}/tex`}>.tex</a>
                 <a className="underline" href={`/api/builds/${b.id}/report`} target="_blank" rel="noreferrer">
@@ -180,7 +180,7 @@ function CoachSession() {
 
 export default function CoachSessionPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+    <Suspense fallback={<StateNote story="Turning to the right page…">Loading…</StateNote>}>
       <CoachSession />
     </Suspense>
   );

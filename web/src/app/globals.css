@@ -1,5 +1,291 @@
 @import "tailwindcss";
 
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+/* Plain is the default; the head script swaps data-theme before first paint. */
+:root,
+[data-theme="plain"] {
+  --surface: #fafafa;
+  --surface-raised: #ffffff;
+  --surface-muted: #f4f4f5;
+  --ink: #18181b;
+  --ink-muted: #52525b;
+  --ink-faint: #71717a;
+  --accent: #18181b;
+  --accent-hover: #3f3f46;
+  --accent-disabled: #a1a1aa;
+  --accent-ink: #ffffff;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --gold: #d4d4d8;
+  --focus: #2563eb;
+  --success: #166534;
+  --success-surface: #dcfce7;
+  --warning: #92400e;
+  --warning-surface: #fef3c7;
+  --danger: #991b1b;
+  --danger-surface: #fef2f2;
+  --danger-border: #fecaca;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: var(--font-body);
+}
+
+[data-theme="parchment"] {
+  --surface: #f4ead5;
+  --surface-raised: #fbf5e6;
+  --surface-muted: #ecdfc2;
+  --ink: #2b1d12;
+  --ink-muted: #54402c;
+  --ink-faint: #6b5640;
+  --accent: #4a2f16;
+  --accent-hover: #63401f;
+  --accent-disabled: #a8977a;
+  --accent-ink: #fbf3df;
+  --border: #dcc79e;
+  --border-strong: #b8892d;
+  --gold: #b8892d;
+  --focus: #8a5a12;
+  --success: #2f5124;
+  --success-surface: #e2ead0;
+  --warning: #6e4206;
+  --warning-surface: #f5e2b3;
+  --danger: #7a1f1a;
+  --danger-surface: #f4dcd2;
+  --danger-border: #c98f84;
+  --font-body: var(--font-garamond), "EB Garamond", Georgia, serif;
+  --font-display: var(--font-cinzel), "Cinzel Decorative", Georgia, serif;
+  color-scheme: light;
+  accent-color: var(--accent);
+  font-size: 106.25%; /* 17px body; Garamond reads small */
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-disabled: var(--accent-disabled);
+  --color-accent-ink: var(--accent-ink);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-gold: var(--gold);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-danger-border: var(--danger-border);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Theme-only pieces: ornaments and storybook copy show in parchment only. */
+.ornament,
+.theme-parchment {
+  display: none;
+}
+[data-theme="parchment"] .theme-plain {
+  display: none;
+}
+[data-theme="parchment"] .theme-parchment {
+  display: inline;
+}
+[data-theme="parchment"] .ornament {
+  display: flex;
+  justify-content: center;
+  color: var(--gold);
+}
+[data-theme="parchment"] .ornament-quill {
+  display: inline-flex;
+  vertical-align: -0.2em;
+  margin-right: 0.35em;
+  color: var(--ink-muted);
+}
+
+/* ---- Parchment skin ---- */
+[data-theme="parchment"] body {
+  line-height: 1.6;
+  background-image:
+    radial-gradient(ellipse at center, transparent 55%, rgb(110 75 25 / 0.14) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .25 0 0 0 0 .1 0 0 0 .13 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-attachment: fixed, scroll;
+}
+
+[data-theme="parchment"] h1.font-display {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+}
+[data-theme="parchment"] h2 {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+[data-theme="parchment"] .site-header {
+  border-bottom: 3px double var(--gold);
+}
+
+/* Deckled cards: uneven corners, soft shadow and a thin inner gold rule. */
+[data-theme="parchment"] .card {
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.6) inset,
+    0 1px 2px rgb(60 40 15 / 0.12),
+    0 4px 14px -6px rgb(60 40 15 / 0.25);
+  outline: 1px solid rgb(184 137 45 / 0.45);
+  outline-offset: -5px;
+}
+
+/* Gold-edged plaques. */
+[data-theme="parchment"] .btn-primary {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.14));
+  box-shadow:
+    inset 0 0 0 2px rgb(184 137 45 / 0.35),
+    0 1px 2px rgb(43 29 18 / 0.35);
+  letter-spacing: 0.02em;
+}
+[data-theme="parchment"] .btn-ghost {
+  border-color: var(--gold);
+  border-radius: 3px;
+  background-image: linear-gradient(180deg, var(--surface-raised), var(--surface-muted));
+}
+
+/* Ribbon bookmarks for the job-site tabs. */
+[data-theme="parchment"] .ribbon {
+  border-radius: 2px 2px 0 0;
+  padding-bottom: 0.6rem;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  border-color: transparent;
+  background-color: var(--surface-muted);
+}
+[data-theme="parchment"] .ribbon:focus-visible {
+  outline-offset: -4px;
+}
+[data-theme="parchment"] .ribbon[aria-pressed="true"] {
+  background-color: var(--accent);
+  box-shadow: inset 0 3px 0 var(--gold);
+}
+
+/* Wax seals: tone surface with a waxy sheen and an uneven rim. */
+[data-theme="parchment"] .seal {
+  border: 1px solid currentColor;
+  border-radius: 46% 54% 50% 50% / 55% 45% 55% 45%;
+  background-image: radial-gradient(circle at 30% 30%, rgb(255 255 255 / 0.45), transparent 60%);
+  box-shadow: 0 1px 1px rgb(43 29 18 / 0.25);
+}
+[data-theme="parchment"] .seal-medal {
+  display: inline-grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--accent-ink);
+  background-color: var(--danger);
+  background-image: radial-gradient(circle at 32% 28%, rgb(255 255 255 / 0.28), transparent 55%);
+  border: 3px double rgb(251 243 223 / 0.5);
+  border-radius: 48% 52% 46% 54% / 52% 47% 53% 48%;
+  box-shadow:
+    0 0 0 3px var(--danger),
+    0 2px 4px rgb(43 29 18 / 0.4);
+}
+
+[data-theme="parchment"] main a:not(.btn-primary) {
+  text-decoration-color: var(--gold);
+  text-underline-offset: 0.2em;
+  background: linear-gradient(var(--gold), var(--gold)) no-repeat 0 100% / 0 1.5px;
+}
+[data-theme="parchment"] main a:not(.btn-primary):hover {
+  text-decoration-line: none;
+  background-size: 100% 1.5px;
+}
+
+[data-theme="parchment"] .error-note {
+  border-left-width: 4px;
+  border-radius: 2px;
+}
+
+/* KTD13 motion: parchment only, CSS only, never when reduced motion is asked for. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-theme="parchment"] main a:not(.btn-primary) {
+    transition: background-size 300ms ease-out;
+  }
+  [data-theme="parchment"] .btn-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 35%, rgb(255 240 200 / 0.45) 50%, transparent 65%);
+    transform: translateX(-120%);
+  }
+  [data-theme="parchment"] .btn-primary:hover:not(:disabled)::after {
+    transform: translateX(120%);
+    transition: transform 400ms ease-out;
+  }
+  [data-theme="parchment"] .page-turn > li {
+    transform-origin: top center;
+    animation: page-turn 320ms ease-out both;
+  }
+  [data-theme="parchment"] .stamp {
+    transition: transform 150ms ease-out;
+  }
+  [data-theme="parchment"] .stamp:active:not(:disabled) {
+    transform: scale(0.9) rotate(-4deg);
+  }
+  [data-theme="parchment"] .sparkle {
+    position: relative;
+  }
+  [data-theme="parchment"] .sparkle::before {
+    content: "\2726";
+    position: absolute;
+    left: -1.1rem;
+    top: 0;
+    color: var(--gold);
+    animation: sparkle 400ms ease-out both;
+  }
+}
+
+@keyframes page-turn {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(-10deg) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-30deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.3) rotate(10deg);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1) rotate(0);
+  }
 }

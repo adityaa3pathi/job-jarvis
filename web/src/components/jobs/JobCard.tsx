@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { istDate, type Job } from "@/lib/api";
-import { Button } from "@/components/ui";
+import { Button, PRIMARY } from "@/components/ui";
 import { ROLE_LABELS, SOURCE_LABELS, WORK_MODE_LABELS, yearsTag } from "./filters";
 
 type Props = { job: Job; status: string; onMark: (job: Job, next: string) => void };
@@ -12,23 +12,23 @@ export function JobCard({ job: j, status, onMark }: Props) {
     yearsTag(j.min_years, j.max_years),
   ].filter(Boolean);
   return (
-    <li className="rounded-lg border border-zinc-200 bg-white p-3">
+    <li className="card rounded-lg border border-border bg-surface-raised p-3">
       <div className="flex flex-wrap items-baseline gap-x-2">
         <a href={j.url ?? "#"} target="_blank" rel="noreferrer" className="font-medium hover:underline">
           {j.title}
         </a>
-        <span className="text-zinc-600">· {j.company}</span>
-        <span className="ml-auto text-xs text-zinc-500">
+        <span className="text-ink-muted">· {j.company}</span>
+        <span className="ml-auto text-xs text-ink-faint">
           {SOURCE_LABELS[j.source] ?? j.source} · {istDate(j.posted_date ?? j.seen_date)}
         </span>
       </div>
-      <p className="text-sm text-zinc-600">
+      <p className="text-sm text-ink-muted">
         {[j.location, j.experience_text, j.drop_reason].filter(Boolean).join(" · ")}
       </p>
       {tags.length > 0 && (
         <ul aria-label="Tags" className="mt-1 flex flex-wrap gap-1">
           {tags.map((t) => (
-            <li key={t} className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-700">
+            <li key={t} className="rounded bg-surface-muted px-1.5 py-0.5 text-xs text-ink-muted">
               {t}
             </li>
           ))}
@@ -36,13 +36,13 @@ export function JobCard({ job: j, status, onMark }: Props) {
       )}
       <div className="mt-2 flex flex-wrap gap-2">
         <Link
-          className="rounded bg-zinc-900 px-3 py-1 text-sm text-white hover:bg-zinc-700"
+          className={`rounded px-3 py-1 text-sm ${PRIMARY}`}
           href={`/coach?url=${encodeURIComponent(j.url ?? "")}&title=${encodeURIComponent(j.title)}&company=${encodeURIComponent(j.company)}`}
         >
           Coach me
         </Link>
         {status !== "applied" && (
-          <Button variant="ghost" onClick={() => onMark(j, "applied")}>
+          <Button variant="ghost" className="stamp" onClick={() => onMark(j, "applied")}>
             Applied
           </Button>
         )}

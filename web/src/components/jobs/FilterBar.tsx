@@ -14,7 +14,7 @@ import {
   type Filters,
 } from "./filters";
 
-const FIELD = "rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900";
+const FIELD = "rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm text-ink";
 const SEARCH_DELAY_MS = 300;
 
 type Props = {
@@ -28,7 +28,7 @@ export function FilterBar({ filters, facets, onChange, onClear }: Props) {
   const anyYears = filters.max_years === "";
   const setQ = useCallback((q: string) => onChange({ q }), [onChange]);
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-3">
+    <div className="card flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface-raised p-3">
       <SearchBox value={filters.q} onChange={setQ} />
       <Select
         label="Status"
@@ -42,7 +42,7 @@ export function FilterBar({ filters, facets, onChange, onClear }: Props) {
         options={[["", "Any"], ...YEARS.map((y) => [y, y] as [string, string])]}
         onChange={(max_years) => onChange({ max_years })}
       />
-      <label className={`flex items-center gap-1.5 py-1.5 text-sm ${anyYears ? "text-zinc-400" : "text-zinc-700"}`}>
+      <label className={`flex items-center gap-1.5 py-1.5 text-sm ${anyYears ? "text-ink-faint" : "text-ink-muted"}`}>
         <input
           type="checkbox"
           checked={filters.include_unstated}
@@ -103,7 +103,7 @@ export function Select({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-zinc-600">
+    <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
       {label}
       <select className={FIELD} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(([v, text]) => (
@@ -143,7 +143,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (q: string) =
   }, [draft, value, pending, onChange]);
 
   return (
-    <label className="flex min-w-48 grow flex-col gap-0.5 text-xs text-zinc-600">
+    <label className="flex min-w-48 grow flex-col gap-0.5 text-xs text-ink-muted">
       Search title, company or text
       <input
         type="search"
@@ -182,7 +182,7 @@ function Picker({
   };
 
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-zinc-600">
+    <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
       {label}
       <input
         className={`${FIELD} w-40`}
