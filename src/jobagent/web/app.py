@@ -113,7 +113,7 @@ def keep_awake(
     base = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
     if not base:
         return None
-    url = f"{base}/api/health"
+    url = f"{base}/api/health/live"  # no DB query every 5 min
 
     def loop() -> None:
         while not stop.wait(every_s):

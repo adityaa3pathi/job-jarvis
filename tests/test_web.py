@@ -517,7 +517,7 @@ def test_self_ping_uses_the_public_url_while_running(monkeypatch: pytest.MonkeyP
     assert thread is not None and got_two.wait(2)
     stop.set()
     thread.join(2)
-    assert set(pinged) == {"https://job-jarvis.onrender.com/api/health"}
+    assert set(pinged) == {"https://job-jarvis.onrender.com/api/health/live"}
 
 
 def test_self_ping_is_skipped_without_a_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
