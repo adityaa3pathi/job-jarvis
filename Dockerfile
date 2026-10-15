@@ -15,12 +15,15 @@ WORKDIR /app
 COPY --chown=app pyproject.toml uv.lock ./
 COPY --chown=app src ./src
 COPY --chown=app config.yaml policy.yaml companies.yaml searches.yaml ./
-RUN uv sync --frozen --no-dev --extra agent --extra turso && chown -R app /app
+RUN uv sync --frozen --no-dev --extra agent --extra turso --extra embed && chown -R app /app
 
 USER app
 ENV PATH="/app/.venv/bin:$PATH" \
     JOBAGENT_DATA_DIR=/tmp/jobagent/data \
-    JOBAGENT_CONFIG_DIR=/tmp/jobagent/config
+    JOBAGENT_CONFIG_DIR=/tmp/jobagent/config \
+    FASTEMBED_CACHE_PATH=/app/.fastembed
+# Fetch the ranking model at build time; Render's disk is wiped on every wake.
+RUN python -c "from jobagent.index import FastEmbedEmbedder; FastEmbedEmbedder().embed(['warm'])"
 # Download the LaTeX packages once at build time, so the first PDF is not slow.
 # The first run fetches the whole bundle, so it gets a longer timeout.
 COPY --chown=app tests/fixtures/resume/sample.tex /tmp/warm/resume.tex
@@ -28,4 +31,6 @@ RUN python -c "from pathlib import Path; from jobagent.web.app import compile_pd
 compile_pdf(Path('/tmp/warm/resume.tex').read_text(), timeout=1200)" && rm -rf /tmp/warm
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+# On Render set FORWARDED_ALLOW_IPS=* : Render only accepts traffic through its own proxy,
+# whose address is not fixed. Login keys come from headers Vercel writes (see login_key).
+CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\" --timeout-graceful-shutdown 20"]

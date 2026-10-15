@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { api, ApiError, istDate, runTask, type SessionRow } from "@/lib/api";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { ApiError, invalidate, istDate, runTask, TaskAborted, useCachedApi, type SessionRow } from "@/lib/api";
+import { Button, Card, ErrorNote, Refreshing } from "@/components/ui";
+import { Ornament } from "@/components/Ornament";
 
 function NewCoach() {
   const params = useSearchParams();
@@ -17,6 +18,13 @@ function NewCoach() {
   const [askTrust, setAskTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const alive = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const ctl = new AbortController();
+    alive.current = ctl;
+    return () => ctl.abort();
+  }, []);
 
   async function start(trustHost = false) {
     setBusy(true);
@@ -26,9 +34,12 @@ function NewCoach() {
         tab === "link"
           ? { url, title, company, trust_host: trustHost }
           : { jd_text: jdText, title, company };
-      const { session_id } = await runTask<{ session_id: number }>("/coach", body);
-      router.push(`/coach/${session_id}`);
+      const signal = alive.current?.signal;
+      const { session_id } = await runTask<{ session_id: number }>("/coach", body, signal);
+      invalidate("/coach");
+      if (!signal?.aborted) router.push(`/coach/${session_id}`);
     } catch (e) {
+      if (e instanceof TaskAborted) return;
       if (e instanceof ApiError && e.status === 409) setAskTrust(true);
       setError((e as Error).message);
       setBusy(false);
@@ -45,7 +56,7 @@ function NewCoach() {
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`rounded px-3 py-1 text-sm ${tab === t ? "bg-zinc-900 text-white" : "bg-zinc-100"}`}
+            className={`rounded px-3 py-1 text-sm ${tab === t ? "bg-accent text-accent-ink" : "bg-surface-muted"}`}
           >
             {t === "link" ? "Paste link" : "Paste JD text"}
           </button>
@@ -55,7 +66,7 @@ function NewCoach() {
         <input
           aria-label="Job link"
           placeholder="https://…"
-          className="w-full rounded border border-zinc-300 px-3 py-2"
+          className="w-full rounded border border-border-strong px-3 py-2"
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -66,7 +77,7 @@ function NewCoach() {
         <textarea
           aria-label="Job description"
           placeholder="Paste the full job description here"
-          className="h-56 w-full rounded border border-zinc-300 p-2 text-sm"
+          className="h-56 w-full rounded border border-border-strong p-2 text-sm"
           value={jdText}
           onChange={(e) => setJdText(e.target.value)}
         />
@@ -75,14 +86,14 @@ function NewCoach() {
         <input
           aria-label="Job title (optional)"
           placeholder="Job title (optional)"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <input
           aria-label="Company (optional)"
           placeholder="Company (optional)"
-          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          className="rounded border border-border-strong px-3 py-2 text-sm"
           value={company}
           onChange={(e) => setCompany(e.target.value)}
         />
@@ -105,20 +116,18 @@ function NewCoach() {
 }
 
 function PastSessions() {
-  const [rows, setRows] = useState<SessionRow[] | null>(null);
-  useEffect(() => {
-    api<SessionRow[]>("/coach").then(setRows, () => setRows([]));
-  }, []);
+  const { data: rows, refreshing } = useCachedApi<SessionRow[]>("/coach");
   if (!rows?.length) return null;
   return (
     <Card title="Past sessions">
+      <Refreshing on={refreshing} className="mb-1 block" />
       <ul className="flex flex-col gap-1 text-sm">
         {rows.map((r) => (
           <li key={r.id} className="flex gap-2">
             <Link href={`/coach/${r.id}`} className="hover:underline">
               {r.title || "Untitled role"} {r.company && `· ${r.company}`}
             </Link>
-            <span className="ml-auto text-zinc-500">{istDate(r.created_at)}</span>
+            <span className="ml-auto text-ink-faint">{istDate(r.created_at)}</span>
           </li>
         ))}
       </ul>
@@ -129,7 +138,8 @@ function PastSessions() {
 export default function CoachPage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Coach</h1>
+      <h1 className="font-display text-xl font-semibold">Coach</h1>
+      <Ornament />
       <Suspense>
         <NewCoach />
       </Suspense>

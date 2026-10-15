@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from jobagent.lexicon import KNOWN_TECH, find_numbers, find_scope, words
 from jobagent.llm import LLM, LLMError, ask, data_block
@@ -31,16 +31,23 @@ CATEGORIES = (
     ("Eval \\& Observability", _EVAL),
 )
 OTHER = "Data, Infra \\& Frontend"
+MAX_BATCH = 30  # bullets per model call; keeps the reply well under its token cap
 SYSTEM = (
-    "Rewrite one resume bullet for a job. Keep every fact, number, tool and level of "
+    "Rewrite each resume bullet for a job. Keep every fact, number, tool and level of "
     "responsibility exactly as written; add none. Start with a strong action verb. You may use "
-    "these job terms only where the bullet already supports them: {terms}. Mark up to 3 key "
-    'terms with **double asterisks**. Reply as {{"text": str}}.'
+    "these job terms only where a bullet already supports them: {terms}. Mark up to 3 key "
+    "terms per bullet with **double asterisks**. Return every bullet once, by its id. "
+    'Reply as {{"items": [{{"id": int, "text": str}}]}}.'
 )
 
 
-class _Rewrite(BaseModel):
+class _Item(BaseModel):
+    id: int
     text: str
+
+
+class _Batch(BaseModel):
+    items: list[_Item] = Field(default_factory=list)
 
 
 @dataclass
@@ -57,6 +64,8 @@ class TailorResult:
     changes: list[Change] = field(default_factory=list)
     added_gap_skills: list[str] = field(default_factory=list)
     rejected: list[tuple[str, str]] = field(default_factory=list)
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (bullet, model error)
+    dropped_skills: list[str] = field(default_factory=list)
 
 
 def check_rewrite(original: str, new: str, allowed: set[str]) -> str | None:
@@ -106,16 +115,20 @@ def _tailor_bullets(
     terms = ", ".join(
         i.need.verbatim for i in coverage.items if i.status == "proven" and not i.need.implicit
     )
+    sections = []
     for title in BULLET_SECTIONS:
         try:
-            section = resume.section(title)
+            sections.append((title, resume.section(title)))
         except KeyError:
             continue
+    cmds = [
+        node for _, section in sections for run in _runs(section) for pos in run
+        if isinstance(node := section.nodes[pos], Command)
+    ]  # fmt: skip
+    for start in range(0, len(cmds), MAX_BATCH):
+        _rewrite_batch(cmds[start : start + MAX_BATCH], allowed, terms, profile, llm, out)
+    for title, section in sections:
         for run in _runs(section):
-            for pos in run:
-                cmd = section.nodes[pos]
-                assert isinstance(cmd, Command)
-                _rewrite_one(cmd, allowed, terms, profile, llm, out)
             order = sorted(
                 (section.nodes[p] for p in run),
                 key=lambda n: -_score(to_plain(n.args[0]) or "", coverage),  # type: ignore[union-attr]
@@ -126,17 +139,29 @@ def _tailor_bullets(
                     section.nodes[pos] = node
 
 
-def _rewrite_one(
-    cmd: Command, allowed: set[str], terms: str, profile: JDProfile, llm: LLM, out: TailorResult
-) -> None:
-    plain = to_plain(cmd.args[0])
-    if plain is None:
+def _rewrite_batch(
+    cmds: list[Command], allowed: set[str], terms: str, profile: JDProfile, llm: LLM,
+    out: TailorResult,
+) -> None:  # fmt: skip
+    """One model call for many bullets; each reply still passes `check_rewrite` on its own."""
+    plains = {i: p for i, cmd in enumerate(cmds) if (p := to_plain(cmd.args[0])) is not None}
+    if not plains:
         return
-    user = data_block("bullet", plain) + data_block("job_title", profile.role_title)
+    listed = "\n".join(f"{i}. {p}" for i, p in plains.items())
+    user = data_block("job_title", profile.role_title) + data_block("bullets", listed)
+    system = SYSTEM.format(terms=terms or "none")
     try:
-        new = ask(llm, _Rewrite, system=SYSTEM.format(terms=terms or "none"), user=user).text
-    except LLMError:
+        batch = ask(llm, _Batch, system=system, user=user, step="rewrite_bullets")
+    except LLMError as exc:
+        out.failed += [(p, str(exc)) for p in plains.values()]
         return
+    replies = {item.id: item.text for item in batch.items}
+    for i, plain in plains.items():
+        if i in replies:
+            _apply(cmds[i], plain, replies[i], allowed, out)
+
+
+def _apply(cmd: Command, plain: str, new: str, allowed: set[str], out: TailorResult) -> None:
     new = " ".join(new.split())
     if new == plain:
         return
@@ -173,6 +198,35 @@ def build_skills(
     return kept, [g for g in gaps if g in kept]
 
 
+def _listed_skills(section_tex: str) -> list[str]:
+    """Skill names in a 'Label: a, b (c, d)' style Skills section."""
+    names: list[str] = []
+    for line in re.findall(r"\\textbf\{[^}]*:\}([^\n]*)", section_tex):
+        line = line.replace("\\\\", "").strip()
+        plain = to_plain(line) or re.sub(r"\\[a-zA-Z]+|[{}]", "", line)
+        depth, part = 0, ""
+        for ch in plain + ",":
+            depth += (ch == "(") - (ch == ")")
+            if ch == "," and depth == 0:
+                names.append(part.strip())
+                part = ""
+            else:
+                part += ch
+    return [n for n in names if n]
+
+
+def _dropped(before: list[str], cards: list[EvidenceCard], kept: list[str]) -> list[str]:
+    """Owner skills (old section or evidence) that are not in the new section."""
+    have = {canonical(s) for s in kept}
+    owned = [*before, *(c.text for c in cards if c.kind == "skill")]
+    out: dict[str, str] = {}
+    for name in owned:
+        key = canonical(name)
+        if key not in have:
+            out.setdefault(key, name)
+    return list(out.values())
+
+
 def _skills_block(skills: list[str]) -> str:
     groups: dict[str, list[str]] = {}
     for skill in skills:
@@ -206,6 +260,7 @@ def tailor_resume(
         before = "".join(n.emit() for n in section.nodes)
         section.nodes[:] = [Raw(_skills_block(skills))]
         out.added_gap_skills = added
+        out.dropped_skills = _dropped(_listed_skills(before), cards, skills)
         out.changes.append(
             Change("skills", before.strip(), ", ".join(skills), "ordered for this job")
         )

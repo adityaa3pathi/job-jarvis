@@ -1,0 +1,56 @@
+# Daily job search at 08:53 IST (03:23 UTC). Fails when the run is refused, fails or never ends.
+name: daily-discover
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: daily-discover
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      API_URL: ${{ secrets.JOBAGENT_API_URL }}
+      TOKEN: ${{ secrets.JOBAGENT_CRON_TOKEN }}
+    steps:
+      - name: Start discovery and wait for its result
+        run: |
+          set -euo pipefail
+          call() {
+            # The first call also wakes the free Render service, so allow retries.
+            curl -sS --fail-with-body --retry 3 --retry-delay 30 --retry-all-errors --max-time 120 \
+              -H "Authorization: Bearer $TOKEN" "$@" "$API_URL/api/cron/discover"
+          }
+          start=$(call -X POST)
+          echo "start: $(jq -c '{started, running, last_id: .last.id}' <<<"$start")"
+          before=$(jq -r '.last.id // 0' <<<"$start")
+          if [ "$(jq -r .started <<<"$start")" != "true" ]; then
+            if [ "$(jq -r .running <<<"$start")" = "true" ]; then
+              echo "::notice::a run was already going; waiting for it instead"
+            else
+              echo "::error::discovery was refused and nothing is running"; exit 1
+            fi
+          fi
+          state=$start
+          for _ in $(seq 50); do  # 50 x 30 s = 25 min
+            [ "$(jq -r .running <<<"$state")" = "true" ] || break
+            sleep 30
+            state=$(call)
+          done
+          if [ "$(jq -r .running <<<"$state")" = "true" ]; then
+            echo "::error::still running after 25 min"; exit 1
+          fi
+          jq '.last' <<<"$state"  # counts, notes and unreachable portals
+          jq -r '.last.unreachable[]? | "::warning::unreachable: \(.)"' <<<"$state"
+          id=$(jq -r '.last.id // 0' <<<"$state")
+          status=$(jq -r '.last.status // "none"' <<<"$state")
+          if [ "$id" -le "$before" ]; then
+            echo "::error::no new run was recorded (last id $id, before $before)"; exit 1
+          fi
+          if [ "$status" != "done" ]; then
+            echo "::error::run $id ended '$status': $(jq -r '.last.error // ""' <<<"$state")"; exit 1
+          fi
+          echo "run $id done"

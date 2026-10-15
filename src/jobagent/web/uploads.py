@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 
 MAX_UPLOAD_BYTES = 5_000_000
+MAX_SUMMARY_CHARS = 100_000  # every coach prompt carries the summary
 
 
 class UploadError(ValueError):

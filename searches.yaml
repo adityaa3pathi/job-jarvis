@@ -1,15 +1,61 @@
-# Job-board searches. jobgether, hirist and jobleads take free keywords; cutshort, bebee and
-# switchly take the board's role slug (spaces become hyphens), e.g. cutshort writes "fullstack".
+# Job-board searches. jobgether, hirist and jobleads take free keywords; cutshort, bebee,
+# switchly and wellfound take the board's role slug (spaces become hyphens), e.g. cutshort
+# writes "fullstack". yc takes a location slug on ycombinator.com/jobs.
 searches:
   - {board: jobgether, term: full stack developer}
   - {board: jobgether, term: ai engineer}
+  - {board: jobgether, term: backend developer}
+  - {board: jobgether, term: python developer}
+  - {board: jobgether, term: nodejs developer}
+  - {board: jobgether, term: react developer}
+  - {board: jobgether, term: software engineer}
+  - {board: jobgether, term: generative ai engineer}
+  - {board: jobgether, term: llm engineer}
+  - {board: jobgether, term: react native developer}
   - {board: hirist, term: full stack developer}
   - {board: hirist, term: ai engineer}
-  - {board: cutshort, term: fullstack developer}
-  - {board: cutshort, term: artificial intelligence ai}
-  - {board: bebee, term: full stack developer}
-  - {board: bebee, term: ai engineer}
-  - {board: switchly, term: full stack developer}
-  - {board: switchly, term: ai engineer}
+  - {board: hirist, term: backend developer}
+  - {board: hirist, term: python developer}
+  - {board: hirist, term: nodejs developer}
+  - {board: hirist, term: react developer}
+  - {board: hirist, term: software engineer}
+  - {board: hirist, term: generative ai engineer}
+  - {board: hirist, term: llm engineer}
+  - {board: hirist, term: react native developer}
   - {board: jobleads, term: full stack developer}
   - {board: jobleads, term: ai engineer}
+  - {board: jobleads, term: backend developer}
+  - {board: jobleads, term: python developer}
+  - {board: jobleads, term: nodejs developer}
+  - {board: jobleads, term: react developer}
+  - {board: jobleads, term: software engineer}
+  - {board: jobleads, term: generative ai engineer}
+  - {board: jobleads, term: llm engineer}
+  - {board: jobleads, term: react native developer}
+  - {board: cutshort, term: fullstack developer}
+  - {board: cutshort, term: artificial intelligence ai}
+  - {board: cutshort, term: backend developer}
+  - {board: cutshort, term: python}
+  - {board: cutshort, term: nodejs}
+  - {board: cutshort, term: reactjs}
+  - {board: cutshort, term: react native}
+  - {board: bebee, term: full stack developer}
+  - {board: bebee, term: ai engineer}
+  - {board: bebee, term: backend developer}
+  - {board: bebee, term: python developer}
+  - {board: bebee, term: nodejs developer}
+  - {board: bebee, term: react developer}
+  - {board: bebee, term: software engineer}
+  - {board: bebee, term: generative ai engineer}
+  - {board: bebee, term: react native developer}
+  - {board: switchly, term: full stack developer}
+  - {board: switchly, term: ai engineer}
+  - {board: wellfound, term: software engineer}
+  - {board: wellfound, term: full stack engineer}
+  - {board: wellfound, term: backend engineer}
+  - {board: wellfound, term: frontend engineer}
+  - {board: wellfound, term: mobile engineer}
+  - {board: wellfound, term: artificial intelligence engineer}
+  - {board: wellfound, term: machine learning engineer}
+  - {board: yc, term: india}
+  - {board: yc, term: remote}

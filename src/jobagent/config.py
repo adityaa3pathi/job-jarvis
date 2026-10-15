@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
@@ -18,11 +19,27 @@ class ConfigError(Exception):
     """Raised when startup must be refused."""
 
 
+MAX_OUTPUT_TOKENS = {
+    "jd_extract": 1200, "jd_repair": 1200, "coach_report": 800, "coach_chat": 400,
+    "rewrite_bullets": 3000, "profile_digest": 1200,
+}  # fmt: skip
+
+
 class LLMSettings(BaseModel):
     provider: str = "gemini"
     model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 30.0
     send_contact_details: bool = False
+    max_output_tokens: dict[str, int] = Field(default_factory=lambda: dict(MAX_OUTPUT_TOKENS))
+    thinking_budget: int | None = None  # off: the field name for this model is unconfirmed
+    daily_token_budget: int = Field(default=1_000_000, ge=0)  # 0 means no limit
+    daily_call_budget: int = Field(default=200, ge=0)  # 0 means no limit
+
+
+class RankingSettings(BaseModel):
+    judge_top_n: int = Field(default=30, ge=0)  # new found jobs the AI judge sees per IST day
+    digest_top_n: int = Field(default=10, ge=1, le=50)
+    owner_years: int | None = Field(default=None, ge=0)  # unset: no years term in the ceiling
 
 
 class Settings(BaseModel):
@@ -31,11 +48,14 @@ class Settings(BaseModel):
     min_pause_s: float = 20.0
     follow_up_days: int = 7
     retention_days: int = 90
+    close_after_clean_runs: int = Field(default=3, ge=1)  # misses before a found job is closed
+    detail_fetch_cap: int = Field(default=200, ge=0)  # new jobs' text fetched one by one per run
     years_rounding: Literal["down", "nearest", "up"] = "down"
     fit_bar: int = Field(default=4, ge=1, le=5)
     max_years_asked: int = 5
     freetext_questions: Literal["pause_all", "owner_approved_drafts"] = "pause_all"
     llm: LLMSettings = LLMSettings()
+    ranking: RankingSettings = RankingSettings()
     repo_root: Path = REPO_ROOT
     config_dir: Path = Path.home() / ".config" / "jobagent"
     data_dir: Path = REPO_ROOT / "data"
@@ -107,6 +127,28 @@ def load_secrets(settings: Settings, *, export: bool = True) -> dict[str, str]:
     if export:
         os.environ.update(values)
     return values
+
+
+REQUIRED_ENV = ("JOBAGENT_OWNER_HASH", "JOBAGENT_SESSION_SECRET")
+PRODUCTION_ENV = ("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "GEMINI_API_KEY")
+REMOTE_DB_SCHEMES = ("libsql://", "https://", "http://", "wss://", "ws://")
+
+
+def is_production(env: Mapping[str, str]) -> bool:
+    """Render sets RENDER on every service; JOBAGENT_ENV covers any other host."""
+    return bool(env.get("RENDER")) or env.get("JOBAGENT_ENV", "").lower() == "production"
+
+
+def check_config(env: Mapping[str, str] = os.environ) -> None:
+    """Refuse to start with one error naming every missing setting. In production the
+    database must be remote: a local file on a free host is wiped on the next restart."""
+    needed = [*REQUIRED_ENV, *(PRODUCTION_ENV if is_production(env) else ())]
+    missing = [name for name in needed if not env.get(name, "").strip()]
+    if missing:
+        raise ConfigError(f"missing required settings: {', '.join(missing)}")
+    url = env.get("TURSO_DATABASE_URL", "").strip().lower()
+    if is_production(env) and not url.startswith(REMOTE_DB_SCHEMES):
+        raise ConfigError("TURSO_DATABASE_URL must be a remote database URL (libsql://...)")
 
 
 def ensure_data_dir(settings: Settings) -> Path:

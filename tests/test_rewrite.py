@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +35,18 @@ PROFILE = JDProfile(
 )
 
 
+def bullets_in(user: str) -> list[tuple[int, str]]:
+    """The numbered bullets sent in one batched rewrite prompt."""
+    block = user.split('<data name="bullets">\n', 1)[1].split("\n</data>", 1)[0]
+    return [(int(m[1]), m[2]) for m in re.finditer(r"^(\d+)\. (.*)$", block, re.M)]
+
+
+def same_text_for_every_bullet(text: str) -> StubLLM:
+    return StubLLM(lambda s, u: {"items": [{"id": i, "text": text} for i, _ in bullets_in(u)]})
+
+
 def run(reply: Any = None, add_gaps: bool = True, llm: Any = None):  # type: ignore[no-untyped-def]
-    llm = llm or StubLLM(lambda s, u: reply or {"text": "unused"})
+    llm = llm or same_text_for_every_bullet((reply or {"text": "unused"})["text"])
     resume = parse(SAMPLE)
     return tailor_resume(resume, CARDS, PROFILE, match_profile(PROFILE, CARDS), llm, add_gaps)
 
@@ -139,3 +150,27 @@ def test_tailored_resume_has_a_rebuilt_skills_section_and_a_gap_report() -> None
     assert result.added_gap_skills == ["Terraform"]
     assert result.latex.count("\\begin{document}") == 1
     assert parse(result.latex).emit() == result.latex
+
+
+def test_model_failure_is_recorded_with_its_cause() -> None:
+    result = run(llm=FailingLLM())
+    assert result.failed
+    assert all("TimeoutError" in cause for _, cause in result.failed)
+
+
+def test_skills_left_out_of_the_new_section_are_listed() -> None:
+    result = run()
+    kept = parse(result.latex).section("Technical Skills").emit()
+    assert "Kubernetes" not in kept and "TypeScript" not in kept
+    assert {"Kubernetes", "TypeScript"} <= set(result.dropped_skills)
+    assert "Python" not in result.dropped_skills
+
+
+def test_skills_cut_by_the_cap_are_listed() -> None:
+    many = [make_card("skill", f"Tool{i}", "owner", True) for i in range(30)]
+    coverage = match_profile(PROFILE, many)
+    kept, _ = build_skills(many, coverage)
+    result = tailor_resume(parse(SAMPLE), many, PROFILE, coverage, FailingLLM())
+    cut = [f"Tool{i}" for i in range(30) if f"Tool{i}" not in kept]
+    assert len(cut) >= 15
+    assert set(cut) <= set(result.dropped_skills)

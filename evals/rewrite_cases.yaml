@@ -1,0 +1,188 @@
+# Rewrite-refusal set (U16). Each pair is scored by resume.rewrite.check_rewrite.
+# expect: refuse = the rewrite claims more than the original; accept = honest rewording.
+# The resume path's check is lighter on purpose: this set only reports its rates.
+cases:
+  # --- honest rewordings ---
+  - id: h-reorder
+    kind: honest
+    original: Built a FastAPI service in Python that serves 2 million requests a day.
+    new: Built a Python FastAPI service serving 2 million requests a day.
+    allowed: [Python, FastAPI]
+    expect: accept
+  - id: h-keyword
+    kind: honest
+    original: Wrote ETL jobs with Airflow and PostgreSQL for the billing team.
+    new: Wrote Airflow ETL pipelines on PostgreSQL for the billing team.
+    allowed: [Airflow, PostgreSQL]
+    expect: accept
+  - id: h-allowed-skill
+    kind: honest
+    original: Added caching to the search API, cutting p95 latency by 40%.
+    new: Added Redis caching to the search API, cutting p95 latency by 40%.
+    allowed: [Redis]
+    expect: accept
+  - id: h-shorter
+    kind: honest
+    original: Worked on the React dashboard used by the support team to track tickets every day.
+    new: Built React dashboard features the support team uses daily to track tickets.
+    allowed: [React]
+    expect: accept
+  - id: h-tense
+    kind: honest
+    original: Maintain CI pipelines on GitHub Actions for 6 services.
+    new: Maintained GitHub Actions CI pipelines for 6 services.
+    allowed: [GitHub Actions]
+    expect: accept
+  - id: h-plain
+    kind: honest
+    original: Fixed flaky tests in the payments module and added pytest fixtures.
+    new: Fixed flaky payments tests and added shared pytest fixtures.
+    allowed: [pytest]
+    expect: accept
+  - id: h-ats-spelling
+    kind: honest
+    original: Deployed services to k8s with Helm charts.
+    new: Deployed services to Kubernetes (k8s) with Helm charts.
+    allowed: [Kubernetes, Helm]
+    expect: accept
+  - id: h-same-number
+    kind: honest
+    original: Migrated 3 cron jobs to Celery workers.
+    new: Moved 3 cron jobs onto Celery workers.
+    allowed: [Celery]
+    expect: accept
+  - id: h-rag
+    kind: honest
+    original: Prototyped a RAG chatbot over internal docs using LangChain.
+    new: Prototyped a LangChain RAG chatbot over internal docs.
+    allowed: [RAG, LangChain]
+    expect: accept
+  - id: h-focus
+    kind: honest
+    original: Helped the team write API docs and onboarding guides.
+    new: Helped write API docs and onboarding guides for new engineers.
+    allowed: []
+    expect: accept
+  # --- inflated verbs and scope ---
+  - id: a-contributed-led
+    kind: inflate_scope
+    original: Contributed to the migration of the order service to Go.
+    new: Led the migration of the order service to Go.
+    allowed: [Go]
+    expect: refuse
+  - id: a-helped-owned
+    kind: inflate_scope
+    original: Helped build the notification service.
+    new: Owned the notification service end to end.
+    allowed: []
+    expect: refuse
+  - id: a-architected
+    kind: inflate_scope
+    original: Implemented parts of the event pipeline in Kafka.
+    new: Architected the event pipeline in Kafka.
+    allowed: [Kafka]
+    expect: refuse
+  - id: a-mentored
+    kind: inflate_scope
+    original: Paired with interns on code reviews.
+    new: Mentored interns through code reviews.
+    allowed: []
+    expect: refuse
+  - id: a-production
+    kind: inflate_scope
+    original: Built a demo recommender in Python for a hackathon.
+    new: Built a production recommender in Python.
+    allowed: [Python]
+    expect: refuse
+  - id: a-spearheaded
+    kind: inflate_scope
+    original: Worked on the checkout redesign.
+    new: Spearheaded the checkout redesign.
+    allowed: []
+    expect: refuse
+  - id: a-team-of
+    kind: inflate_scope
+    original: Coordinated releases with QA.
+    new: Coordinated releases across a team of QA engineers.
+    allowed: []
+    expect: refuse
+  - id: a-built-alone
+    kind: inflate_scope
+    original: Contributed fixes to the billing service.
+    new: Single-handedly rebuilt the billing service.
+    allowed: []
+    expect: refuse
+  - id: a-delivered
+    kind: inflate_scope
+    original: Assisted with the search relaunch.
+    new: Delivered the search relaunch.
+    allowed: []
+    expect: refuse
+  # --- invented numbers ---
+  - id: n-new-percent
+    kind: new_number
+    original: Improved the query speed of the reports page.
+    new: Improved the query speed of the reports page by 60%.
+    allowed: []
+    expect: refuse
+  - id: n-bigger
+    kind: new_number
+    original: Served 2 million requests a day.
+    new: Served 20 million requests a day.
+    allowed: []
+    expect: refuse
+  - id: n-users
+    kind: new_number
+    original: Shipped the mobile onboarding flow.
+    new: Shipped the mobile onboarding flow to 50,000 users.
+    allowed: []
+    expect: refuse
+  - id: n-word
+    kind: new_number
+    original: Wrote integration tests for the API.
+    new: Wrote ten integration test suites for the API.
+    allowed: []
+    expect: refuse
+  - id: n-doubled
+    kind: new_number
+    original: Tuned the cache settings.
+    new: Tuned cache settings and doubled the hit rate.
+    allowed: []
+    expect: refuse
+  # --- unrelated tools added ---
+  - id: t-cross-project
+    kind: new_tool
+    original: Built a Flask admin panel for the ops team.
+    new: Built a Flask and Kubernetes admin panel for the ops team.
+    allowed: [Flask]
+    expect: refuse
+  - id: t-langgraph
+    kind: new_tool
+    original: Wrote a Python script that summarises tickets with an LLM.
+    new: Wrote a LangGraph agent that summarises tickets with an LLM.
+    allowed: [Python, LLM]
+    expect: refuse
+  - id: t-aws
+    kind: new_tool
+    original: Deployed the API on a single VM.
+    new: Deployed the API on AWS ECS.
+    allowed: []
+    expect: refuse
+  - id: t-typescript
+    kind: new_tool
+    original: Built the settings page in React.
+    new: Built the settings page in React and TypeScript.
+    allowed: [React]
+    expect: refuse
+  - id: t-terraform
+    kind: new_tool
+    original: Set up staging servers by hand.
+    new: Set up staging servers with Terraform.
+    allowed: []
+    expect: refuse
+  - id: t-pgvector
+    kind: new_tool
+    original: Stored embeddings in PostgreSQL for semantic search.
+    new: Stored embeddings in pgvector for semantic search.
+    allowed: [PostgreSQL]
+    expect: refuse

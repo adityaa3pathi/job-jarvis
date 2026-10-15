@@ -1,9 +1,13 @@
-"""Run lock holding the pid, so two passes never overlap and stale locks are detected."""
+"""Run lock holding the pid and start time, so two passes never overlap and stale locks clear."""
 
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
 from pathlib import Path
+
+STALE_AFTER_S = 30 * 60  # a daily run takes minutes; a lock older than this is left over
 
 
 class LockHeldError(Exception):
@@ -21,23 +25,53 @@ def _alive(pid: int) -> bool:
 
 
 class RunLock:
-    def __init__(self, path: Path, pid: int | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        pid: int | None = None,
+        max_age_s: float = STALE_AFTER_S,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
         self.path = path
         self.pid = pid if pid is not None else os.getpid()
+        self.max_age_s, self.clock = max_age_s, clock
+
+    def _holder(self) -> tuple[int, float]:
+        parts = self.path.read_text().split()
+        try:
+            pid = int(parts[0])
+        except (IndexError, ValueError):
+            pid = -1
+        try:
+            started = float(parts[1])
+        except (IndexError, ValueError):  # older lock files hold only the pid
+            started = self.path.stat().st_mtime
+        return pid, started
+
+    def live_holder(self) -> int | None:
+        """The pid of a live, recent holder; None when the lock is free or left over."""
+        try:
+            holder, started = self._holder()
+        except FileNotFoundError:
+            return None
+        # Containers reuse low pids, so a live pid alone does not prove a run holds it.
+        fresh = self.clock() - started < self.max_age_s
+        return holder if holder > 0 and _alive(holder) and fresh else None
+
+    def held_elsewhere(self) -> bool:
+        return self.live_holder() not in (None, self.pid)
 
     def acquire(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if self.path.exists():
-            try:
-                holder = int(self.path.read_text().strip())
-            except ValueError:
-                holder = -1
-            if holder > 0 and _alive(holder):
-                raise LockHeldError(f"another run holds the lock (pid {holder})")
-            self.path.unlink(missing_ok=True)
-        fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        if (holder := self.live_holder()) is not None:
+            raise LockHeldError(f"another run holds the lock (pid {holder})")
+        self.path.unlink(missing_ok=True)
+        try:
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError as exc:
+            raise LockHeldError("another run took the lock just now") from exc
         with os.fdopen(fd, "w") as handle:
-            handle.write(str(self.pid))
+            handle.write(f"{self.pid} {self.clock()}")
 
     def release(self) -> None:
         self.path.unlink(missing_ok=True)

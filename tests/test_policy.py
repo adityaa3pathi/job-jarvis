@@ -3,13 +3,17 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from jobagent.config import ConfigError, Settings, ensure_data_dir, load_secrets
-from jobagent.lock import LockHeldError, RunLock
+from jobagent import cli
+from jobagent.config import REPO_ROOT, ConfigError, Settings, ensure_data_dir, load_secrets
+from jobagent.lock import STALE_AFTER_S, LockHeldError, RunLock
 from jobagent.policy import Policy, PolicyDenied, engage_kill_switch
+from jobagent.runs import kill_switch_check
 from tests.conftest import FakeClock
 
 
@@ -139,3 +143,91 @@ def test_lock_refuses_second_run_and_clears_stale(settings: Settings) -> None:
     proc.wait()
     settings.lock_file.write_text(str(proc.pid))  # dead pid: stale
     RunLock(settings.lock_file).acquire()
+
+
+def test_lock_held_too_long_is_stale_even_when_the_pid_is_alive(settings: Settings) -> None:
+    # Containers reuse low pids, so a live pid alone does not prove the holder is a run.
+    old = time.time() - STALE_AFTER_S - 60
+    settings.lock_file.parent.mkdir(parents=True)
+    settings.lock_file.write_text(f"{os.getpid()} {old}")
+    RunLock(settings.lock_file).acquire()
+    assert settings.lock_file.read_text().split()[0] == str(os.getpid())
+    with pytest.raises(LockHeldError):  # a fresh lock still blocks
+        RunLock(settings.lock_file).acquire()
+
+
+def test_old_lock_without_a_time_falls_back_to_file_age(settings: Settings) -> None:
+    settings.lock_file.parent.mkdir(parents=True)
+    settings.lock_file.write_text(str(os.getpid()))
+    old = time.time() - STALE_AFTER_S - 60
+    os.utime(settings.lock_file, (old, old))
+    RunLock(settings.lock_file).acquire()
+
+
+def test_racing_lock_create_is_a_held_lock_not_a_crash(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def racing_open(*_: object, **__: object) -> int:
+        raise FileExistsError("taken between check and create")
+
+    monkeypatch.setattr("jobagent.lock.os.open", racing_open)
+    with pytest.raises(LockHeldError):
+        RunLock(settings.lock_file).acquire()
+
+
+# --- kill switch kept in the database (R12) ---
+
+
+def test_stop_check_is_read_and_cached(policy: Policy, clock: FakeClock) -> None:
+    calls: list[int] = []
+    flag = [False]
+
+    def check() -> bool:
+        calls.append(1)
+        return flag[0]
+
+    policy.stop_check = check
+    assert not policy.stopped()
+    flag[0] = True
+    assert not policy.stopped() and len(calls) == 1  # cached for a few seconds
+    clock.now += 5
+    assert policy.stopped() and len(calls) == 2
+    assert not policy.begin("greenhouse", "discover").allowed
+
+
+def test_stop_check_that_fails_halts_the_agent(policy: Policy) -> None:
+    def broken() -> bool:
+        raise ConnectionError("db down")
+
+    policy.stop_check = broken
+    assert policy.stopped()
+
+
+def test_kill_switch_set_by_cli_is_seen_by_policy(
+    settings: Settings, clock: FakeClock, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setattr("jobagent.cli.load_settings", lambda: settings)
+
+    def fresh_policy() -> Policy:
+        return Policy.load(
+            REPO_ROOT / "policy.yaml", settings.stop_file, clock=clock,
+            stop_check=kill_switch_check(settings.db_path),
+        )  # fmt: skip
+
+    assert cli.main(["stop"]) == 0
+    assert "kill switch: ON" in capsys.readouterr().out
+    assert not settings.stop_file.exists()  # the flag lives in the database, not /tmp
+    assert fresh_policy().stopped()
+    assert cli.main(["status"]) == 0 and "kill switch: ON" in capsys.readouterr().out
+    assert cli.main(["resume"]) == 0 and "kill switch: off" in capsys.readouterr().out
+    assert not fresh_policy().stopped()
+
+
+def test_stop_file_still_works_as_a_local_trigger(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setattr("jobagent.cli.load_settings", lambda: settings)
+    engage_kill_switch(settings.stop_file)
+    assert cli.main(["status"]) == 0 and "kill switch: ON" in capsys.readouterr().out
+    assert cli.main(["resume"]) == 0 and "kill switch: off" in capsys.readouterr().out
+    assert not settings.stop_file.exists()

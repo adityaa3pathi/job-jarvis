@@ -1,14 +1,12 @@
-"""Job description analyzer: an extractor and a critic in a small LangGraph loop."""
+"""Job description analyzer: one extraction call, plain-code checks, at most one repair call."""
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+import json
+from dataclasses import asdict
 
-from langgraph.graph import END, START, StateGraph
-
-from jobagent.llm import LLM, LLMError, ask, data_block
+from jobagent.llm import LLM, LLMCache, LLMError, ask, cache_key, data_block, model_id
 from jobagent.resume.jd import (
-    Critique,
     JDProfile,
     Pass,
     SkillNeed,
@@ -19,111 +17,98 @@ from jobagent.resume.jd import (
     weight,
     work_mode,
 )
-from jobagent.resume.ontology import all_terms, canonical, mention
-from jobagent.sanitize import clean_posting_text
+from jobagent.resume.ontology import all_terms, mention
+from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
-PASSES = 3
-MAX_ROUNDS = 2
+PROMPT_VERSION = "jd-2"
+STEP = "jd_analysis"
 MAX_RESPONSIBILITIES = 8
 
+SYSTEM = (
+    "You read one job posting and list what it asks for. Copy skills as the posting spells "
+    "them. Per skill give importance: 'must' only when the posting calls it required or core "
+    "to the role, else 'nice'. implicit_skills are things the role clearly needs but the "
+    "posting never names."
+)
 EXTRACT = (
-    "You read one job posting. List what it asks for. Per skill give importance: 'must' only "
-    "when the posting calls it required or core to the role, else 'nice'. Copy skills as the "
-    "posting spells them. implicit_skills are things the role clearly needs but the posting "
-    'never names. Reply as {"role_title": str, "level": str, "years_min": int|null, '
-    '"domain": str, "responsibilities": [str], "skills": [{"name": str, "importance": str}], '
-    '"implicit_skills": [str]}.'
+    'List the requirements, at most 8 responsibilities. Reply as {"role_title": str, '
+    '"level": str, "years_min": int|null, "domain": str, "responsibilities": [str], '
+    '"skills": [{"name": str, "importance": str}], "implicit_skills": [str]}.'
 )
-CRITIC = (
-    "You check a skill list against the posting. missing: skills the posting names that the "
-    "list lacks. unsupported: listed skills the posting does not support. "
-    'Reply as {"missing": [str], "unsupported": [str]}.'
+SEEN = (
+    "Known terms seen in the text (some may be plain words, like 'rest'): {terms}. Include "
+    "the ones the job asks for."
 )
+REPAIR = "Your last reply named no skill that appears in the posting. Read it again."
 
 
-class State(TypedDict, total=False):
-    text: str
-    title: str
-    hints: list[str]
-    rounds: int
-    passes: list[Pass]
-    skills: list[SkillNeed]
-    misses: list[str]
+def _scan(text: str) -> list[str]:
+    """Known terms the posting really contains (plain code, no model)."""
+    return [t for t in all_terms() if mention(t, text)]
 
 
-def build_graph(llm: LLM) -> Any:
-    def extract(state: State) -> State:
-        hint = f"\nAlso check for: {', '.join(state['hints'])}." if state.get("hints") else ""
-        user = data_block("job_posting", state["text"]) + "\nList the requirements." + hint
-        passes = []
-        for _ in range(PASSES):
-            try:
-                passes.append(ask(llm, Pass, system=EXTRACT, user=user))
-            except LLMError:
-                continue
-        title = next((p.role_title for p in passes if p.role_title), state["title"])
-        skills = vote(passes, state["text"], title) if passes else []
-        return {"passes": passes, "title": title, "skills": skills, "rounds": state["rounds"] + 1}
-
-    def critic(state: State) -> State:
-        if not state["passes"]:
-            return {"misses": []}
-        listed = ", ".join(s.name for s in state["skills"]) or "none"
-        user = data_block("job_posting", state["text"]) + f"\nSkill list: {listed}"
-        try:
-            found = ask(llm, Critique, system=CRITIC, user=user)
-        except LLMError:
-            return {"misses": []}
-        have = {s.name for s in state["skills"]}
-        real = {canonical(m) for m in found.missing if mention(m, state["text"])}
-        return {"misses": sorted(real - have)}
-
-    def again(state: State) -> str:
-        return "extract" if state["misses"] and state["rounds"] < MAX_ROUNDS else "end"
-
-    def hint(state: State) -> State:
-        return {"hints": state["misses"]}
-
-    graph = StateGraph(State)
-    graph.add_node("extract", extract)
-    graph.add_node("critic", critic)
-    graph.add_node("hint", hint)
-    graph.add_edge(START, "extract")
-    graph.add_edge("extract", "critic")
-    graph.add_conditional_edges("critic", again, {"extract": "hint", "end": END})
-    graph.add_edge("hint", "extract")
-    return graph.compile()
+def _extract(llm: LLM, text: str, hint: str, step: str) -> Pass | None:
+    user = data_block("job_posting", text) + "\n" + hint
+    try:
+        return ask(llm, Pass, system=SYSTEM, user=user, step=step)
+    except LLMError:
+        return None
 
 
-def analyze_jd(posting: str, llm: LLM) -> JDProfile:
+def _to_json(profile: JDProfile) -> str:
+    return json.dumps(asdict(profile))
+
+
+def _from_json(raw: str) -> JDProfile:
+    data = json.loads(raw)
+    data["skills"] = [SkillNeed(**s) for s in data["skills"]]
+    data["implicit_skills"] = [SkillNeed(**s) for s in data["implicit_skills"]]
+    return JDProfile(**data)
+
+
+def analyze_jd(posting: str, llm: LLM, cache: LLMCache | None = None) -> JDProfile:
     text, flagged = clean_posting_text(posting)
+    key = cache_key(STEP, PROMPT_VERSION, model_id(llm), text)
+    if cache is not None and (hit := cache.cache_get(key)):
+        return _from_json(hit)
+    profile = _analyze(text, flagged, llm)
+    if cache is not None and not profile.degraded:
+        cache.cache_put(key, STEP, _to_json(profile))
+    return profile
+
+
+def _analyze(text: str, flagged: bool, llm: LLM) -> JDProfile:
     first_line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
-    out = build_graph(llm).invoke(
-        {"text": text, "title": first_line, "hints": [], "rounds": 0}, {"recursion_limit": 12}
-    )
-    passes: list[Pass] = out["passes"]
-    if not passes:
+    found = _scan(text)
+    ask_for = EXTRACT + ("\n" + SEEN.format(terms=", ".join(found)) if found else "")
+    lead = _extract(llm, text, ask_for, "jd_extract")
+    calls, title = 1, (lead.role_title if lead else "") or first_line
+    skills = vote([lead], text, title) if lead else []
+    # One repair when the reply was unusable or names nothing the posting contains.
+    if found and not skills:
+        calls += 1
+        if again := _extract(llm, text, ask_for + "\n" + REPAIR, "jd_repair"):
+            lead, title = again, again.role_title or first_line
+            skills = vote([lead], text, title)
+    if lead is None:
         return _fallback(text, first_line, flagged)
-    skills: list[SkillNeed] = list(out["skills"])
-    for name in out["misses"]:
-        verbatim = mention(name, text) or name
-        skills.append(SkillNeed(name, verbatim, "nice", weight(name, "nice", text, out["title"])))
-    skills.sort(key=lambda n: (-n.weight, n.name))
-    lead = passes[0]
     return JDProfile(
-        role_title=out["title"].strip()[:120],
-        level=level_for(lead.level, out["title"]),
+        role_title=title.strip()[:120],
+        level=level_for(lead.level, title),
         years_min=verified_years(lead.years_min, text),
         work_mode=work_mode(text),
         domain=lead.domain.strip()[:80],
-        responsibilities=[r.strip()[:200] for r in lead.responsibilities if r.strip()][
-            :MAX_RESPONSIBILITIES
-        ],
+        responsibilities=duties(lead.responsibilities)[:MAX_RESPONSIBILITIES],
         skills=skills,
-        implicit_skills=implicit_from(passes, text),
+        implicit_skills=implicit_from([lead], text),
         injection_flagged=flagged,
-        rounds=out["rounds"],
+        rounds=calls,
     )
+
+
+def duties(lines: list[str]) -> list[str]:
+    """Job duties only: a line about the candidate's own skills is never kept as a fact."""
+    return [r.strip()[:200] for r in lines if r.strip() and not states_candidate_fact(r)]
 
 
 def _fallback(text: str, title: str, flagged: bool) -> JDProfile:

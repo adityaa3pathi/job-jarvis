@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -57,8 +58,13 @@ class Policy:
     dry_run: bool = True
     clock: Callable[[], float] = time.monotonic
     sleep: Callable[[float], None] = time.sleep
+    # The durable kill switch (a DB flag); the STOP file stays a local trigger too.
+    stop_check: Callable[[], bool] | None = None
+    stop_cache_s: float = 5.0
     _last: dict[tuple[str, str], float] = field(default_factory=dict)
     _applied: dict[str, int] = field(default_factory=dict)
+    _stop_seen: tuple[float, bool] | None = None
+    _stop_lock: threading.Lock = field(default_factory=threading.Lock)
 
     @classmethod
     def load(cls, path: Path, stop_file: Path, **kwargs: object) -> Policy:
@@ -71,12 +77,24 @@ class Policy:
         return self.portals.get(portal.lower(), PortalRule())
 
     def stopped(self) -> bool:
-        return self.stop_file.exists()
+        if self.stop_file.exists():
+            return True
+        if self.stop_check is None:
+            return False
+        with self._stop_lock:  # portal threads share one cached read
+            now = self.clock()
+            if self._stop_seen is None or now - self._stop_seen[0] >= self.stop_cache_s:
+                try:
+                    value = bool(self.stop_check())
+                except Exception:  # an unreadable kill switch halts, it never lets runs through
+                    value = True
+                self._stop_seen = (now, value)
+            return self._stop_seen[1]
 
     def authorize(self, portal: str, action: Action, *, live: bool = False) -> Decision:
         """Pure check. Call again right before the Submit click, STOP may appear in between."""
         if self.stopped():
-            return Decision(False, "kill switch (STOP file) is on")
+            return Decision(False, "kill switch is on")
         rule = self.rule(portal)
         if portal.lower() not in self.portals or rule.mode == "off":
             return Decision(False, f"portal {portal!r} is off")
@@ -108,7 +126,7 @@ class Policy:
             if wait > 0:
                 self.sleep(wait)
         if self.stopped():
-            return Decision(False, "kill switch (STOP file) is on")
+            return Decision(False, "kill switch is on")
         self._last[(key, action)] = self.clock()
         if action == "apply":
             self._applied[key] = self._applied.get(key, 0) + 1

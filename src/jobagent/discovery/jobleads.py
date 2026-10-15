@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 
-from jobagent.discovery.base import Adapter, BoardSearch
+from jobagent.discovery.base import Adapter, BoardSearch, build_each
 from jobagent.models import Posting
 
 _WRAPPERS = {"ShallowReactive", "Reactive", "Ref", "ShallowRef"}
@@ -56,18 +56,17 @@ class JobleadsAdapter(Adapter[BoardSearch]):
         index: Any = 0
         for key in ("pinia", "vdb-search-store", "allJobs"):
             index = _slot(table, index, key)
-        postings = []
-        for job in _unpack(table, index) or []:
+
+        def build(job: dict[str, Any]) -> Posting:
             posted = job.get("validFrom")
             place = ", ".join(p for p in (job.get("location"), job.get("locationRegion")) if p)
-            postings.append(
-                Posting(
-                    source=self.portal,
-                    url=f"https://www.jobleads.com{job['jobLink']}",
-                    company=job.get("company") or "",
-                    title=job["title"],
-                    location=place,
-                    posted_date=datetime.fromtimestamp(posted, UTC).date() if posted else None,
-                )
+            return Posting(
+                source=self.portal,
+                url=f"https://www.jobleads.com{job['jobLink']}",
+                company=job.get("company") or "",
+                title=job["title"],
+                location=place,
+                posted_date=datetime.fromtimestamp(posted, UTC).date() if posted else None,
             )
-        return postings
+
+        return build_each(_unpack(table, index) or [], build)
