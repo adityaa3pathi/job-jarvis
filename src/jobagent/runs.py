@@ -18,6 +18,7 @@ from jobagent.discovery.base import DiscoveryResult, SweepContext, Validators
 from jobagent.index import Embedder
 from jobagent.llm import LLM
 from jobagent.models import Posting
+from jobagent.policy import Policy
 from jobagent.rank import JudgeStore, rank_jobs
 from jobagent.sqlconn import connect
 
@@ -59,6 +60,7 @@ class RunTally:
         try:
             saved = upsert(part.postings)
         except Exception as exc:
+            log.exception("saving %s failed", part.portal or "a portal")
             self.add(part, None)
             self.note_failure(part, "save", exc)
             return None
@@ -134,6 +136,12 @@ def sweep_context(db: Database, detail_cap: int) -> SweepContext:
         known=lambda url: normalize_url(url) in stored,
         detail_cap=detail_cap,
     )
+
+
+def note_policy(policy: Policy, tally: RunTally) -> None:
+    """Tell the owner when discovery ran without ever reading the DB kill switch."""
+    if policy.stop_unread:
+        tally.notes.append("kill switch could not be read")
 
 
 def rules_swept(db: Database, tally: RunTally) -> None:

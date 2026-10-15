@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import threading
 import time
 from typing import Any
 
+import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -307,6 +309,79 @@ def test_cron_trigger_needs_its_token(settings: Settings, monkeypatch: pytest.Mo
     ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
     assert ok.json()["started"] and ok.json()["running"] and started == [True]
     assert ok.json()["last"] == {}
+
+
+def github_client(
+    settings: Settings, calls: list[httpx.Request], status: int = 204, **extra: Any
+) -> TestClient:
+    def answer(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(status)
+
+    c = client_for(
+        settings, github_token="gh-tok", github_repo="owner/jobs",
+        github_transport=httpx.MockTransport(answer), **extra,
+    )  # fmt: skip
+    assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
+    return c
+
+
+def test_find_new_jobs_starts_the_github_run_and_follows_its_runs_row(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobagent.web.store import Store
+
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: pytest.fail("ran here"))
+    calls: list[httpx.Request] = []
+    c = github_client(settings, calls)
+    body = c.post("/api/discover").json()
+    assert body == {"started": True, "running": True, "last": {}, "current": None, "via": "github"}
+    (call,) = calls
+    assert call.method == "POST" and str(call.url) == (
+        "https://api.github.com/repos/owner/jobs/actions/workflows/discover.yml/dispatches"
+    )
+    assert call.headers["authorization"] == "Bearer gh-tok"
+    assert json.loads(call.content) == {"ref": "main"}
+    assert c.get("/api/discover").json()["running"]  # waiting for the runner to start
+    assert not c.post("/api/discover").json()["started"] and len(calls) == 1
+    st = Store(settings.db_path)  # the runner writes the same runs table
+    run_id = st.start_run()
+    st.update_run(run_id, {"read": 7, "new": 2})
+    state = c.get("/api/discover").json()
+    assert state["running"] and state["current"]["read"] == 7
+    st.finish_run(run_id, "done", "", {"read": 9, "new": 3})
+    st.close()
+    state = c.get("/api/discover").json()
+    assert not state["running"] and state["last"]["read"] == 9
+
+
+def test_a_dispatch_the_runner_never_picks_up_stops_counting_as_running(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[httpx.Request] = []
+    c = github_client(settings, calls)
+    assert c.post("/api/discover").json()["started"]
+    monkeypatch.setattr("jobagent.web.app.DISPATCH_WAIT_S", 0.0)
+    assert not c.get("/api/discover").json()["running"]
+
+
+def test_a_refused_dispatch_is_an_error_and_leaves_nothing_running(settings: Settings) -> None:
+    calls: list[httpx.Request] = []
+    c = github_client(settings, calls, status=401)
+    res = c.post("/api/discover")
+    assert res.status_code == 502 and "401" in res.json()["detail"]
+    assert not c.get("/api/discover").json()["running"]
+
+
+def test_cron_trigger_still_runs_in_process_with_github_set(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[httpx.Request] = []
+    monkeypatch.setattr("jobagent.web.app.discover_all", lambda *a, **k: DiscoveryResult())
+    c = github_client(settings, calls, cron_token="cron-123")
+    ok = c.post("/api/cron/discover", headers={"Authorization": "Bearer cron-123"})
+    assert ok.json()["started"] and calls == []
+    assert wait_discover(c)["last"]["status"] == "done"
 
 
 def wait_discover(c: TestClient) -> dict[str, Any]:

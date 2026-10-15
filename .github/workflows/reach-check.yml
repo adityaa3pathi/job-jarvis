@@ -1,0 +1,25 @@
+# One-off reachability check for LinkedIn, Naukri and Indeed from GitHub's runner (plan U1).
+name: reach-check
+on:
+  workflow_dispatch:
+  push:  # also runs when this check changes, as dispatch needs the file on main first
+    paths: [".github/workflows/reach-check.yml", "src/jobagent/discovery/reach.py"]
+permissions:
+  contents: read
+jobs:
+  reach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra browser
+      - run: uv run playwright install --with-deps chromium
+      - name: Probe the three sites
+        run: mkdir -p reach-out && uv run python -m jobagent.discovery.reach reach-out | tee reach-out/summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reach-out
+          path: reach-out/
+          retention-days: 7

@@ -1,4 +1,6 @@
-# Daily job search at 08:53 IST (03:23 UTC). Fails when the run is refused, fails or never ends.
+# Daily job search at 08:53 IST (03:23 UTC), run here: on Render's small CPU it starved the
+# health check. Writes the Turso runs table, so the web Jobs page shows progress and result.
+# "Find new jobs" on the web starts it too (workflow_dispatch). Fails when the run fails.
 name: daily-discover
 on:
   schedule:
@@ -11,46 +13,37 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
-      API_URL: ${{ secrets.JOBAGENT_API_URL }}
-      TOKEN: ${{ secrets.JOBAGENT_CRON_TOKEN }}
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      # Optional: without them the AI judge and the Telegram digest are skipped.
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
     steps:
-      - name: Start discovery and wait for its result
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --extra agent --extra turso --extra embed
+      - uses: actions/cache@v4
+        with:
+          path: .fastembed
+          key: fastembed-bge-small-en-v1.5
+      - name: Run discovery
         run: |
           set -euo pipefail
-          call() {
-            # The first call also wakes the free Render service, so allow retries.
-            curl -sS --fail-with-body --retry 3 --retry-delay 30 --retry-all-errors --max-time 120 \
-              -H "Authorization: Bearer $TOKEN" "$@" "$API_URL/api/cron/discover"
-          }
-          start=$(call -X POST)
-          echo "start: $(jq -c '{started, running, last_id: .last.id}' <<<"$start")"
-          before=$(jq -r '.last.id // 0' <<<"$start")
-          if [ "$(jq -r .started <<<"$start")" != "true" ]; then
-            if [ "$(jq -r .running <<<"$start")" = "true" ]; then
-              echo "::notice::a run was already going; waiting for it instead"
-            else
-              echo "::error::discovery was refused and nothing is running"; exit 1
-            fi
-          fi
-          state=$start
-          for _ in $(seq 50); do  # 50 x 30 s = 25 min
-            [ "$(jq -r .running <<<"$state")" = "true" ] || break
-            sleep 30
-            state=$(call)
-          done
-          if [ "$(jq -r .running <<<"$state")" = "true" ]; then
-            echo "::error::still running after 25 min"; exit 1
-          fi
-          jq '.last' <<<"$state"  # counts, notes and unreachable portals
-          jq -r '.last.unreachable[]? | "::warning::unreachable: \(.)"' <<<"$state"
-          id=$(jq -r '.last.id // 0' <<<"$state")
-          status=$(jq -r '.last.status // "none"' <<<"$state")
-          if [ "$id" -le "$before" ]; then
-            echo "::error::no new run was recorded (last id $id, before $before)"; exit 1
-          fi
-          if [ "$status" != "done" ]; then
-            echo "::error::run $id ended '$status': $(jq -r '.last.error // ""' <<<"$state")"; exit 1
-          fi
-          echo "run $id done"
+          test -n "$TURSO_DATABASE_URL" || { echo "::error::TURSO_DATABASE_URL is not set"; exit 1; }
+          export JOBAGENT_DATA_DIR="$RUNNER_TEMP/jobagent/data"
+          export JOBAGENT_CONFIG_DIR="$RUNNER_TEMP/jobagent/config"
+          # NEW lines, then the summary: portals, drops, notes, unreachable boards, digest.
+          uv run --no-sync job-agent discover | tee "$RUNNER_TEMP/discover.txt"
+      - name: Run summary
+        if: always()
+        run: |
+          test -f "$RUNNER_TEMP/discover.txt" || exit 0
+          { echo '```'; grep -v '^NEW ' "$RUNNER_TEMP/discover.txt" || true; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"

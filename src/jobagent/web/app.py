@@ -63,6 +63,7 @@ from jobagent.resume.pipeline import run_tailor
 from jobagent.runs import (
     RunTally,
     digest_after_run,
+    note_policy,
     prune_after_run,
     rank_after_run,
     rules_swept,
@@ -99,6 +100,10 @@ REVALIDATE = "private, no-cache"  # owner data: never in a shared cache, always 
 GZIP_MIN_BYTES = 1000
 COUNTS_TTL_S = 600.0
 COUNTS_MAX = 128
+GITHUB_API = "https://api.github.com"
+DISCOVER_WORKFLOW = "discover.yml"
+DISPATCH_WAIT_S = 600.0  # a queued workflow writes its runs row within minutes, or never
+CLOCK_SKEW_S = 60.0  # the runner's clock against ours
 log = logging.getLogger(__name__)
 OwnerMark = Literal["found", "applied", "dropped", "interview", "rejected"]
 
@@ -121,6 +126,23 @@ class WebConfig:
     shutdown_wait_s: float = SHUTDOWN_WAIT_S
     embedder: Callable[[], Embedder | None] = shared_embedder  # loaded on the first run
     digest_sender: Callable[[], Sender | None] = field(default=lambda: sender_from_env(os.environ))
+    # Both set: "Find new jobs" starts the GitHub workflow instead of running here.
+    github_token: str = ""
+    github_repo: str = ""
+    github_transport: httpx.BaseTransport | None = None
+
+
+def dispatch_discover(token: str, repo: str, transport: httpx.BaseTransport | None) -> None:
+    """Start the daily-discover workflow on main; GitHub answers 204 when it is queued."""
+    url = f"{GITHUB_API}/repos/{repo}/actions/workflows/{DISCOVER_WORKFLOW}/dispatches"
+    headers = {
+        "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }  # fmt: skip
+    with httpx.Client(transport=transport, timeout=15) as client:
+        res = client.post(url, json={"ref": "main"}, headers=headers)
+    if res.status_code != 204:
+        raise RuntimeError(f"GitHub answered {res.status_code}")
 
 
 def keep_awake(
@@ -166,6 +188,15 @@ def _still_wanted(cancelled: threading.Event) -> None:
 class _DiscoverState:
     running: bool = False
     guard: threading.Lock = field(default_factory=threading.Lock)
+    dispatched_at: float | None = None  # when we last started the GitHub run
+
+    def awaiting_runner(self, runs: dict[str, dict[str, Any] | None]) -> bool:
+        """A dispatched run counts as running until the runner's runs row appears."""
+        at = self.dispatched_at
+        if at is None or time.time() - at >= DISPATCH_WAIT_S:
+            return False
+        rows = [r for r in runs.values() if r]
+        return not any(r["started_at"] >= at - CLOCK_SKEW_S for r in rows)
 
 
 class Login(BaseModel):
@@ -544,12 +575,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
                                 after_runs=settings.close_after_clean_runs,
                             )  # fmt: skip
 
+                        policy = load_policy()
                         discover_all(
                             load_companies(REPO_ROOT / "companies.yaml"), cfg.fetcher,
-                            load_policy(), load_searches(REPO_ROOT / "searches.yaml"),
+                            policy, load_searches(REPO_ROOT / "searches.yaml"),
                             on_portal_done=save,
                             ctx=sweep_context(db, settings.detail_fetch_cap),
                         )  # fmt: skip
+                        note_policy(policy, tally)
                         rules_swept(db, tally)
                         prune_after_run(db, tally)
                         rank_after_run(
@@ -578,6 +611,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
             finally:
                 discover_state.running = False
 
+    on_github = bool(cfg.github_token and cfg.github_repo)
+
     def discover_view() -> dict[str, Any]:
         with stores.borrow() as st:
             runs = st.runs()
@@ -585,6 +620,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
         # after a restart the row is a leftover and must not block a new run.
         current = runs["current"]
         elsewhere = current is not None and RunLock(settings.lock_file).held_elsewhere()
+        if on_github:  # the runner holds its own lock; its fresh "running" row is the signal
+            elsewhere = current is not None or discover_state.awaiting_runner(runs)
         running = discover_state.running or elsewhere
         return {
             "running": running,
@@ -592,15 +629,31 @@ def create_app(cfg: WebConfig) -> FastAPI:
             "current": current if running else None,
         }
 
-    @app.post("/api/discover", dependencies=[Owner])
-    def start_discover() -> dict[str, Any]:
-        # Same shape as GET /api/discover, which the page reads.
+    def start_here() -> dict[str, Any]:
         with discover_state.guard:
             started = not discover_state.running
             discover_state.running = True
         if started:
             threading.Thread(target=_discover, daemon=True).start()
         return {"started": started, **discover_view()}
+
+    def start_on_github() -> dict[str, Any]:
+        """Render's small CPU cannot run discovery and answer its health check at once."""
+        with discover_state.guard:
+            if (view := discover_view())["running"]:
+                return {"started": False, **view, "via": "github"}
+            try:
+                dispatch_discover(cfg.github_token, cfg.github_repo, cfg.github_transport)
+            except Exception as exc:
+                log.exception("starting the GitHub discovery run failed")
+                raise HTTPException(502, f"could not start the GitHub run: {exc}") from exc
+            discover_state.dispatched_at = time.time()
+        return {"started": True, **discover_view(), "via": "github"}
+
+    @app.post("/api/discover", dependencies=[Owner])
+    def start_discover() -> dict[str, Any]:
+        # Same shape as GET /api/discover, which the page reads.
+        return start_on_github() if on_github else start_here()
 
     def cron(request: Request) -> None:
         """A scheduler holds a token instead of a login."""
@@ -610,7 +663,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.post("/api/cron/discover", dependencies=[Depends(cron)])
     def cron_discover() -> dict[str, Any]:
-        return start_discover()
+        # The fallback: always runs in this process. The daily run now lives on GitHub.
+        return start_here()
 
     @app.post("/api/cron/digest", dependencies=[Depends(cron)])
     def cron_digest(db: DB) -> dict[str, Any]:
@@ -1067,5 +1121,7 @@ def app_from_env() -> FastAPI:
             cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
             proxy_secret=os.environ.get("JOBAGENT_PROXY_SECRET", ""),
             task_deadline_s=float(os.environ.get("JOBAGENT_TASK_DEADLINE_S", TASK_DEADLINE_S)),
+            github_token=os.environ.get("GITHUB_DISPATCH_TOKEN", ""),
+            github_repo=os.environ.get("GITHUB_REPO", ""),
         )
     )

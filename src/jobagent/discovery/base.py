@@ -252,7 +252,7 @@ class Adapter[T: Target]:
         empty_first = truncated = held_back = False
         for page, url in enumerate(urls):
             if page and not (decision := policy.begin(self.portal, "discover")).allowed:
-                why = "by kill switch" if policy.stopped() else f"({decision.reason})"
+                why = "by kill switch" if policy.stopped("discover") else f"({decision.reason})"
                 out.notes.append(f"{target.name}: stopped {why} after page {page}")
                 out.partial = True
                 break

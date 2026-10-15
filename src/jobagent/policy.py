@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -14,6 +15,9 @@ from pydantic import BaseModel, field_validator
 
 Mode = Literal["apply_automatically", "discover_only", "off"]
 Action = Literal["discover", "apply", "submit"]
+STOP_READ_TRIES = 3  # Turso reads fail under load; a run's first check tries this often
+STOP_RETRY_WAIT_S = 0.5
+log = logging.getLogger(__name__)
 
 
 class PortalRule(BaseModel):
@@ -63,7 +67,9 @@ class Policy:
     stop_cache_s: float = 5.0
     _last: dict[tuple[str, str], float] = field(default_factory=dict)
     _applied: dict[str, int] = field(default_factory=dict)
-    _stop_seen: tuple[float, bool] | None = None
+    stop_unread: bool = False  # discovery went ahead without a kill switch reading
+    _stop_at: float | None = None
+    _stop_known: bool | None = None
     _stop_lock: threading.Lock = field(default_factory=threading.Lock)
 
     @classmethod
@@ -76,24 +82,41 @@ class Policy:
     def rule(self, portal: str) -> PortalRule:
         return self.portals.get(portal.lower(), PortalRule())
 
-    def stopped(self) -> bool:
+    def stopped(self, action: Action = "submit") -> bool:
+        """A failed DB read keeps the last known value. Never read at all: discovery runs
+        (and the run is told), while applying and submitting stay halted."""
         if self.stop_file.exists():
             return True
         if self.stop_check is None:
             return False
         with self._stop_lock:  # portal threads share one cached read
             now = self.clock()
-            if self._stop_seen is None or now - self._stop_seen[0] >= self.stop_cache_s:
-                try:
-                    value = bool(self.stop_check())
-                except Exception:  # an unreadable kill switch halts, it never lets runs through
-                    value = True
-                self._stop_seen = (now, value)
-            return self._stop_seen[1]
+            if self._stop_at is None or now - self._stop_at >= self.stop_cache_s:
+                first = self._stop_at is None
+                self._stop_at = now
+                value = self._read_stop(STOP_READ_TRIES if first else 1)
+                self._stop_known = self._stop_known if value is None else value
+            if self._stop_known is None:
+                self.stop_unread = True
+                return action != "discover"
+            return self._stop_known
+
+    def _read_stop(self, tries: int) -> bool | None:
+        assert self.stop_check is not None
+        error: Exception | None = None
+        for attempt in range(tries):
+            if attempt:
+                self.sleep(STOP_RETRY_WAIT_S)
+            try:
+                return bool(self.stop_check())
+            except Exception as exc:
+                error = exc
+        log.error("kill switch could not be read (%d tries): %s", tries, error)
+        return None
 
     def authorize(self, portal: str, action: Action, *, live: bool = False) -> Decision:
         """Pure check. Call again right before the Submit click, STOP may appear in between."""
-        if self.stopped():
+        if self.stopped(action):
             return Decision(False, "kill switch is on")
         rule = self.rule(portal)
         if portal.lower() not in self.portals or rule.mode == "off":
@@ -125,7 +148,7 @@ class Policy:
             wait = last + pause - self.clock()
             if wait > 0:
                 self.sleep(wait)
-        if self.stopped():
+        if self.stopped(action):
             return Decision(False, "kill switch is on")
         self._last[(key, action)] = self.clock()
         if action == "apply":

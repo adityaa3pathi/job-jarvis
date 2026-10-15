@@ -195,12 +195,49 @@ def test_stop_check_is_read_and_cached(policy: Policy, clock: FakeClock) -> None
     assert not policy.begin("greenhouse", "discover").allowed
 
 
-def test_stop_check_that_fails_halts_the_agent(policy: Policy) -> None:
-    def broken() -> bool:
-        raise ConnectionError("db down")
+def flaky_check(*answers: bool | None) -> tuple[Any, list[int]]:
+    """A stop check giving `answers` in turn; None is a failed DB read."""
+    calls: list[int] = []
 
-    policy.stop_check = broken
-    assert policy.stopped()
+    def check() -> bool:
+        calls.append(1)
+        answer = answers[min(len(calls), len(answers)) - 1]
+        if answer is None:
+            raise ConnectionError("turso busy")
+        return answer
+
+    return check, calls
+
+
+def test_unreadable_kill_switch_lets_discovery_run_but_never_an_apply(
+    policy: Policy, clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    policy.stop_check, calls = flaky_check(None)
+    with caplog.at_level("ERROR", logger="jobagent.policy"):
+        assert policy.authorize("greenhouse", "discover").allowed
+    assert len(calls) == 3 and clock.slept == [0.5, 0.5]  # three tries, short waits
+    assert policy.stop_unread and "turso busy" in caplog.text
+    assert policy.authorize("greenhouse", "apply").reason == "kill switch is on"
+    clock.now += 5
+    policy.authorize("greenhouse", "discover")
+    assert len(calls) == 4  # the next check tries once more
+
+
+def test_kill_switch_read_on_a_retry_is_used(policy: Policy) -> None:
+    policy.stop_check, calls = flaky_check(None, True)
+    assert not policy.authorize("greenhouse", "discover").allowed
+    assert len(calls) == 2 and not policy.stop_unread
+
+
+def test_failed_read_keeps_the_last_known_kill_switch(policy: Policy, clock: FakeClock) -> None:
+    policy.stop_check, calls = flaky_check(True, None, None, False)
+    assert policy.stopped("discover")
+    clock.now += 5
+    assert policy.stopped("discover") and len(calls) == 2  # one try, then the cached ON
+    clock.now += 5
+    assert policy.stopped("discover") and len(calls) == 3  # retried on the next check
+    clock.now += 5
+    assert not policy.stopped("discover") and not policy.stop_unread
 
 
 def test_kill_switch_set_by_cli_is_seen_by_policy(

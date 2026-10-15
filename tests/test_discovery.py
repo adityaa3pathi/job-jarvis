@@ -544,6 +544,26 @@ def test_cli_discover_saves_each_portal_as_it_finishes(
     assert not settings.lock_file.exists()
 
 
+def test_cli_discover_failure_prints_the_summary_and_records_the_run(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    from jobagent.web.store import Store
+
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        on_portal_done(StubAdapter("hirist").discover(GH, None, None))
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("jobagent.cli.discover_all", fake_discover_all)
+    with pytest.raises(RuntimeError):  # a non-zero exit fails the GitHub job
+        cli.discover(settings)
+    assert "PORTAL  hirist: read 1" in capsys.readouterr().out
+    st = Store(settings.db_path)
+    last = st.runs()["last"]
+    st.close()
+    assert last is not None and (last["status"], last["error"]) == ("failed", "RuntimeError: boom")
+    assert not settings.lock_file.exists()
+
+
 def test_cli_discover_reports_counts_drops_and_notes_and_records_the_run(
     settings: Settings, monkeypatch: pytest.MonkeyPatch, capsys: Any
 ) -> None:

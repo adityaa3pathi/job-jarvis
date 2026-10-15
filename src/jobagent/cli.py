@@ -23,6 +23,7 @@ from jobagent.runs import (
     RunTally,
     digest_after_run,
     kill_switch_check,
+    note_policy,
     prune_after_run,
     rank_after_run,
     rules_swept,
@@ -66,6 +67,7 @@ def discover(settings: Settings) -> int:
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
                 ctx=sweep_context(db, settings.detail_fetch_cap),
             )  # fmt: skip
+            note_policy(policy, tally)
             rules_swept(db, tally)
             prune_after_run(db, tally)
             rank_after_run(
@@ -74,6 +76,7 @@ def discover(settings: Settings) -> int:
             )  # fmt: skip
         except Exception as exc:
             st.finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}", tally.as_dict())
+            report(tally.as_dict(), out)  # what was saved before it failed
             raise
         else:
             st.finish_run(run_id, "done", "", tally.as_dict())
