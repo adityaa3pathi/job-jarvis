@@ -1,6 +1,6 @@
-# Job-board searches. jobgether, linkedin, hirist and jobleads take free keywords; cutshort, bebee,
-# switchly and wellfound take the board's role slug (spaces become hyphens), e.g. cutshort
-# writes "fullstack". yc takes a location slug on ycombinator.com/jobs.
+# Free keywords: jobgether, linkedin, hirist, jobleads, himalayas, jobicy, hn. The board's own slug
+# (spaces become hyphens): cutshort, bebee, switchly, wellfound, remoteok (tag), remotive and
+# weworkremotely (category). yc: a location slug. workingnomads: a category name.
 searches:
   - {board: jobgether, term: full stack developer}
   - {board: jobgether, term: ai engineer}
@@ -69,3 +69,28 @@ searches:
   - {board: wellfound, term: machine learning engineer}
   - {board: yc, term: india}
   - {board: yc, term: remote}
+  - {board: himalayas, term: full stack developer}
+  - {board: himalayas, term: ai engineer}
+  - {board: himalayas, term: backend developer}
+  - {board: himalayas, term: python developer}
+  - {board: himalayas, term: nodejs developer}
+  - {board: himalayas, term: react developer}
+  - {board: himalayas, term: software engineer}
+  - {board: himalayas, term: llm engineer}
+  - {board: remoteok, term: python}
+  - {board: remoteok, term: react}
+  - {board: remoteok, term: node}
+  - {board: remoteok, term: full stack}
+  - {board: remoteok, term: backend}
+  - {board: remoteok, term: ai}
+  - {board: jobicy, term: python}
+  - {board: jobicy, term: react}
+  - {board: jobicy, term: node}
+  - {board: jobicy, term: full stack}
+  - {board: jobicy, term: backend}
+  - {board: remotive, term: software-dev}
+  - {board: weworkremotely, term: remote-full-stack-programming-jobs}
+  - {board: weworkremotely, term: remote-back-end-programming-jobs}
+  - {board: weworkremotely, term: remote-front-end-programming-jobs}
+  - {board: workingnomads, term: development}
+  - {board: hn, term: remote}

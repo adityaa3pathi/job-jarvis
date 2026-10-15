@@ -141,7 +141,7 @@ JOB_COLUMNS = (
     " j.min_years, j.max_years, j.role, j.work_mode, j.city"
 )
 
-FULL_LIST_SOURCES = frozenset({"greenhouse", "lever", "ashby", "workable"})
+FULL_LIST_SOURCES = frozenset({"greenhouse", "lever", "ashby", "workable", "smartrecruiters"})
 
 
 def _now() -> str:

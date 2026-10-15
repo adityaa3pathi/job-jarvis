@@ -17,13 +17,15 @@ KNOWN_ATS_HOSTS = frozenset(
         "boards-api.greenhouse.io", "boards.greenhouse.io", "job-boards.greenhouse.io",
         "api.lever.co", "api.eu.lever.co", "jobs.lever.co", "jobs.eu.lever.co",
         "api.ashbyhq.com", "jobs.ashbyhq.com", "apply.workable.com", "jobs.workable.com",
+        "api.smartrecruiters.com", "jobs.smartrecruiters.com",
     }
 )  # fmt: skip
 KNOWN_BOARD_HOSTS = frozenset(
     {
         "jobgether.com", "gladiator.hirist.tech", "www.hirist.tech", "cutshort.io",
         "bebee.com", "www.switchly.in", "www.jobleads.com", "wellfound.com", "www.ycombinator.com",
-        "www.linkedin.com", "in.linkedin.com",
+        "www.linkedin.com", "in.linkedin.com", "himalayas.app", "remoteok.com", "jobicy.com",
+        "remotive.com", "weworkremotely.com", "www.workingnomads.com", "hn.algolia.com",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3

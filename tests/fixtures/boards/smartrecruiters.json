@@ -1,0 +1,128 @@
+{
+ "offset": 0,
+ "limit": 100,
+ "totalFound": 2,
+ "content": [
+  {
+   "id": "744000155675855",
+   "name": "Staff Engineer - Machine Learning",
+   "uuid": "8c2de041-768c-4ca7-a672-f284fe06cb0b",
+   "jobAdId": "15f0f227-e709-4f4b-a914-6292ba941925",
+   "defaultJobAd": true,
+   "refNumber": "P-1001848_1",
+   "company": {
+    "identifier": "Freshworks",
+    "name": "Freshworks"
+   },
+   "releasedDate": "2026-10-15T07:10:42.372Z",
+   "location": {
+    "city": "Bengaluru",
+    "region": "KA",
+    "country": "in",
+    "remote": false,
+    "hybrid": false,
+    "latitude": "12.9628957",
+    "longitude": "77.57754",
+    "fullLocation": "Bengaluru, KA, India"
+   },
+   "industry": {
+    "id": "it_and_services",
+    "label": "Information Technology And Services"
+   },
+   "department": {},
+   "function": {
+    "id": "other",
+    "label": "Other"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "618bba30fa9dfa25d877c58b",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Freshworks"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "in",
+     "valueLabel": "India"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Freshworks/postings/744000155675855",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  },
+  {
+   "id": "744000155615027",
+   "name": "Staff Engineer, Web Operations",
+   "uuid": "8c5e01ed-249b-4b7a-8620-01a574ae79d6",
+   "jobAdId": "40e78f6d-6531-4449-8bf8-3405f07b668e",
+   "defaultJobAd": true,
+   "refNumber": "P-1009924_1",
+   "company": {
+    "identifier": "Freshworks",
+    "name": "Freshworks"
+   },
+   "releasedDate": "2026-10-14T21:34:31.957Z",
+   "location": {
+    "city": "San Mateo",
+    "region": "CA",
+    "country": "us",
+    "remote": false,
+    "hybrid": true,
+    "hybridDescription": "3x a week onsite Tue-Thur",
+    "fullLocation": "San Mateo, CA, United States"
+   },
+   "industry": {
+    "id": "it_and_services",
+    "label": "Information Technology And Services"
+   },
+   "department": {},
+   "function": {
+    "id": "other",
+    "label": "Other"
+   },
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   },
+   "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+   },
+   "customField": [
+    {
+     "fieldId": "618bba30fa9dfa25d877c58b",
+     "fieldLabel": "Brands",
+     "valueId": "default",
+     "valueLabel": "Freshworks"
+    },
+    {
+     "fieldId": "COUNTRY",
+     "fieldLabel": "Country/Region",
+     "valueId": "us",
+     "valueLabel": "United States"
+    }
+   ],
+   "visibility": "PUBLIC",
+   "ref": "https://api.smartrecruiters.com/v1/companies/Freshworks/postings/744000155615027",
+   "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+   }
+  }
+ ]
+}

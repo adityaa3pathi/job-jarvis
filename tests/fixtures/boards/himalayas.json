@@ -1,0 +1,124 @@
+{
+ "offset": 0,
+ "limit": 20,
+ "totalCount": 2,
+ "jobs": [
+  {
+   "title": "Senior Python Developer",
+   "excerpt": "Title: Senior Python Developer Remote WFH OpportunityCompany: ITHR 360 Consultin",
+   "companyName": "ITHR Technologies Consulting LLC",
+   "companySlug": "ithr-technologies-consulting-llc",
+   "companyLogo": "https://cdn-images.himalayas.app/rpwogy87t6v1u0yqk3k74du7yhgh",
+   "employmentType": "Full Time",
+   "minSalary": null,
+   "maxSalary": null,
+   "salaryPeriod": "annual",
+   "seniority": [
+    "Senior"
+   ],
+   "currency": null,
+   "locationRestrictions": [
+    "India"
+   ],
+   "timezoneRestrictions": [
+    5.5
+   ],
+   "categories": [
+    "Python-Developer",
+    "Backend-Engineer",
+    "Software-Developer",
+    "Software-Engineer",
+    "Senior-Python-Engineer",
+    "Senior-Python-Software-Engineer",
+    "Senior-Python-Backend-Developer",
+    "Senior-Backend-Python-Developer",
+    "Senior-Python-Developer-(South-America)"
+   ],
+   "parentCategories": [
+    "Developer"
+   ],
+   "description": "<h3>Title: Senior Python Developer </h3><h3>Remote WFH Opportunity</h3><h3>Company: ITHR 360 Consulting</h3><h3>Location: Remote</h3><p>Salary: Competitive, Indian Market Standard</p><p>Availability: Immediate (Join within 15 Days)</p><h3>Contact: </h3><p>Are you an experienced Python developer looking for a remote opportunity? Join us at ITHR 360 Consulting, where you can leverage your expertise ",
+   "pubDate": 1791551630,
+   "expiryDate": 1796735629,
+   "applicationLink": "https://himalayas.app/companies/ithr-technologies-consulting-llc/jobs/senior-python-developer-9627617409",
+   "guid": "https://himalayas.app/companies/ithr-technologies-consulting-llc/jobs/senior-python-developer-9627617409"
+  },
+  {
+   "title": "Python Backend Engineer (m/f/x)",
+   "excerpt": "Job Title: (Senior) Python Engineer (m/f/x) Location: EU(Remote)Who You’ll Work ",
+   "companyName": "Makersite",
+   "companySlug": "makersite",
+   "companyLogo": "https://cdn-images.himalayas.app/xnwdcbpomg88h46oowt0e8fooayb",
+   "employmentType": "Full Time",
+   "minSalary": null,
+   "maxSalary": null,
+   "salaryPeriod": "annual",
+   "seniority": [
+    "Senior"
+   ],
+   "currency": null,
+   "locationRestrictions": [],
+   "timezoneRestrictions": [
+    -11,
+    -10,
+    -9.5,
+    -9,
+    -8,
+    -7,
+    -6,
+    -5,
+    -4,
+    -3.5,
+    -3,
+    -2,
+    -1,
+    0,
+    1,
+    2,
+    3,
+    3.5,
+    4,
+    4.5,
+    5,
+    5.5,
+    5.75,
+    6,
+    6.5,
+    7,
+    8,
+    8.75,
+    9,
+    9.5,
+    10,
+    10.5,
+    11,
+    12,
+    12.75,
+    13,
+    14
+   ],
+   "categories": [
+    "Python-Backend-Engineering",
+    "Backend-Development",
+    "Software-Engineer",
+    "API-Development",
+    "Python-Engineering",
+    "Python-Backend-Engineer",
+    "Python-Backend-Developer",
+    "Senior-Backend-Python-Developer",
+    "Senior-Python-Backend-Developer",
+    "Backend-Engineer",
+    "Product-Backend-Engineer",
+    "Backend-Services-Engineer"
+   ],
+   "parentCategories": [
+    "Developer"
+   ],
+   "description": "<p>Job Title: (Senior) Python Engineer (m/f/x)</p><h3>Location: EU</h3><h3>(Remote)</h3><h4><strong>Who You’ll Work For:</strong></h4><p>At <a href=\"https://himalayas.app/companies/makersite\">Makersite</a>, we're pioneering the future of sustainable product development and digital collaboration. As a leading platform for product lifecycle management (PLM), we empower companies to make smarter, mor",
+   "pubDate": 1790878022,
+   "expiryDate": 1796058422,
+   "applicationLink": "https://himalayas.app/companies/makersite/jobs/python-backend-engineer-m-f-x",
+   "guid": "https://himalayas.app/companies/makersite/jobs/python-backend-engineer-m-f-x"
+  }
+ ]
+}

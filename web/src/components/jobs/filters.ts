@@ -12,10 +12,18 @@ export const SOURCE_LABELS: Record<string, string> = {
   bebee: "beBee",
   jobleads: "JobLeads",
   switchly: "Switchly",
+  himalayas: "Himalayas",
+  remoteok: "RemoteOK",
+  jobicy: "Jobicy",
+  remotive: "Remotive",
+  weworkremotely: "We Work Remotely",
+  workingnomads: "Working Nomads",
+  hn: "Hacker News",
   greenhouse: "Greenhouse",
   lever: "Lever",
   ashby: "Ashby",
   workable: "Workable",
+  smartrecruiters: "SmartRecruiters",
 };
 
 export const ROLE_LABELS: Record<string, string> = {

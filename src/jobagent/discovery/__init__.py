@@ -19,25 +19,39 @@ from jobagent.discovery.base import (
 from jobagent.discovery.bebee import BebeeAdapter
 from jobagent.discovery.cutshort import CutshortAdapter
 from jobagent.discovery.greenhouse import GreenhouseAdapter
+from jobagent.discovery.himalayas import HimalayasAdapter
 from jobagent.discovery.hirist import HiristAdapter
+from jobagent.discovery.hn import HnAdapter
 from jobagent.discovery.jobgether import JobgetherAdapter
+from jobagent.discovery.jobicy import JobicyAdapter
 from jobagent.discovery.jobleads import JobleadsAdapter
 from jobagent.discovery.lever import LeverAdapter
 from jobagent.discovery.linkedin import LinkedinAdapter
+from jobagent.discovery.remoteok import RemoteokAdapter
+from jobagent.discovery.remotive import RemotiveAdapter
+from jobagent.discovery.smartrecruiters import SmartrecruitersAdapter
 from jobagent.discovery.switchly import SwitchlyAdapter
 from jobagent.discovery.wellfound import WellfoundAdapter
+from jobagent.discovery.weworkremotely import WeworkremotelyAdapter
 from jobagent.discovery.workable import WorkableAdapter
+from jobagent.discovery.workingnomads import WorkingnomadsAdapter
 from jobagent.discovery.yc import YcAdapter
 from jobagent.policy import Policy
 
 ADAPTERS: dict[str, Adapter[Company]] = {
-    a.portal: a for a in (GreenhouseAdapter(), LeverAdapter(), AshbyAdapter(), WorkableAdapter())
-}
+    a.portal: a
+    for a in (
+        GreenhouseAdapter(), LeverAdapter(), AshbyAdapter(), WorkableAdapter(),
+        SmartrecruitersAdapter(),
+    )
+}  # fmt: skip
 BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
     a.portal: a
     for a in (
         JobgetherAdapter(), HiristAdapter(), CutshortAdapter(), BebeeAdapter(),
         SwitchlyAdapter(), JobleadsAdapter(), WellfoundAdapter(), YcAdapter(), LinkedinAdapter(),
+        HimalayasAdapter(), RemoteokAdapter(), JobicyAdapter(), RemotiveAdapter(),
+        WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(),
     )
 }  # fmt: skip
 
