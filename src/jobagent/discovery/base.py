@@ -22,7 +22,10 @@ _TOKEN = re.compile(r"^[A-Za-z0-9_.-]+$")
 _BLOCK_MARKERS = (
     "just a moment", "attention required", "access denied", "verify you are human",
     "complete the captcha", "are you a robot", "unusual traffic",
+    "authwall", "sign up | linkedin", "sign in | linkedin", "linkedin login",
 )  # fmt: skip
+_BLOCK_STATUSES = frozenset({429, 999})  # rate limit; LinkedIn's bot refusal
+WALL = "bot wall or captcha page"
 
 
 class Company(BaseModel):
@@ -46,8 +49,9 @@ def load_companies(path: Path) -> list[Company]:
 
 
 Board = Literal[
-    "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc"
-]
+    "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc",
+    "linkedin",
+]  # fmt: skip
 _TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+-]{0,59}$")
 
 
@@ -143,6 +147,7 @@ class DiscoveryResult:
     partial: bool = False  # some target read incompletely, so missing jobs prove nothing
     unchanged: list[str] = field(default_factory=list)  # targets not swept: same as last save
     fresh: dict[str, Validators] = field(default_factory=dict)  # to keep once the save works
+    blocked: bool = False  # the site refused us: its other targets wait for the next run
 
     def extend(self, other: DiscoveryResult) -> None:
         self.postings += other.postings
@@ -154,6 +159,7 @@ class DiscoveryResult:
         self.fresh.update(other.fresh)
         self.portal = self.portal or other.portal
         self.partial = self.partial or other.partial
+        self.blocked = self.blocked or other.blocked
 
 
 class Postings(list[Posting]):
@@ -202,7 +208,7 @@ def blocked_reason(result: FetchResult, *, expect_json: bool) -> str | None:
         return None
     head = result.text[:20000].lower()
     if any(marker in head for marker in _BLOCK_MARKERS):
-        return "bot wall or captcha page"
+        return WALL
     return None
 
 
@@ -271,6 +277,7 @@ class Adapter[T: Target]:
                 continue
             if error := http_error(result):
                 out.unreachable.append(Unreachable(target.name, url, error))
+                out.blocked = result.status in _BLOCK_STATUSES
                 break
             # Wall markers count only on pages with no jobs; real pages may say "captcha" in CSS.
             try:
@@ -279,11 +286,13 @@ class Adapter[T: Target]:
                 reason = blocked_reason(result, expect_json=self.expect_json)
                 unparseable = f"unparseable: {type(exc).__name__}: {exc}"
                 out.unreachable.append(Unreachable(target.name, url, reason or unparseable))
+                out.blocked = reason == WALL
                 break
             if isinstance(parsed, Postings):
                 skipped += parsed.skipped
             if not parsed and (reason := blocked_reason(result, expect_json=self.expect_json)):
                 out.unreachable.append(Unreachable(target.name, url, reason))
+                out.blocked = reason == WALL
                 break
             empty_first = empty_first or (page == 0 and not parsed)
             if isinstance(parsed, Postings) and parsed.detail:

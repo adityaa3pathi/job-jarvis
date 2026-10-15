@@ -1,4 +1,4 @@
-# Job-board searches. jobgether, hirist and jobleads take free keywords; cutshort, bebee,
+# Job-board searches. jobgether, linkedin, hirist and jobleads take free keywords; cutshort, bebee,
 # switchly and wellfound take the board's role slug (spaces become hyphens), e.g. cutshort
 # writes "fullstack". yc takes a location slug on ycombinator.com/jobs.
 searches:
@@ -12,6 +12,16 @@ searches:
   - {board: jobgether, term: generative ai engineer}
   - {board: jobgether, term: llm engineer}
   - {board: jobgether, term: react native developer}
+  - {board: linkedin, term: full stack developer}
+  - {board: linkedin, term: ai engineer}
+  - {board: linkedin, term: backend developer}
+  - {board: linkedin, term: python developer}
+  - {board: linkedin, term: nodejs developer}
+  - {board: linkedin, term: react developer}
+  - {board: linkedin, term: software engineer}
+  - {board: linkedin, term: generative ai engineer}
+  - {board: linkedin, term: llm engineer}
+  - {board: linkedin, term: react native developer}
   - {board: hirist, term: full stack developer}
   - {board: hirist, term: ai engineer}
   - {board: hirist, term: backend developer}

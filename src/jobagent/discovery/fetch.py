@@ -23,6 +23,7 @@ KNOWN_BOARD_HOSTS = frozenset(
     {
         "jobgether.com", "gladiator.hirist.tech", "www.hirist.tech", "cutshort.io",
         "bebee.com", "www.switchly.in", "www.jobleads.com", "wellfound.com", "www.ycombinator.com",
+        "www.linkedin.com", "in.linkedin.com",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3

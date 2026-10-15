@@ -23,6 +23,7 @@ from jobagent.discovery.hirist import HiristAdapter
 from jobagent.discovery.jobgether import JobgetherAdapter
 from jobagent.discovery.jobleads import JobleadsAdapter
 from jobagent.discovery.lever import LeverAdapter
+from jobagent.discovery.linkedin import LinkedinAdapter
 from jobagent.discovery.switchly import SwitchlyAdapter
 from jobagent.discovery.wellfound import WellfoundAdapter
 from jobagent.discovery.workable import WorkableAdapter
@@ -36,7 +37,7 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
     a.portal: a
     for a in (
         JobgetherAdapter(), HiristAdapter(), CutshortAdapter(), BebeeAdapter(),
-        SwitchlyAdapter(), JobleadsAdapter(), WellfoundAdapter(), YcAdapter(),
+        SwitchlyAdapter(), JobleadsAdapter(), WellfoundAdapter(), YcAdapter(), LinkedinAdapter(),
     )
 }  # fmt: skip
 
@@ -70,11 +71,17 @@ def discover_all(
         portal: str, tasks: list[tuple[str, Callable[[], DiscoveryResult]]]
     ) -> DiscoveryResult:
         out = DiscoveryResult(portal=portal)
-        for name, task in tasks:
+        for done, (name, task) in enumerate(tasks, 1):
             try:
                 out.extend(task())
             except Exception as exc:  # one target's error must never lose the portal's other jobs
                 out.unreachable.append(Unreachable(name, "", f"{type(exc).__name__}: {exc}"))
+            if out.blocked and (left := len(tasks) - done):
+                # A refusal is sticky: asking again in the same run only invites a ban
+                noun = "target" if left == 1 else "targets"
+                out.notes.append(f"{portal}: blocked, {left} remaining {noun} skipped")
+                out.partial = True
+                break
         return out
 
     result = DiscoveryResult()

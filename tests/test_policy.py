@@ -23,9 +23,8 @@ def test_unknown_portal_is_off(policy: Policy) -> None:
 
 
 def test_defaults_match_research_table(policy: Policy) -> None:
-    assert policy.rule("linkedin").mode == "off"
     assert policy.rule("indeed_india").mode == "off"
-    for name in ("naukri", "foundit", "wellfound", "hirist", "cutshort"):
+    for name in ("linkedin", "naukri", "foundit", "wellfound", "hirist", "cutshort"):
         assert policy.rule(name).mode == "discover_only"
     assert policy.rule("lever").mode == "discover_only"
     for name in ("greenhouse", "ashby", "workable"):

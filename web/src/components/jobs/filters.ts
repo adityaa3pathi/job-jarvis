@@ -3,6 +3,7 @@
 export const STATUSES = ["found", "applied", "interview", "rejected", "dropped", "closed"];
 
 export const SOURCE_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn",
   wellfound: "Wellfound",
   yc: "YC",
   cutshort: "Cutshort",
