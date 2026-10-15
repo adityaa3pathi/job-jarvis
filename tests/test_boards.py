@@ -512,3 +512,14 @@ def test_remote_board_locations_meet_the_india_rule(location: str, dropped: bool
     from jobagent.rules import outside_india
 
     assert outside_india(location) is dropped
+
+
+def test_instahyre_reads_logged_out_search_data(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["instahyre"].url_for(BoardSearch(board="instahyre", term="full stack"))
+    assert url == "https://www.instahyre.com/api/v1/job_search?skills=full+stack&limit=35&offset=0"
+    first, second = run("instahyre", "python", "instahyre.json", policy)
+    assert (first.title, first.company, first.location) == (
+        "Python Engineer", "Nineleaps", "Bangalore",
+    )  # fmt: skip
+    assert first.url.startswith("https://www.instahyre.com/job-439850-")
+    assert second.location == "Bangalore,Hyderabad" and "Python" in first.stack_words

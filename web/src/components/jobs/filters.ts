@@ -19,6 +19,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   weworkremotely: "We Work Remotely",
   workingnomads: "Working Nomads",
   hn: "Hacker News",
+  instahyre: "Instahyre",
   greenhouse: "Greenhouse",
   lever: "Lever",
   ashby: "Ashby",

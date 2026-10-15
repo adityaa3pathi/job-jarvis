@@ -26,6 +26,7 @@ KNOWN_BOARD_HOSTS = frozenset(
         "bebee.com", "www.switchly.in", "www.jobleads.com", "wellfound.com", "www.ycombinator.com",
         "www.linkedin.com", "in.linkedin.com", "himalayas.app", "remoteok.com", "jobicy.com",
         "remotive.com", "weworkremotely.com", "www.workingnomads.com", "hn.algolia.com",
+        "www.instahyre.com",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3

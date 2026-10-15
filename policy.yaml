@@ -7,7 +7,7 @@ portals:
   naukri: {mode: discover_only, live: false, discover: false, notes: "High: bot shield, terms unreadable"}
   foundit: {mode: discover_only, live: false, discover: false, notes: "High: 403 to plain requests"}
   wellfound: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "High: terms bar scraping; owner chose to read India role pages (robots.txt allows), listing only, never apply"}
-  instahyre: {mode: discover_only, live: false, discover: false, notes: "Pages show a Cloudflare check (403, 15-10-2026); only its internal API answers. Owner chose to skip it (15-10-2026)"}
+  instahyre: {mode: discover_only, live: false, discover: true, discover_pause_s: 6, notes: "Medium; pages are Cloudflare-walled; owner chose 15-10-2026 to read its logged-out job search data, slow, read-only, never log in or apply"}
   hirist: {mode: discover_only, live: false, discover: true, discover_pause_s: 10, notes: "Medium; reads the site's own search JSON, robots.txt Crawl-delay 10"}
   cutshort: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; role pages only, robots.txt bans free-text search"}
   peerlist: {mode: discover_only, live: false, discover: false, notes: "Medium; Cloudflare bot check on every page"}

@@ -52,7 +52,7 @@ def load_companies(path: Path) -> list[Company]:
 Board = Literal[
     "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc",
     "linkedin", "himalayas", "remoteok", "jobicy", "remotive", "weworkremotely",
-    "workingnomads", "hn",
+    "workingnomads", "hn", "instahyre",
 ]  # fmt: skip
 _TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+-]{0,59}$")
 

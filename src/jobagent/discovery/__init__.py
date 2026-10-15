@@ -22,6 +22,7 @@ from jobagent.discovery.greenhouse import GreenhouseAdapter
 from jobagent.discovery.himalayas import HimalayasAdapter
 from jobagent.discovery.hirist import HiristAdapter
 from jobagent.discovery.hn import HnAdapter
+from jobagent.discovery.instahyre import InstahyreAdapter
 from jobagent.discovery.jobgether import JobgetherAdapter
 from jobagent.discovery.jobicy import JobicyAdapter
 from jobagent.discovery.jobleads import JobleadsAdapter
@@ -51,7 +52,7 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         JobgetherAdapter(), HiristAdapter(), CutshortAdapter(), BebeeAdapter(),
         SwitchlyAdapter(), JobleadsAdapter(), WellfoundAdapter(), YcAdapter(), LinkedinAdapter(),
         HimalayasAdapter(), RemoteokAdapter(), JobicyAdapter(), RemotiveAdapter(),
-        WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(),
+        WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
     )
 }  # fmt: skip
 

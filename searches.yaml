@@ -1,6 +1,6 @@
-# Free keywords: jobgether, linkedin, hirist, jobleads, himalayas, jobicy, hn. The board's own slug
-# (spaces become hyphens): cutshort, bebee, switchly, wellfound, remoteok (tag), remotive and
-# weworkremotely (category). yc: a location slug. workingnomads: a category name.
+# Free keywords: jobgether, linkedin, hirist, jobleads, himalayas, jobicy, hn, instahyre.
+# The board's own slug (spaces become hyphens): cutshort, bebee, switchly, wellfound, remoteok
+# (tag), remotive and weworkremotely (category). yc: location slug. workingnomads: category name.
 searches:
   - {board: jobgether, term: full stack developer}
   - {board: jobgether, term: ai engineer}
@@ -94,3 +94,9 @@ searches:
   - {board: weworkremotely, term: remote-front-end-programming-jobs}
   - {board: workingnomads, term: development}
   - {board: hn, term: remote}
+  - {board: instahyre, term: python}
+  - {board: instahyre, term: full stack}
+  - {board: instahyre, term: react}
+  - {board: instahyre, term: node}
+  - {board: instahyre, term: machine learning}
+  - {board: instahyre, term: generative ai}
