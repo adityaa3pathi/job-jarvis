@@ -112,7 +112,19 @@ export type Job = {
   drop_reason: string | null;
   score: number | null;
   url: string | null;
+  min_years: number | null;
+  max_years: number | null;
+  role: string;
+  work_mode: string;
+  city: string;
 };
+
+/** One page of `GET /api/jobs`; `sources` counts ignore the source filter, zeros left out. */
+export type JobPage = { items: Job[]; total: number; sources: Record<string, number> };
+
+export type Facet = { name: string; count: number };
+
+export type JobFacets = { companies: Facet[]; cities: Facet[] };
 
 export type PortalCounts = { read: number; new: number; saved: number };
 
