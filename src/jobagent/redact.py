@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from collections.abc import Iterable
+from contextvars import ContextVar
+from datetime import UTC, datetime
 
 _PATTERNS = [
     re.compile(r"bot[0-9]+:[A-Za-z0-9_-]{10,}"),
@@ -17,6 +20,9 @@ _PATTERNS = [
 _URL_QUERY = re.compile(r"(https?://[^\s?#\"'<>]+)\?[^\s\"'<>]*")
 _SECRET_NAME = re.compile(r"(TOKEN|KEY|SECRET|PASSWORD|CHAT_ID)", re.IGNORECASE)
 MASK = "[REDACTED]"
+# Set per web request (and copied into its background task) so every line can be joined up.
+request_id: ContextVar[str] = ContextVar("request_id", default="")
+UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
 
 
 class Redactor:
@@ -46,12 +52,49 @@ class RedactingFormatter(logging.Formatter):
         return self._redactor(super().format(record))
 
 
-def configure_logging(redactor: Redactor, level: int = logging.INFO) -> None:
+class RequestIdFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not getattr(record, "request_id", ""):
+            record.request_id = request_id.get()
+        return True
+
+
+class JsonFormatter(logging.Formatter):
+    """One JSON object per line. Each text field is redacted before encoding, so JSON
+    escaping cannot hide a secret from the redactor."""
+
+    def __init__(self, redactor: Redactor) -> None:
+        super().__init__()
+        self._redactor = redactor
+
+    def format(self, record: logging.LogRecord) -> str:
+        line: dict[str, str] = {
+            "ts": datetime.fromtimestamp(record.created, UTC).isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": self._redactor(record.getMessage()),
+        }
+        if rid := getattr(record, "request_id", "") or request_id.get():
+            line["request_id"] = rid
+        if record.exc_info:
+            line["exc"] = self._redactor(self.formatException(record.exc_info))
+        return json.dumps(line, ensure_ascii=False)
+
+
+def configure_logging(
+    redactor: Redactor, level: int = logging.INFO, *, json_lines: bool = False
+) -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(RedactingFormatter(redactor))
+    formatter = JsonFormatter(redactor) if json_lines else RedactingFormatter(redactor)
+    handler.setFormatter(formatter)
+    handler.addFilter(RequestIdFilter())
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    # uvicorn installs its own unredacted handlers; send its lines through ours instead.
+    for name in UVICORN_LOGGERS:
+        logging.getLogger(name).handlers[:] = []
+        logging.getLogger(name).propagate = True
     # HTTP client loggers print full URLs, so keep them quiet.
     for name in ("httpx", "httpcore", "urllib3"):
         logging.getLogger(name).setLevel(logging.WARNING)

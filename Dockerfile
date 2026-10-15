@@ -28,4 +28,6 @@ RUN python -c "from pathlib import Path; from jobagent.web.app import compile_pd
 compile_pdf(Path('/tmp/warm/resume.tex').read_text(), timeout=1200)" && rm -rf /tmp/warm
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+# On Render set FORWARDED_ALLOW_IPS=* : Render only accepts traffic through its own proxy,
+# whose address is not fixed. Login keys come from headers Vercel writes (see login_key).
+CMD ["sh", "-c", "uvicorn --factory jobagent.web.app:app_from_env --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\" --timeout-graceful-shutdown 20"]

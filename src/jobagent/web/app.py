@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -14,9 +15,9 @@ import tempfile
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Iterator
+from collections.abc import AsyncIterator, Callable, Hashable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
@@ -27,7 +28,9 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Respo
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
+from jobagent import __version__
 from jobagent import db as jobs_module
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
 from jobagent.db import OWNER, Database
@@ -35,10 +38,11 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
-from jobagent.llm import LLM, LLMError, usage_sink
+from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
 from jobagent.policy import Policy, clear_kill_switch
+from jobagent.redact import request_id
 from jobagent.resume.coach import (
     MAX_JD_CHARS,
     CoachReport,
@@ -55,10 +59,20 @@ from jobagent.resume.pipeline import run_tailor
 from jobagent.runs import RunTally, save_portal
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.store import Store, profile_from_json, profile_to_json
-from jobagent.web.uploads import MAX_UPLOAD_BYTES, UploadError, doc_to_text
+from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadError, doc_to_text
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_WINDOW_S = 900
+MAX_GLOBAL_FAILURES = 30  # across all keys, so rotating addresses cannot brute-force
+GLOBAL_WINDOW_S = 3600
+LOGIN_CHECKS = 2  # scrypt needs 16 MB each; a burst must not exhaust 512 MB
+LOGIN_WAIT_S = 3.0
+HEALTH_TIMEOUT_S = 3.0
+SHUTDOWN_WAIT_S = 10.0
+SHUTDOWN_ERROR = "server shutting down"
+REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+PDF_ENV = ("PATH", "HOME", "TMPDIR", "LANG")  # Tectonic must never see the app's secrets
+RUN_FIELDS = ("id", "status", "started_at", "finished_at", "error")
 PDF_TIMEOUT_S = 120
 MAX_TASKS = 50
 TASK_DEADLINE_S = 600.0  # free-tier retries can stall an AI step for tens of minutes
@@ -88,6 +102,7 @@ class WebConfig:
     ping: Callable[[str], object] = field(default=lambda url: httpx.get(url, timeout=30))
     ping_every_s: float = PING_EVERY_S
     task_deadline_s: float = TASK_DEADLINE_S
+    shutdown_wait_s: float = SHUTDOWN_WAIT_S
 
 
 def keep_awake(
@@ -149,7 +164,7 @@ class Mark(BaseModel):
 
 
 class SummaryIn(BaseModel):
-    summary: str = Field(max_length=100_000)
+    summary: str = Field(max_length=MAX_SUMMARY_CHARS)
 
 
 class CoachIn(BaseModel):
@@ -239,6 +254,49 @@ def _not_modified(request: Request, response: Response, version: int) -> Respons
     return None
 
 
+def login_key(request: Request) -> tuple[str, str]:
+    """Who is logging in, and which header said so. Browsers reach us through Vercel, whose
+    edge writes the client address; in X-Forwarded-For the right-most hop is Vercel itself."""
+    vercel = request.headers.get("x-vercel-forwarded-for", "").split(",")[0].strip()
+    if vercel:
+        return vercel, "x-vercel-forwarded-for"
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",")]
+    hops = [h for h in hops if h]
+    if len(hops) >= 2:
+        return hops[-2], "x-forwarded-for"
+    return (request.client.host if request.client else "?"), "client"
+
+
+def mask_ip(ip: str) -> str:
+    if ip.count(".") == 3:
+        return ip.rsplit(".", 1)[0] + ".x"
+    if ":" in ip:
+        return ":".join(ip.split(":")[:3]) + ":x"
+    return "?"
+
+
+def db_ping(db: Database) -> None:
+    db.conn.execute("SELECT 1").fetchone()
+
+
+def _db_up(handles: _Handles[Database], timeout_s: float = HEALTH_TIMEOUT_S) -> bool:
+    """A hung Turso call must not hang the health check, so it runs on its own thread."""
+    up: list[bool] = []
+
+    def check() -> None:
+        try:
+            with handles.borrow() as db:
+                db_ping(db)
+            up.append(True)
+        except Exception as exc:
+            log.warning("health: database check failed: %s", short_cause(exc))
+
+    thread = threading.Thread(target=check, daemon=True)
+    thread.start()
+    thread.join(timeout_s)
+    return bool(up)
+
+
 def _jobs_db(request: Request) -> Iterator[Database]:
     handles: _Handles[Database] = request.app.state.jobs_db
     with handles.borrow() as db:
@@ -259,7 +317,15 @@ ST = Annotated[Store, Depends(_store)]
 def create_app(cfg: WebConfig) -> FastAPI:
     if not cfg.owner_hash or not cfg.session_secret:
         raise RuntimeError("JOBAGENT_OWNER_HASH and JOBAGENT_SESSION_SECRET must be set")
-    app = FastAPI(title="job-agent", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        await run_in_threadpool(shutdown)
+
+    app = FastAPI(
+        title="job-agent", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
+    )
     app.add_middleware(GZipMiddleware, minimum_size=GZIP_MIN_BYTES)
     app.state.settings = cfg.settings
     settings = cfg.settings
@@ -276,8 +342,12 @@ def create_app(cfg: WebConfig) -> FastAPI:
             log.warning("index %s was missing; created it", name)
     counts = _TTLCache()
     failures: dict[str, list[float]] = {}
+    all_failures: list[float] = []
     failures_lock = threading.Lock()
+    checks = threading.BoundedSemaphore(LOGIN_CHECKS)
+    key_logged = threading.Event()
     discover_state = _DiscoverState()
+    closing = threading.Event()
 
     def db_stopped() -> bool:
         with stores.borrow() as st:
@@ -293,9 +363,15 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     Owner = Depends(owner)
 
+    @app.get("/api/health/live")
+    def live() -> dict[str, bool]:
+        return {"ok": True}  # never touches the DB: cheap enough for frequent pings
+
     @app.get("/api/health")
-    def health() -> dict[str, str]:
-        return {"ok": "yes"}
+    def health() -> JSONResponse:
+        up = _db_up(jobs_db)
+        body = {"ok": up, "db": "ok" if up else "down", "version": __version__}
+        return JSONResponse(body, status_code=200 if up else 503)
 
     @app.middleware("http")
     async def upload_limit(request: Request, call_next: Any) -> Any:
@@ -306,21 +382,55 @@ def create_app(cfg: WebConfig) -> FastAPI:
             return JSONResponse({"detail": "file is larger than 5 MB"}, status_code=413)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def request_ids(request: Request, call_next: Any) -> Any:
+        # Added last, so it runs first: even refused uploads get an id.
+        given = request.headers.get("x-request-id", "")
+        rid = given if REQUEST_ID.fullmatch(given) else secrets.token_hex(8)
+        token = request_id.set(rid)
+        try:
+            response = await call_next(request)
+        finally:
+            request_id.reset(token)
+        response.headers["X-Request-ID"] = rid
+        return response
+
+    def _forget(who: str, at: float) -> None:
+        with failures_lock:
+            for seen in (failures.get(who, []), all_failures):
+                if at in seen:
+                    seen.remove(at)
+
     @app.post("/api/login")
     def login(body: Login, request: Request, response: Response) -> dict[str, bool]:
-        # Per client, so strangers cannot lock the owner out; --proxy-headers sets the host.
-        now, who = time.time(), request.client.host if request.client else "?"
+        # Per client, so strangers cannot lock the owner out (KTD8).
+        now, (who, source) = time.time(), login_key(request)
+        if not key_logged.is_set():
+            key_logged.set()
+            log.info("login key comes from %s: %s", source, mask_ip(who))
         with failures_lock:
             for key in list(failures):
                 failures[key] = [t for t in failures[key] if now - t < LOGIN_WINDOW_S]
                 if not failures[key]:
                     del failures[key]
+            all_failures[:] = [t for t in all_failures if now - t < GLOBAL_WINDOW_S]
             if len(failures.get(who, [])) >= MAX_LOGIN_FAILURES:
                 raise HTTPException(429, "too many attempts, wait 15 minutes")
-        if not verify_password(body.password, cfg.owner_hash):
-            with failures_lock:
-                failures.setdefault(who, []).append(now)
+            if len(all_failures) >= MAX_GLOBAL_FAILURES:
+                raise HTTPException(429, "too many failed logins lately, wait an hour")
+            # Counted before the check, so a burst cannot all slip past the limit.
+            failures.setdefault(who, []).append(now)
+            all_failures.append(now)
+        if not checks.acquire(timeout=LOGIN_WAIT_S):
+            _forget(who, now)
+            raise HTTPException(429, "login is busy, try again in a moment")
+        try:
+            ok = verify_password(body.password, cfg.owner_hash)
+        finally:
+            checks.release()
+        if not ok:
             raise HTTPException(401, "wrong password")
+        _forget(who, now)
         response.set_cookie(
             COOKIE, make_token(cfg.session_secret), max_age=SESSION_TTL_S,
             httponly=True, secure=cfg.cookie_secure, samesite="lax",
@@ -498,6 +608,11 @@ def create_app(cfg: WebConfig) -> FastAPI:
             raise HTTPException(400, str(exc)) from exc
         if not text:
             raise HTTPException(400, "no text found in the file")
+        if len(text) > MAX_SUMMARY_CHARS:
+            raise HTTPException(
+                422, f"the summary has {len(text):,} characters; the limit is "
+                f"{MAX_SUMMARY_CHARS:,}. Shorten it and upload again.",
+            )  # fmt: skip
         st.save_profile(summary=text)
         return {"chars": len(text), "summary": text}
 
@@ -526,7 +641,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 task.status = "failed" if error else "done"
 
     def submit(work: Callable[[Store, threading.Event], dict[str, Any]]) -> dict[str, str]:
+        if closing.is_set():
+            raise HTTPException(503, "the server is shutting down; try again in a minute")
         task_id, task, cancelled = secrets.token_hex(8), _Task(), threading.Event()
+        rid = request_id.get()
         with tasks_lock:
             finished = [k for k, v in tasks.items() if v.status != "running"]
             for key in finished[: max(0, len(tasks) - MAX_TASKS)]:
@@ -534,8 +652,17 @@ def create_app(cfg: WebConfig) -> FastAPI:
             tasks[task_id] = task
 
         def body() -> None:
+            request_id.set(rid)  # a new thread starts with an empty context
+            used = {"calls": 0, "tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "ms": 0}
+
+            def record(usage: Usage, st: Store) -> None:
+                used["calls"] += 1
+                for name in ("tokens_in", "tokens_out", "tokens_cached", "ms"):
+                    used[name] += getattr(usage, name)
+                st.add_usage(usage)
+
             try:
-                with stores.borrow() as st, usage_sink(st.add_usage):
+                with stores.borrow() as st, usage_sink(lambda u: record(u, st)):
                     finish(task, 0, "", work(st, cancelled))
             except _Abandoned:
                 log.warning("background task %s ended after its deadline; nothing saved", task_id)
@@ -544,8 +671,12 @@ def create_app(cfg: WebConfig) -> FastAPI:
             except Exception as exc:  # report, never crash the worker
                 log.exception("background task %s failed", task_id)
                 finish(task, 500, f"{type(exc).__name__}: {exc}"[:500])
+            finally:
+                summary = " ".join(f"{k}={v}" for k, v in used.items())
+                log.info("task %s AI usage: %s", task_id, summary)
 
         def run() -> None:
+            request_id.set(rid)
             # A thread cannot be killed; past the deadline we stop waiting and free the worker.
             worker = threading.Thread(target=body, daemon=True)
             worker.start()
@@ -558,6 +689,33 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
         pool.submit(run)
         return {"task_id": task_id}
+
+    def shutdown() -> None:
+        """Deploys send SIGTERM: refuse new work, give running work a moment, then record
+        what was cut off so the owner is not left looking at a run that never ends."""
+        closing.set()
+        end = time.monotonic() + cfg.shutdown_wait_s
+        while time.monotonic() < end:
+            with tasks_lock:
+                busy = any(t.status == "running" for t in tasks.values())
+            if not busy and not discover_state.running:
+                break
+            time.sleep(0.05)
+        if discover_state.running:
+            try:
+                with stores.borrow() as st:
+                    current = st.runs()["current"]
+                    if current:
+                        counts = {k: v for k, v in current.items() if k not in RUN_FIELDS}
+                        st.finish_run(current["id"], "failed", SHUTDOWN_ERROR, counts)
+                log.warning("discovery run marked failed: %s", SHUTDOWN_ERROR)
+            except Exception:
+                log.exception("could not mark the discovery run failed at shutdown")
+        with tasks_lock:
+            running = [t for t in tasks.values() if t.status == "running"]
+        for task in running:
+            finish(task, 503, f"{SHUTDOWN_ERROR}; try again in a minute")
+        pool.shutdown(wait=False, cancel_futures=True)
 
     @app.get("/api/tasks/{task_id}", dependencies=[Owner])
     def task_status(task_id: str) -> dict[str, Any]:
@@ -792,10 +950,11 @@ def compile_pdf(tex: str, timeout: float = PDF_TIMEOUT_S) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "resume.tex"
         src.write_text(XETEX_SHIM + tex)
+        env = {name: value for name in PDF_ENV if (value := os.environ.get(name))}
         try:
             done = subprocess.run(
                 [binary, "--untrusted", "--outdir", tmp, str(src)],
-                capture_output=True, timeout=timeout, check=False,
+                capture_output=True, timeout=timeout, check=False, env=env,
             )  # fmt: skip
         except subprocess.TimeoutExpired as exc:
             raise HTTPException(504, "PDF build timed out") from exc
@@ -808,11 +967,14 @@ def compile_pdf(tex: str, timeout: float = PDF_TIMEOUT_S) -> bytes:
 
 def app_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn --factory jobagent.web.app:app_from_env`."""
-    from jobagent.config import load_settings
+    from jobagent.config import check_config, load_settings
     from jobagent.llm import GeminiLLM
     from jobagent.redact import Redactor, configure_logging
 
-    configure_logging(Redactor.from_environment())  # task tracebacks reach the host's logs
+    # Task tracebacks reach the host's logs, one JSON object per line.
+    configure_logging(Redactor.from_environment(), json_lines=True)
+    check_config()
+    log.info("database: %s", "turso" if os.environ.get("TURSO_DATABASE_URL") else "local file")
     settings = load_settings()
     return create_app(
         WebConfig(

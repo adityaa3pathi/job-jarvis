@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
@@ -118,6 +119,28 @@ def load_secrets(settings: Settings, *, export: bool = True) -> dict[str, str]:
     if export:
         os.environ.update(values)
     return values
+
+
+REQUIRED_ENV = ("JOBAGENT_OWNER_HASH", "JOBAGENT_SESSION_SECRET")
+PRODUCTION_ENV = ("TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "GEMINI_API_KEY")
+REMOTE_DB_SCHEMES = ("libsql://", "https://", "http://", "wss://", "ws://")
+
+
+def is_production(env: Mapping[str, str]) -> bool:
+    """Render sets RENDER on every service; JOBAGENT_ENV covers any other host."""
+    return bool(env.get("RENDER")) or env.get("JOBAGENT_ENV", "").lower() == "production"
+
+
+def check_config(env: Mapping[str, str] = os.environ) -> None:
+    """Refuse to start with one error naming every missing setting. In production the
+    database must be remote: a local file on a free host is wiped on the next restart."""
+    needed = [*REQUIRED_ENV, *(PRODUCTION_ENV if is_production(env) else ())]
+    missing = [name for name in needed if not env.get(name, "").strip()]
+    if missing:
+        raise ConfigError(f"missing required settings: {', '.join(missing)}")
+    url = env.get("TURSO_DATABASE_URL", "").strip().lower()
+    if is_production(env) and not url.startswith(REMOTE_DB_SCHEMES):
+        raise ConfigError("TURSO_DATABASE_URL must be a remote database URL (libsql://...)")
 
 
 def ensure_data_dir(settings: Settings) -> Path:
