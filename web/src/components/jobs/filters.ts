@@ -23,6 +23,7 @@ export const ROLE_LABELS: Record<string, string> = {
   backend: "Backend",
   frontend: "Frontend",
   mobile: "Mobile",
+  software: "Software (general)",
   other: "Other",
 };
 

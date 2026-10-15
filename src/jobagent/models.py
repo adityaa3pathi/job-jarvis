@@ -47,7 +47,7 @@ class Posting(BaseModel):
 
 
 ListStatus = Literal["found", "applied", "interview", "rejected", "dropped", "closed"]
-RoleGroup = Literal["ai_ml", "full_stack", "backend", "frontend", "mobile", "other"]
+RoleGroup = Literal["ai_ml", "full_stack", "backend", "frontend", "mobile", "software", "other"]
 WorkMode = Literal["remote", "hybrid", "onsite", "unknown"]
 DATE_WINDOWS = (1, 3, 7, 30)
 

@@ -19,6 +19,9 @@ ROLE_RULES: tuple[tuple[Role, str], ...] = (
     ("backend", r"back[- ]?end|server[- ]side|api (?:developer|engineer)|golang|django"
                 r"|(?:node|python|java|go)(?:[ .]?js)? (?:developer|engineer)"),
     ("full_stack", r"full[- ]?stack|mern|mean stack"),
+    # Generic engineering titles last, so any specific group above wins.
+    ("software", r"software (?:engineer|developer|development engineer)|sde(?: ?[1-3i]+)?"
+                 r"|sdet|product engineer|application developer|programmer"),
 )  # fmt: skip
 _ROLES = [(role, re.compile(rf"(?<![a-z0-9])(?:{rx})(?![a-z0-9])")) for role, rx in ROLE_RULES]
 
