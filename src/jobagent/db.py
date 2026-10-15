@@ -7,7 +7,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, get_args
@@ -21,7 +21,7 @@ from jobagent.dedupe import (
 )
 from jobagent.models import DropReason, JobFilters, JobStatus, Posting
 from jobagent.rules import RULES_VERSION, check_hard_rules, years_asked
-from jobagent.sqlconn import connect
+from jobagent.sqlconn import chunks, connect, marks
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -124,6 +124,24 @@ class ApplicationResult:
 
 _Job = dict[str, Any]  # a jobs row read up front, kept current as the batch writes
 CHUNK = 500  # stays under SQLite's limit on `?` marks in one statement
+# The columns a new job is saved with; every column a refresh can change is among them.
+JOB_INSERT = (
+    "key", "company", "title", "location", "experience_text", "stack_words", "description",
+    "posted_date", "seen_date", "source", "status", "drop_reason", "rules_version", "desc_hash",
+    *DERIVED,
+)  # fmt: skip
+
+
+@dataclass
+class _Writes:
+    """A batch's writes, sent once it is planned so each kind is one statement per chunk.
+    New jobs carry negative ids until their insert returns the real ones."""
+
+    new: list[_Job] = field(default_factory=list)
+    first_link: dict[int, str] = field(default_factory=dict)  # new job -> its own URL
+    links: list[tuple[int, str, str, str]] = field(default_factory=list)
+    updates: dict[int, dict[str, object]] = field(default_factory=dict)
+    events: list[tuple[int, str | None, str, str]] = field(default_factory=list)
 
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -148,7 +166,7 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _chunks(items: list[str]) -> list[list[str]]:
+def _chunks(items: list[Any]) -> list[list[Any]]:
     return [items[i : i + CHUNK] for i in range(0, len(items), CHUNK)]
 
 
@@ -341,6 +359,20 @@ def _stale_derived(job: Mapping[str, Any]) -> dict[str, object]:
     return {c: v for c, v in derive(job).items() if job[c] != v}
 
 
+def _may_need_text(row: Mapping[str, Any], posting: Posting) -> bool:
+    """Whether a refresh may re-judge or re-derive this job from its stored text."""
+    if row["pruned_at"]:
+        return False
+    stale = (
+        row["status"] == "dropped" and row["drop_reason"] in RULE_REASONS
+        and row["rules_version"] < RULES_VERSION
+    )  # fmt: skip
+    posted = posting.posted_date.isoformat() if posting.posted_date else None
+    retitled = bool(posted and posted != row["posted_date"] and posting.title != row["title"])
+    filled = bool(posting.experience_text and not row["experience_text"])
+    return stale or row["role"] == "" or retitled or filled
+
+
 class Database:
     def __init__(self, path: Path | str, max_years_asked: int = 5, *, schema: bool = True) -> None:
         self.conn = connect(path)
@@ -381,20 +413,102 @@ class Database:
             for p in postings
         ]
         by_url, by_key = self._known(keyed)
-        bumps: list[tuple[str, int]] = []
         with self.conn:
-            out = [
-                self._upsert(p, norm, key, seen, by_url, by_key, bumps) for p, norm, key in keyed
-            ]
-            if bumps:
-                self.conn.executemany(
-                    "UPDATE jobs SET seen_date=?, missed_runs=0 WHERE id=?", bumps
-                )
+            out = self._save(keyed, seen, by_url, by_key)
             if out:
                 bump_version(self.conn)
         return out
 
+    def _save(
+        self, keyed: list[tuple[Posting, str, str]], seen: str,
+        by_url: dict[str, _Job], by_key: dict[str, _Job],
+    ) -> list[UpsertResult]:  # fmt: skip
+        self._fetch_text(keyed, by_url, by_key)
+        w = _Writes()
+        out = [self._upsert(p, norm, key, seen, by_url, by_key, w) for p, norm, key in keyed]
+        ids = self._insert_jobs(w.new)
+
+        def real(job_id: int) -> int:
+            return ids.get(job_id, job_id)
+
+        linked = self._insert_links([(real(j), s, url, n) for j, s, url, n in w.links])
+        # Another handle saved one of these URLs after our read: drop our copy, save again.
+        lost = {tmp for tmp, norm in w.first_link.items() if norm not in linked}
+        if lost:
+            gone = [(ids[tmp],) for tmp in lost]
+            self.conn.executemany("DELETE FROM job_links WHERE job_id=?", gone)
+            self.conn.executemany("DELETE FROM jobs WHERE id=?", gone)
+        self._write_updates(w.updates)
+        self._events([(real(j), old, new, note) for j, old, new, note in w.events if j not in lost])
+        redo = [i for i, r in enumerate(out) if r.job_id in lost]
+        if redo:
+            again = [keyed[i] for i in redo]
+            for i, r in zip(redo, self._save(again, seen, *self._read_known(again)), strict=True):
+                out[i] = r
+        return [replace(r, job_id=real(r.job_id)) for r in out]
+
+    def _insert_jobs(self, rows: list[_Job]) -> dict[int, int]:
+        """Real ids by temporary id. SQLite leaves the order of RETURNING rows unspecified,
+        so they are matched by dedupe key, which no two new jobs of a batch share."""
+        ids: dict[int, int] = {}
+        for chunk in chunks(rows, len(JOB_INSERT)):
+            temp = {row["key"]: row["id"] for row in chunk}
+            cur = self.conn.execute(
+                f"INSERT INTO jobs({', '.join(JOB_INSERT)})"
+                f" VALUES {marks(len(chunk), len(JOB_INSERT))} RETURNING id, key",
+                tuple(row[col] for row in chunk for col in JOB_INSERT),
+            )
+            ids |= {temp[got["key"]]: int(got["id"]) for got in cur.fetchall()}
+        return ids
+
+    def _insert_links(self, links: list[tuple[int, str, str, str]]) -> set[str]:
+        """The normalised URLs saved; one already linked to a job is left as it is."""
+        saved: set[str] = set()
+        for chunk in chunks(links, 4):
+            cur = self.conn.execute(
+                "INSERT INTO job_links(job_id, source, url, norm_url)"
+                f" VALUES {marks(len(chunk), 4)}"
+                " ON CONFLICT(norm_url) DO NOTHING RETURNING norm_url",
+                tuple(v for link in chunk for v in link),
+            )
+            saved |= {row[0] for row in cur.fetchall()}
+        return saved
+
+    def _write_updates(self, updates: Mapping[int, Mapping[str, object]]) -> None:
+        """One statement per set of changed columns, not one per job."""
+        groups: dict[tuple[str, ...], list[tuple[object, ...]]] = {}
+        for job_id, changes in updates.items():
+            cols = tuple(sorted(changes))
+            groups.setdefault(cols, []).append((*(changes[c] for c in cols), job_id))
+        for cols, rows in groups.items():
+            sets = ", ".join(f"{col}=?" for col in cols)
+            self.conn.executemany(f"UPDATE jobs SET {sets} WHERE id=?", rows)
+
+    def _fetch_text(
+        self, keyed: list[tuple[Posting, str, str]],
+        by_url: dict[str, _Job], by_key: dict[str, _Job],
+    ) -> None:  # fmt: skip
+        """Stored text of the known jobs this batch may re-judge or re-derive, read in
+        chunks up front instead of once per job (`_with_text` stays the fallback)."""
+        rows = [
+            row for p, norm, key in keyed
+            if (row := by_url.get(norm) or by_key.get(key))
+            and "description" not in row and _may_need_text(row, p)
+        ]  # fmt: skip
+        text: dict[int, str] = {}
+        for chunk in _chunks(sorted({row["id"] for row in rows})):
+            sql = f"SELECT id, description FROM jobs WHERE id IN ({','.join('?' * len(chunk))})"
+            text |= {r["id"]: r["description"] for r in self.conn.execute(sql, chunk).fetchall()}
+        for row in rows:
+            row["description"] = text.get(row["id"], "")
+
     def _known(
+        self, keyed: list[tuple[Posting, str, str]]
+    ) -> tuple[dict[str, _Job], dict[str, _Job]]:
+        """The batch's preload; after a lost race `_save` reads again with `_read_known`."""
+        return self._read_known(keyed)
+
+    def _read_known(
         self, keyed: list[tuple[Posting, str, str]]
     ) -> tuple[dict[str, _Job], dict[str, _Job]]:
         by_url: dict[str, _Job] = {}
@@ -417,14 +531,14 @@ class Database:
 
     def _upsert(
         self, posting: Posting, norm: str, key: str, seen: str,
-        by_url: dict[str, _Job], by_key: dict[str, _Job], bumps: list[tuple[str, int]],
+        by_url: dict[str, _Job], by_key: dict[str, _Job], w: _Writes,
     ) -> UpsertResult:  # fmt: skip
         if row := by_url.get(norm):
-            return self._refresh(row, posting, seen, bumps)
+            return self._refresh(row, posting, seen, w)
         if row := by_key.get(key):
-            self._add_link(row["id"], posting, norm)
+            w.links.append((row["id"], posting.source, posting.url, norm))
             by_url[norm] = row
-            return replace(self._refresh(row, posting, seen, bumps), outcome="merged")
+            return replace(self._refresh(row, posting, seen, w), outcome="merged")
         reason = check_hard_rules(posting, self.max_years_asked)
         status = "dropped" if reason else "found"
         posted = posting.posted_date.isoformat() if posting.posted_date else None
@@ -437,34 +551,15 @@ class Database:
             "desc_hash": text_hash(posting.description),
         }  # fmt: skip
         row |= derive(row)
-        cur = self.conn.execute(
-            f"INSERT INTO jobs({', '.join(row)}) VALUES ({','.join('?' * len(row))})",
-            tuple(row.values()),
-        )
-        job_id = int(cur.lastrowid or 0)
-        if not self._add_link(job_id, posting, norm):
-            # Another handle saved this URL after our read: keep its row, not a linkless copy.
-            self.conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
-            found = self.conn.execute(
-                f"SELECT {LEAN} FROM jobs j JOIN job_links l ON l.job_id=j.id WHERE l.norm_url=?",
-                (norm,),
-            ).fetchone()
-            by_url[norm] = dict(found)
-            return self._refresh(by_url[norm], posting, seen, bumps)
-        self._event(job_id, None, status, reason or "")
-        row |= {"id": job_id, "missed_runs": 0, "pruned_at": None}
+        temp = -1 - len(w.new)
+        row |= {"id": temp, "missed_runs": 0, "pruned_at": None}
+        w.new.append(row)
+        w.first_link[temp] = norm
+        w.links.append((temp, posting.source, posting.url, norm))
+        w.events.append((temp, None, status, reason or ""))
         by_url[norm] = row
         by_key.setdefault(key, row)
-        return UpsertResult(job_id, "new", status, reason)
-
-    def _add_link(self, job_id: int, posting: Posting, norm: str) -> bool:
-        """False when the URL is already linked to a job."""
-        cur = self.conn.execute(
-            "INSERT INTO job_links(job_id, source, url, norm_url) VALUES (?,?,?,?)"
-            " ON CONFLICT(norm_url) DO NOTHING",
-            (job_id, posting.source, posting.url, norm),
-        )
-        return cur.rowcount > 0
+        return UpsertResult(temp, "new", status, reason)
 
     def _judge(self, job: _Job) -> tuple[dict[str, object], tuple[str, str, str] | None]:
         """Hard rules on a stored row: the column changes and the status event, if any."""
@@ -490,9 +585,7 @@ class Database:
         got = self.conn.execute("SELECT description FROM jobs WHERE id=?", (job["id"],)).fetchone()
         return job | {"description": got["description"] if got else ""}
 
-    def _refresh(
-        self, row: _Job, posting: Posting, seen: str, bumps: list[tuple[str, int]]
-    ) -> UpsertResult:
+    def _refresh(self, row: _Job, posting: Posting, seen: str, w: _Writes) -> UpsertResult:
         """A known job seen again: take richer text, re-run stale or new rules, honour closed,
         reopen a job the sweep closed. A status the owner set is never re-judged; a pruned
         job keeps its blank text and its verdict (U4)."""
@@ -532,14 +625,11 @@ class Database:
         # Only new text or a never-derived row can change them; recheck backfills rule changes.
         if not pruned and (row["role"] == "" or moved & set(DERIVED_FROM)):
             changes |= _stale_derived(self._with_text(row | changes))  # current rows keep the bump
-        if len(changes) == 1:
-            bumps.append((seen, row["id"]))
-        else:
-            changes["missed_runs"] = 0
-            sets = ", ".join(f"{col}=?" for col in changes)
-            self.conn.execute(f"UPDATE jobs SET {sets} WHERE id=?", (*changes.values(), row["id"]))
+        changes["missed_runs"] = 0
+        if row["id"] > 0:  # a job new in this batch is saved with its final values instead
+            w.updates.setdefault(row["id"], {}).update(changes)
         for old, new, note in events:
-            self._event(row["id"], old, new, note)
+            w.events.append((row["id"], old, new, note))
             row["last_note"] = note
         row.update(changes)
         outcome: Outcome = "updated" if reposted else "duplicate"
@@ -801,7 +891,7 @@ class Database:
                 "UPDATE applications SET norm_company=?, norm_title=? WHERE id=?", moved
             )
 
-    def _events(self, rows: Sequence[tuple[int, str, str, str]]) -> None:
+    def _events(self, rows: Sequence[tuple[int, str | None, str, str]]) -> None:
         if rows:
             self.conn.executemany(
                 "INSERT INTO events(job_id, at, old_status, new_status, note) VALUES (?,?,?,?,?)",

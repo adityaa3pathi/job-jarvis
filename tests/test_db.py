@@ -92,7 +92,7 @@ def test_existing_posting_costs_at_most_three_calls(counting: list[CountingConn]
         assert calls(db) - before <= 3, again  # read, write, one data-version bump
 
 
-def test_closing_known_jobs_costs_two_calls_each_plus_the_shared_read(
+def test_closing_known_jobs_costs_a_few_calls_for_the_whole_batch(
     counting: list[CountingConn],
 ) -> None:
     db = Database(":memory:")
@@ -100,8 +100,8 @@ def test_closing_known_jobs_costs_two_calls_each_plus_the_shared_read(
     before = calls(db)
     results = db.upsert_many([posting(i, closed=True) for i in range(600)])
     assert {r.status for r in results} == {"closed"}
-    # Update + status event each; two chunked reads; one data-version bump.
-    assert calls(db) - before <= 2 * 600 + 3
+    # Two chunked reads; one shared update; the status events; one data-version bump.
+    assert calls(db) - before <= 5
 
 
 def test_batch_reads_known_rows_once_and_commits_once(counting: list[CountingConn]) -> None:
@@ -610,6 +610,35 @@ def test_stale_rule_drop_is_judged_on_stored_text_when_the_posting_has_none() ->
     again = db.upsert_posting(posting(experience_text=""))  # a list read: no job text
     assert (again.status, again.drop_reason) == ("dropped", "too_senior")
     assert db.get_job(saved.job_id)["description"] == SENIOR_TEXT
+
+
+def test_stale_rule_drops_read_their_text_in_one_call(counting: list[CountingConn]) -> None:
+    db = Database(":memory:")
+    batch = [posting(i, experience_text="", description=SENIOR_TEXT) for i in range(300)]
+    db.upsert_many(batch)
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET rules_version=1")
+    before = calls(db)
+    again = db.upsert_many([posting(i, experience_text="") for i in range(300)])
+    assert {(r.status, r.drop_reason) for r in again} == {("dropped", "too_senior")}
+    assert calls(db) - before <= 6  # two reads, the text read, one update, the version bump
+
+
+def test_a_lost_race_resaves_every_posting_that_used_the_lost_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a, b = Database(tmp_path / "t.db"), Database(tmp_path / "t.db")
+    monkeypatch.setattr(b, "_known", lambda keyed: ({}, {}))  # b read before a committed
+    saved = a.upsert_posting(posting(1))
+    other_board = posting(1, source="cutshort", url="https://cutshort.io/job/x-1")
+    results = b.upsert_many([posting(2), posting(1), posting(1), other_board, posting(3)])
+    assert [r.outcome for r in results] == ["new", "duplicate", "duplicate", "merged", "new"]
+    assert {results[i].job_id for i in (1, 2, 3)} == {saved.job_id}
+    count = lambda t: a.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]  # noqa: E731
+    assert (count("jobs"), count("job_links"), count("events")) == (3, 4, 3)
+    assert len(a.links(saved.job_id)) == 2
+    a.close()
+    b.close()
 
 
 def test_desc_hash_follows_the_stored_text() -> None:
