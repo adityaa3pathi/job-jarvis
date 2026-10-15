@@ -386,3 +386,140 @@ def test_linkedin_searches_load_and_hosts_are_allowed() -> None:
     linkedin = [s.term for s in searches if s.board == "linkedin"]
     assert linkedin and linkedin == [s.term for s in searches if s.board == "jobgether"]
     assert {"www.linkedin.com", "in.linkedin.com"} <= KNOWN_BOARD_HOSTS
+
+
+# --- remote boards and SmartRecruiters (remote and India boards plan) ---
+
+
+def test_himalayas_reads_india_open_jobs(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["himalayas"].url_for(BoardSearch(board="himalayas", term="ai engineer"))
+    assert url == "https://himalayas.app/jobs/api/search?q=ai+engineer&country=IN&page=1"
+    india, anywhere = run("himalayas", "python developer", "himalayas.json", policy)
+    assert (india.title, india.company, india.location) == (
+        "Senior Python Developer", "ITHR Technologies Consulting LLC", "Remote (India)",
+    )  # fmt: skip
+    assert india.posted_date == date(2026, 10, 9) and india.experience_text == "Senior"
+    assert anywhere.location == "Remote (Worldwide)" and anywhere.description
+
+
+def test_remoteok_skips_the_legal_notice_and_keeps_its_own_link(policy: Policy) -> None:
+    first, second = run("remoteok", "python", "remoteok.json", policy)
+    assert (first.title, first.company, first.location) == (
+        "Principal Software Engineer", "Vytalize Health", "Remote (Kansas)",
+    )  # fmt: skip
+    assert first.url.startswith("https://remoteok.com/remote-jobs/")
+    assert second.location == "Remote"
+
+
+def test_jobicy_reads_region_as_remote_location(policy: Policy) -> None:
+    apac, canada = run("jobicy", "python", "jobicy.json", policy)
+    assert (apac.company, apac.location, apac.experience_text) == (
+        "Binance", "Remote (APAC)", "Entry-Level, Junior",
+    )  # fmt: skip
+    assert canada.location == "Remote (Canada)"
+    assert apac.url.startswith("https://jobicy.com/jobs/")
+
+
+def test_remotive_keeps_tech_categories_only(policy: Policy) -> None:
+    (job,) = run("remotive", "software-dev", "remotive.json", policy)
+    assert (job.title, job.company) == ("Senior React Full-stack Developer", "Lemon.io")
+    assert job.location == "Remote (Europe, USA, Canada, APAC)"
+    assert job.url.startswith("https://remotive.com/remote-jobs/")
+
+
+def test_weworkremotely_splits_company_from_title_in_rss(policy: Policy) -> None:
+    first, second = run(
+        "weworkremotely", "remote-full-stack-programming-jobs", "weworkremotely.xml", policy
+    )
+    assert (first.title, first.company, first.location) == (
+        "AI Experience Engineer (Conversational AI)", "Upgrade", "Remote (Anywhere in the World)",
+    )  # fmt: skip
+    assert first.posted_date == date(2026, 10, 15)
+    assert (second.title, second.company) == ("Senior Java Developer", "Twikey")
+
+
+def test_workingnomads_keeps_the_asked_category_only(policy: Policy) -> None:
+    (job,) = run("workingnomads", "development", "workingnomads.json", policy)
+    assert (job.title, job.company) == ("Senior AI Engineer / Architect", "Lemon.io")
+    assert job.location == "Remote (Europe, LATAM, APAC, the U.S., Canada)"
+
+
+def test_hn_finds_this_months_thread_and_keeps_remote_top_level_posts(policy: Policy) -> None:
+    from jobagent.discovery.hn import THREADS
+
+    search = BoardSearch(board="hn", term="remote")
+    adapter = BOARD_ADAPTERS["hn"]
+    adapter._story = "49922569"  # type: ignore[attr-defined]
+    comments = adapter.url_for(search)
+    adapter._story = ""  # type: ignore[attr-defined]
+    f = FakeFetcher(
+        {
+            THREADS: ok("boards/hn_threads.json", THREADS),
+            comments: ok("boards/hn_comments.json", comments),
+        }
+    )
+    res = discover_all([], f, policy, [search])
+    assert f.calls == [THREADS, comments] and res.unreachable == []
+    (job,) = res.postings  # the onsite Helsinki post and the reply are left out
+    assert (job.company, job.location) == ("Irash Tech", "REMOTE (Worldwide)")
+    assert job.title == "Business Development Manager (Freelance, Commission-only)"
+    assert job.url == "https://news.ycombinator.com/item?id=50068986"
+
+
+def test_hn_without_a_hiring_thread_is_unreachable(policy: Policy) -> None:
+    from jobagent.discovery.hn import THREADS
+
+    f = FakeFetcher({THREADS: FetchResult(200, '{"hits": []}', THREADS)})
+    res = discover_all([], f, policy, [BoardSearch(board="hn", term="remote")])
+    assert f.calls == [THREADS] and res.postings == []
+    assert [u.company for u in res.unreachable] == ["hn: remote"]
+
+
+def test_smartrecruiters_reads_india_postings_and_fetches_job_text(policy: Policy) -> None:
+    company = Company(name="Freshworks", ats="smartrecruiters", token="Freshworks")
+    adapter = ADAPTERS["smartrecruiters"]
+    url = adapter.url_for(company)
+    assert url.endswith("/Freshworks/postings?country=in&limit=100&offset=0")
+    api = "https://api.smartrecruiters.com/v1/companies/Freshworks/postings"
+    f = FakeFetcher({
+        url: ok("boards/smartrecruiters.json", url),
+        f"{api}/744000155675855": ok("boards/smartrecruiters_detail.json", api),
+    })  # fmt: skip
+    res = discover_all([company], f, policy)
+    (job,) = res.postings  # the second job's text could not be read, so it waits for next run
+    assert (job.title, job.location) == (
+        "Staff Engineer - Machine Learning",
+        "Bengaluru, KA, India",
+    )
+    assert job.url == "https://jobs.smartrecruiters.com/Freshworks/744000155675855"
+    assert job.description.startswith("The Impact You Will Create")
+
+
+@pytest.mark.parametrize(
+    ("location", "dropped"),
+    [
+        ("Remote (India)", False),
+        ("Remote (Worldwide)", False),
+        ("Remote (Europe, USA, Canada, APAC)", False),
+        ("Remote (Anywhere in the World)", False),
+        ("Remote", False),
+        ("Remote (Canada)", True),
+        ("Remote (USA)", True),
+        ("REMOTE (US only, US time zones; no visa sponsorship)", True),
+    ],
+)
+def test_remote_board_locations_meet_the_india_rule(location: str, dropped: bool) -> None:
+    from jobagent.rules import outside_india
+
+    assert outside_india(location) is dropped
+
+
+def test_instahyre_reads_logged_out_search_data(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["instahyre"].url_for(BoardSearch(board="instahyre", term="full stack"))
+    assert url == "https://www.instahyre.com/api/v1/job_search?skills=full+stack&limit=35&offset=0"
+    first, second = run("instahyre", "python", "instahyre.json", policy)
+    assert (first.title, first.company, first.location) == (
+        "Python Engineer", "Nineleaps", "Bangalore",
+    )  # fmt: skip
+    assert first.url.startswith("https://www.instahyre.com/job-439850-")
+    assert second.location == "Bangalore,Hyderabad" and "Python" in first.stack_words

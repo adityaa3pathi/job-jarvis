@@ -31,7 +31,7 @@ WALL = "bot wall or captcha page"
 
 class Company(BaseModel):
     name: str
-    ats: Literal["greenhouse", "lever", "ashby", "workable"]
+    ats: Literal["greenhouse", "lever", "ashby", "workable", "smartrecruiters"]
     token: str
     region: Literal["us", "eu"] = "us"
     careers_host: str | None = None
@@ -51,7 +51,8 @@ def load_companies(path: Path) -> list[Company]:
 
 Board = Literal[
     "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc",
-    "linkedin",
+    "linkedin", "himalayas", "remoteok", "jobicy", "remotive", "weworkremotely",
+    "workingnomads", "hn", "instahyre",
 ]  # fmt: skip
 _TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+-]{0,59}$")
 
@@ -373,3 +374,11 @@ def _ask_if_changed(cached: Validators) -> dict[str, str]:
 
 def parse_json(text: str) -> Any:
     return json.loads(text)
+
+
+def remote_at(where: str) -> str:
+    """Remote-only boards: "Remote (USA)" lets the India rule drop it, "Remote (APAC)" not."""
+    where = " ".join(where.split())
+    if not where or where.lower() == "remote":
+        return "Remote"
+    return f"Remote ({where})"

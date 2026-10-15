@@ -105,14 +105,16 @@ def test_ashby_skips_unlisted(policy: Policy) -> None:
     assert res.postings[0].posted_date == date(2026, 10, 3)
 
 
-def test_workable_careers_page_capture(policy: Policy) -> None:
+def test_workable_reads_the_jobs_widget_api(policy: Policy) -> None:
     url = ADAPTERS["workable"].url_for(WK)
-    res = discover_all([WK], FakeFetcher({url: ok("pages/workable_delta.html", url)}), policy)
+    assert url == "https://apply.workable.com/api/v1/widget/accounts/delta"
+    res = discover_all([WK], FakeFetcher({url: ok("api/workable_delta.json", url)}), policy)
     assert [(p.title, p.location) for p in res.postings] == [
         ("AI Engineer - RAG", "Bengaluru, India"),
         ("Backend Developer", "Remote, India"),
     ]
     assert res.postings[0].url == "https://apply.workable.com/delta/j/ABC12345/"
+    assert res.postings[0].posted_date == date(2026, 10, 3)
 
 
 def test_bot_wall_and_403_are_recorded_and_run_continues(policy: Policy) -> None:

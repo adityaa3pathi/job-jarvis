@@ -1,0 +1,47 @@
+{
+ "jobCount": 2,
+ "jobs": [
+  {
+   "id": 153014,
+   "url": "https://jobicy.com/jobs/153014-binance-accelerator-program-applied-ai-application-engineer",
+   "jobSlug": "153014-binance-accelerator-program-applied-ai-application-engineer",
+   "jobTitle": "Binance Accelerator Program - Applied AI Application Engineer",
+   "companyName": "Binance",
+   "companyLogo": "https://jobicy.com/data/server-nyc0409/galaxy/mercury/2025/06/bc822f38-221.jpg",
+   "jobIndustry": [
+    "Software Engineering"
+   ],
+   "jobType": [
+    "Internship"
+   ],
+   "jobGeo": "APAC",
+   "jobLevel": "Entry-Level, Junior",
+   "jobExcerpt": "Binance is a leading global blockchain ecosystem behind the world’s largest cryp",
+   "jobDescription": "<p><a href=\"https://jobicy.com/company/binance\" target=\"_blank\" rel=\"noopener\">Binance</a> is a leading global blockchain ecosystem behind the world’s largest cryptocurrency exchange by trading volume and registered users. Binance is trusted by more than 320 million people in 100+ countries for its industry-leading security, transparency, trading engine speed, protections for investors, and unmatc",
+   "pubDate": "2026-10-12T02:35:26+00:00"
+  },
+  {
+   "id": 152419,
+   "url": "https://jobicy.com/jobs/152419-software-engineer-ai-ml-infrastructure",
+   "jobSlug": "152419-software-engineer-ai-ml-infrastructure",
+   "jobTitle": "Software Engineer, AI/ML Infrastructure",
+   "companyName": "Thumbtack",
+   "companyLogo": "https://jobicy.com/data/server-nyc0409/galaxy/mercury/2021/05/Jobicy-210503180426-842530.jpg",
+   "jobIndustry": [
+    "DevOps & Infrastructure"
+   ],
+   "jobType": [
+    "Full-Time"
+   ],
+   "jobGeo": "Canada",
+   "jobLevel": "Senior",
+   "jobExcerpt": "Thumbtack helps millions of people confidently care for their homes. Thumbtack i",
+   "jobDescription": "<h3><strong><a href=\"https://jobicy.com/company/thumbtack\" target=\"_blank\" rel=\"noopener\">Thumbtack</a> helps millions of people confidently care for their homes.</strong></h3>\n<p>Thumbtack is the one app you need to take care of and improve your home — from personalized guidance to AI tools and a best-in-class hiring experience. Every day in every county of the U.S., people turn to Thumbtack to c",
+   "pubDate": "2026-10-15T04:30:05+00:00",
+   "salaryMin": 123300,
+   "salaryMax": 159500,
+   "salaryCurrency": "CAD",
+   "salaryPeriod": "yearly"
+  }
+ ]
+}

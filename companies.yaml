@@ -1,4 +1,4 @@
-# Owner-maintained list. Fields: name, ats (greenhouse|lever|ashby|workable), token,
+# Owner-maintained list. Fields: name, ats (greenhouse|lever|ashby|workable|smartrecruiters), token,
 # region (lever only: us|eu), careers_host (optional extra host the owner trusts).
 # Example: - {name: Acme, ats: greenhouse, token: acme}
 companies:
@@ -28,10 +28,12 @@ companies:
   - {name: BitGo, ats: greenhouse, token: bitgo}
   - {name: Bloomreach, ats: greenhouse, token: bloomreach}
   - {name: Bolna, ats: ashby, token: bolna}
+  - {name: Bosch, ats: smartrecruiters, token: BoschGroup}
   - {name: Branch, ats: greenhouse, token: branchmetrics}
   - {name: Brillio, ats: lever, token: brillio-2}
   - {name: Broccoli AI, ats: ashby, token: broccoli}
   - {name: Bureau, ats: ashby, token: bureau}
+  - {name: Canva, ats: smartrecruiters, token: Canva}
   - {name: Capco, ats: greenhouse, token: capco}
   - {name: Cardboard, ats: ashby, token: cardboard}
   - {name: Cartesia, ats: ashby, token: cartesia}
@@ -68,6 +70,7 @@ companies:
   - {name: ElevenLabs, ats: ashby, token: elevenlabs}
   - {name: Ema, ats: ashby, token: ema}
   - {name: Emergence, ats: ashby, token: emergence}
+  - {name: Endava, ats: smartrecruiters, token: Endava}
   - {name: Energy Exemplar, ats: greenhouse, token: energyexemplarllc}
   - {name: Enterpret, ats: greenhouse, token: enterpret}
   - {name: Entrata, ats: lever, token: entrata}
@@ -75,17 +78,20 @@ companies:
   - {name: Equal Experts, ats: greenhouse, token: equalexperts}
   - {name: Eudia, ats: greenhouse, token: eudia}
   - {name: Everbridge, ats: lever, token: everbridge}
+  - {name: Experian, ats: smartrecruiters, token: Experian}
   - {name: Fampay, ats: lever, token: fampay}
   - {name: Fanatics Commerce, ats: greenhouse, token: fanaticscommerce}
   - {name: Fastly, ats: greenhouse, token: fastly}
   - {name: Five9, ats: greenhouse, token: five9}
   - {name: Fivetran, ats: greenhouse, token: fivetran}
   - {name: Flexport, ats: greenhouse, token: flexport}
+  - {name: Freshworks, ats: smartrecruiters, token: Freshworks}
   - {name: Gainsight, ats: ashby, token: gainsight}
   - {name: GitLab, ats: greenhouse, token: gitlab}
   - {name: Glance, ats: greenhouse, token: glance}
   - {name: Glean, ats: greenhouse, token: gleanwork}
   - {name: GoDaddy, ats: greenhouse, token: godaddy}
+  - {name: Grab, ats: smartrecruiters, token: Grab}
   - {name: Grafana Labs, ats: greenhouse, token: grafanalabs}
   - {name: Granica, ats: ashby, token: granica}
   - {name: Graphcore, ats: greenhouse, token: graphcore}
@@ -113,6 +119,7 @@ companies:
   - {name: Komodo Health, ats: greenhouse, token: komodohealth}
   - {name: Kong, ats: ashby, token: kong}
   - {name: LaunchDarkly, ats: greenhouse, token: launchdarkly}
+  - {name: Leena AI, ats: workable, token: leena-ai}
   - {name: Level AI, ats: lever, token: levelai}
   - {name: Libra AI, ats: ashby, token: libra}
   - {name: Lingaro, ats: lever, token: lingarogroup}
@@ -134,6 +141,7 @@ companies:
   - {name: Neuron7, ats: lever, token: neuron7}
   - {name: New Relic, ats: greenhouse, token: newrelic}
   - {name: Nextiva, ats: greenhouse, token: nextiva}
+  - {name: NielsenIQ, ats: smartrecruiters, token: NielsenIQ}
   - {name: Nium, ats: lever, token: nium}
   - {name: Notion, ats: ashby, token: notion}
   - {name: Observe.AI, ats: greenhouse, token: observeai}
@@ -172,10 +180,12 @@ companies:
   - {name: Sarvam AI, ats: ashby, token: sarvam}
   - {name: Saviynt, ats: lever, token: saviynt}
   - {name: Schrodinger, ats: greenhouse, token: schrdinger}
+  - {name: ServiceNow, ats: smartrecruiters, token: ServiceNow}
   - {name: Sigmoid, ats: greenhouse, token: sigmoid}
   - {name: SigNoz, ats: ashby, token: signoz}
   - {name: Simpplr, ats: greenhouse, token: simpplr}
   - {name: SingleStore, ats: greenhouse, token: singlestore}
+  - {name: Sixt, ats: smartrecruiters, token: Sixt}
   - {name: Smallest.ai, ats: ashby, token: smallest}
   - {name: Smartsheet, ats: greenhouse, token: smartsheet}
   - {name: Snowflake, ats: ashby, token: snowflake}
@@ -191,6 +201,7 @@ companies:
   - {name: Sumo Logic, ats: greenhouse, token: sumologic}
   - {name: Supa, ats: ashby, token: supa}
   - {name: SuperApp, ats: greenhouse, token: superapp}
+  - {name: Swiggy, ats: smartrecruiters, token: Swiggy}
   - {name: TechTorch, ats: ashby, token: techtorch}
   - {name: Tekion, ats: ashby, token: tekion}
   - {name: Temporal, ats: ashby, token: temporal}
@@ -205,12 +216,16 @@ companies:
   - {name: Truveta, ats: greenhouse, token: truveta}
   - {name: Turing, ats: greenhouse, token: turing}
   - {name: Twilio, ats: greenhouse, token: twilio}
+  - {name: Unacademy, ats: smartrecruiters, token: Unacademy}
   - {name: ValGenesis, ats: lever, token: valgenesis}
   - {name: Veeva, ats: lever, token: veeva}
   - {name: Vercel, ats: greenhouse, token: vercel}
   - {name: Wahed, ats: lever, token: wahed.com}
   - {name: Warner Music Group, ats: lever, token: wmg}
   - {name: Weave, ats: ashby, token: weave}
+  - {name: "Western Digital", ats: smartrecruiters, token: WesternDigital}
+  - {name: Whatfix, ats: smartrecruiters, token: Whatfix}
+  - {name: Wise, ats: smartrecruiters, token: Wise}
   - {name: Wiz, ats: greenhouse, token: wizinc}
   - {name: Yugabyte, ats: greenhouse, token: yugabyte}
   - {name: Zenoti, ats: greenhouse, token: zenoti}

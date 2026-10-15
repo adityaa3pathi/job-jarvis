@@ -1,0 +1,6 @@
+{"name": "Delta", "description": null, "jobs": [
+ {"title": "AI Engineer - RAG", "shortcode": "ABC12345", "employment_type": "Full-time", "telecommuting": false,
+  "url": "https://apply.workable.com/j/ABC12345", "published_on": "2026-10-03", "country": "India", "city": "Bengaluru", "experience": "Mid-Senior level"},
+ {"title": "Backend Developer", "shortcode": "DEF67890", "employment_type": "Full-time", "telecommuting": true,
+  "url": "https://apply.workable.com/j/DEF67890", "published_on": "2026-10-01", "country": "India", "city": null, "experience": "Entry level"}
+]}

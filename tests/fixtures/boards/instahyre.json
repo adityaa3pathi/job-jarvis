@@ -1,0 +1,59 @@
+{
+ "objects": [
+  {
+   "resource_uri": "/api/v1/job_search/439850",
+   "employer": {
+    "id": 5003,
+    "company_name": "Nineleaps"
+   },
+   "interview_status": null,
+   "reviewed_at": null,
+   "public_url": "https://www.instahyre.com/job-439850-python-engineer-at-nineleaps-2-bangalore/",
+   "is_strong_match": null,
+   "score": null,
+   "candidate_title": "Python Engineer",
+   "id": 439850,
+   "title": "Python Engineer",
+   "locations": "Bangalore",
+   "keywords": [
+    "API",
+    "FastAPI",
+    "Python",
+    "REST"
+   ],
+   "accept_outstation": true,
+   "gender": 0
+  },
+  {
+   "resource_uri": "/api/v1/job_search/446412",
+   "employer": {
+    "id": 5003,
+    "company_name": "Nineleaps"
+   },
+   "interview_status": null,
+   "reviewed_at": null,
+   "public_url": "https://www.instahyre.com/job-446412-python-engineer-at-nineleaps-2-bangalore-hyderabad/",
+   "is_strong_match": null,
+   "score": null,
+   "candidate_title": "Python Engineer",
+   "id": 446412,
+   "title": "Python Engineer",
+   "locations": "Bangalore,Hyderabad",
+   "keywords": [
+    "FastAPI",
+    "MySQL",
+    "PostgreSQL",
+    "Python",
+    "SQL"
+   ],
+   "accept_outstation": true,
+   "gender": 0
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "limit": 35,
+  "total_count": 2,
+  "next": null
+ }
+}

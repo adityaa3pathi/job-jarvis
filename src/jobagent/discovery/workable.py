@@ -1,40 +1,31 @@
-"""Workable careers page reader. No keyless API exists, so this is treated as unstable."""
+"""Workable public jobs widget API. The careers page itself builds its list with scripts."""
 
 from __future__ import annotations
 
-from bs4 import BeautifulSoup, Tag
+from typing import Any
 
-from jobagent.discovery.base import Adapter, Company, build_each
+from jobagent.discovery.base import Adapter, Company, build_each, parse_json
+from jobagent.discovery.greenhouse import parse_date
 from jobagent.models import Posting
 
 
 class WorkableAdapter(Adapter[Company]):
     portal = "workable"
-    expect_json = False
 
     def url_for(self, company: Company) -> str:
-        return f"https://apply.workable.com/{company.token}/"
+        return f"https://apply.workable.com/api/v1/widget/accounts/{company.token}"
 
     def parse(self, text: str, company: Company) -> list[Posting]:
-        seen: set[str] = set()
-
-        def build(link: Tag) -> Posting | None:
-            href = str(link.get("href", ""))
-            if f"/{company.token}/j/" not in href or href in seen:
-                return None
-            seen.add(href)
-            card = link.find_parent("li") or link.parent
-            title_el = card.select_one('[data-ui="job-title"]') if isinstance(card, Tag) else None
-            loc_el = card.select_one('[data-ui="job-location"]') if isinstance(card, Tag) else None
-            title = (title_el or link).get_text(" ", strip=True)
-            if not title:
-                return None
+        def build(job: dict[str, Any]) -> Posting:
+            place = ", ".join(p for p in (job.get("city"), job.get("country")) if p)
             return Posting(
                 source=self.portal,
-                url=f"https://apply.workable.com{href}",
+                url=f"https://apply.workable.com/{company.token}/j/{job['shortcode']}/",
                 company=company.name,
-                title=title,
-                location=loc_el.get_text(" ", strip=True) if loc_el else "",
+                title=job["title"],
+                location=f"Remote, {place}" if job.get("telecommuting") else place,
+                experience_text=job.get("experience") or "",
+                posted_date=parse_date(job.get("published_on")),
             )
 
-        return build_each(BeautifulSoup(text, "html.parser").select('a[href*="/j/"]'), build)
+        return build_each(parse_json(text)["jobs"], build)

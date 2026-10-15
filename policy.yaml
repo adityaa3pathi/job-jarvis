@@ -7,7 +7,7 @@ portals:
   naukri: {mode: discover_only, live: false, discover: false, notes: "High: bot shield, terms unreadable"}
   foundit: {mode: discover_only, live: false, discover: false, notes: "High: 403 to plain requests"}
   wellfound: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "High: terms bar scraping; owner chose to read India role pages (robots.txt allows), listing only, never apply"}
-  instahyre: {mode: discover_only, live: false, discover: false, notes: "Medium"}
+  instahyre: {mode: discover_only, live: false, discover: true, discover_pause_s: 6, notes: "Medium; pages are Cloudflare-walled; owner chose 15-10-2026 to read its logged-out job search data, slow, read-only, never log in or apply"}
   hirist: {mode: discover_only, live: false, discover: true, discover_pause_s: 10, notes: "Medium; reads the site's own search JSON, robots.txt Crawl-delay 10"}
   cutshort: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; role pages only, robots.txt bans free-text search"}
   peerlist: {mode: discover_only, live: false, discover: false, notes: "Medium; Cloudflare bot check on every page"}
@@ -18,6 +18,13 @@ portals:
   bebee: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; first role page only, robots.txt bans query strings"}
   switchly: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; public role pages show ~3 jobs, /api/ banned"}
   jobgether: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public API built for agents, robots.txt Crawl-delay 2"}
+  himalayas: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Low; public API, country=IN keeps jobs open to India"}
+  remoteok: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public API, terms ask for a link back and the source named; Crawl-delay 1"}
+  jobicy: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public API, apply links must go to the Jobicy URL"}
+  remotive: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Low; public API, max 4 reads a day, link back, no re-posting; keep one search row"}
+  weworkremotely: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; category RSS feeds, robots.txt allows"}
+  workingnomads: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; one public feed of ~50 recent jobs"}
+  hn: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; HN 'Who is hiring?' thread via the public Algolia API"}
   skillmeet: {mode: "off", live: false, discover: false, notes: "Not a job board: local services directory"}
   jobaaj: {mode: "off", live: false, discover: false, notes: "robots.txt disallows all generic bots"}
   nxthiring: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
@@ -26,3 +33,4 @@ portals:
   lever: {mode: discover_only, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: visible hCaptcha likely; apply-automatically only after two clean dry runs"}
   ashby: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low: public job list API"}
   workable: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 2, notes: "Weakest evidence; owner may set discover_only until two dry runs pass"}
+  smartrecruiters: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Low; public postings API, India jobs only"}
