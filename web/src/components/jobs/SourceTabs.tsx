@@ -6,16 +6,20 @@ const ORDER = Object.keys(SOURCE_LABELS);
 
 type Props = { sources: Record<string, number>; active: string; onSelect: (source: string) => void };
 
-/** "All" plus one tab per job site that has jobs under the current filters. */
+/** "All" plus one chip per job site that has jobs under the current filters; scrolls sideways on a phone. */
 export function SourceTabs({ sources, active, onSelect }: Props) {
   const names = Object.keys(sources).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   if (active && !names.includes(active)) names.push(active);
   const all = Object.values(sources).reduce((sum, n) => sum + n, 0);
   return (
-    <div role="group" aria-label="Job site" className="flex flex-wrap gap-1.5">
-      <Tab label="All" count={all} on={active === ""} onClick={() => onSelect("")} />
+    <div
+      role="group"
+      aria-label="Job site"
+      className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+    >
+      <Chip label="All sites" count={all} on={active === ""} onClick={() => onSelect("")} />
       {names.map((s) => (
-        <Tab key={s} label={SOURCE_LABELS[s] ?? s} count={sources[s] ?? 0} on={active === s} onClick={() => onSelect(s)} />
+        <Chip key={s} label={SOURCE_LABELS[s] ?? s} count={sources[s] ?? 0} on={active === s} onClick={() => onSelect(s)} />
       ))}
     </div>
   );
@@ -26,17 +30,18 @@ function rank(source: string) {
   return i === -1 ? ORDER.length : i;
 }
 
-function Tab({ label, count, on, onClick }: { label: string; count: number; on: boolean; onClick: () => void }) {
+function Chip({ label, count, on, onClick }: { label: string; count: number; on: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`ribbon rounded-full border px-3 py-1 text-sm ${
-        on ? "border-accent bg-accent text-accent-ink" : "border-border-strong bg-surface-raised text-ink hover:bg-surface-muted"
+      className={`flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold whitespace-nowrap transition-colors ${
+        on ? "bg-ink text-bg" : "bg-sunk text-ink-2 hover:text-ink"
       }`}
     >
-      {label} <span className={on ? "text-accent-ink/75" : "text-ink-faint"}>{count.toLocaleString("en-IN")}</span>
+      {label}
+      <span className={`figure ${on ? "opacity-70" : "text-ink-3"}`}>{count.toLocaleString("en-IN")}</span>
     </button>
   );
 }
