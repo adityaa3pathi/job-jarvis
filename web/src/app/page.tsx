@@ -4,15 +4,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
+  invalidate,
   istDateTime,
+  mutate,
   post,
+  useCachedApi,
   type DiscoverRun,
   type DiscoverState,
   type Job,
   type JobFacets,
   type JobPage,
 } from "@/lib/api";
-import { Button, ErrorNote, StateNote } from "@/components/ui";
+import { Button, ErrorNote, Refreshing, StateNote } from "@/components/ui";
 import { Ornament } from "@/components/Ornament";
 import { FilterBar, Select } from "@/components/jobs/FilterBar";
 import { JobCard } from "@/components/jobs/JobCard";
@@ -47,9 +50,11 @@ function JobsView() {
   const key = apiQuery(filters);
   const size = Number(filters.size);
 
-  const [data, setData] = useState<(JobPage & { key: string }) | null>(null);
-  const [reloads, setReloads] = useState(0);
-  const [facets, setFacets] = useState<(JobFacets & { status: string }) | null>(null);
+  const path = `/jobs?${key}`;
+  const facetsPath = `/jobs/facets?status=${filters.status}`;
+  // The cache is keyed by path, so a slower reply for an older filter or page never replaces this one.
+  const jobs = useCachedApi<JobPage>(path);
+  const facetRead = useCachedApi<JobFacets>(facetsPath);
   const [discover, setDiscover] = useState<DiscoverState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -81,43 +86,18 @@ function JobsView() {
   const update = useCallback((patch: Partial<Filters>) => go({ ...latest.current, ...patch, page: 1 }), [go]);
 
   useEffect(() => {
-    let current = true; // a slower reply for an older filter or page must not replace this one
-    api<JobPage>(`/jobs?${key}`).then(
-      (p) => {
-        if (!current) return;
-        setData({ ...p, key });
-        setError(null);
-      },
-      (e: Error) => {
-        if (!current) return;
-        focusOnLoad.current = false; // else the next unrelated load would jump to the list
-        setError(e.message);
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [key, reloads]);
+    if (jobs.error) focusOnLoad.current = false; // else the next unrelated load would jump to the list
+  }, [jobs.error]);
 
-  useEffect(() => {
-    let current = true;
-    api<JobFacets>(`/jobs/facets?status=${filters.status}`).then(
-      (f) => current && setFacets({ ...f, status: filters.status }),
-      (e: Error) => current && setError(e.message),
-    );
-    return () => {
-      current = false;
-    };
-  }, [filters.status]);
-
-  const loaded = data?.key === key ? data : null;
+  const loaded = jobs.key === path ? jobs.data : null;
   const last = loaded ? Math.max(1, Math.ceil(loaded.total / size)) : null;
+  const settled = loaded !== null && !jobs.refreshing; // a cached copy may hold an old total
 
   // A page past the end (after filtering or marking) moves to the last real page.
   useEffect(() => {
     // A newer request is on its way; its own reply decides.
-    if (last !== null && filters.page > last && pending.current.length === 0) go({ ...filters, page: last });
-  }, [last, filters, go]);
+    if (settled && last !== null && filters.page > last && pending.current.length === 0) go({ ...filters, page: last });
+  }, [settled, last, filters, go]);
 
   useEffect(() => {
     if (!loaded || !focusOnLoad.current) return;
@@ -142,7 +122,7 @@ function JobsView() {
         const s = await api<DiscoverState>("/discover");
         setDiscover(s);
         setError(null);
-        if (!s.running) setReloads((n) => n + 1);
+        if (!s.running) invalidate("/jobs");
       } catch (e) {
         setError((e as Error).message);
       }
@@ -159,8 +139,8 @@ function JobsView() {
     try {
       await post(`/jobs/${job.id}/mark`, { status: next });
       // Hide it now; refetching this page then fills the gap and fixes the counts.
-      setData((d) => d && { ...d, items: d.items.filter((j) => j.id !== job.id) });
-      setReloads((n) => n + 1);
+      mutate<JobPage>(path, (d) => ({ ...d, items: d.items.filter((j) => j.id !== job.id) }));
+      invalidate("/jobs");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -175,14 +155,16 @@ function JobsView() {
     toPage(Math.max(1, latest.current.page + delta));
   }
 
-  const shown = loaded ?? data; // older results stay visible, dimmed, while new ones load
+  const shown = jobs.data; // older results stay visible, dimmed, while new ones load
   const shownLast = shown ? Math.max(1, Math.ceil(shown.total / size)) : 1;
-  const first = Number(new URLSearchParams(shown?.key).get("offset") ?? 0); // of the page on screen
+  const first = Number(new URLSearchParams(jobs.key?.split("?")[1]).get("offset") ?? 0); // of the page on screen
+  const facets = facetRead.key === facetsPath ? facetRead.data : null;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto font-display text-xl font-semibold">Jobs</h1>
+        <h1 className="font-display text-xl font-semibold">Jobs</h1>
+        <Refreshing on={jobs.refreshing && loaded !== null} className="mr-auto" />
         <Button
           disabled={discover?.running}
           onClick={async () => {
@@ -208,11 +190,11 @@ function JobsView() {
       ) : (
         lastRun && <RunSummary run={lastRun} />
       )}
-      <ErrorNote message={error ?? (lastRun?.error || null)} />
+      <ErrorNote message={error ?? jobs.error ?? facetRead.error ?? (lastRun?.error || null)} />
       <SourceTabs sources={shown?.sources ?? {}} active={filters.source} onSelect={(source) => update({ source })} />
       <FilterBar
         filters={filters}
-        facets={facets?.status === filters.status ? facets : null}
+        facets={facets}
         onChange={update}
         onClear={isFiltered(filters) ? () => go({ ...DEFAULTS, size: latest.current.size }) : null}
       />

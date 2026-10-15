@@ -2,14 +2,16 @@
 
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { api, istDate, post, runTask, TaskAborted, type Session } from "@/lib/api";
+import { invalidate, istDate, post, runTask, TaskAborted, useCachedApi, type Session } from "@/lib/api";
 import { PdfLink } from "@/components/PdfLink";
 import { ReportView } from "@/components/ReportView";
-import { Button, Card, ErrorNote, StateNote } from "@/components/ui";
+import { Button, Card, ErrorNote, Refreshing, StateNote } from "@/components/ui";
 
 function CoachSession() {
   const { id } = useParams<{ id: string }>();
-  const [session, setSession] = useState<Session | null>(null);
+  const path = `/coach/${id}`;
+  const read = useCachedApi<Session>(path);
+  const session = read.key === path ? read.data : null; // never show another session's page
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<"chat" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,10 +27,6 @@ function CoachSession() {
   }, []);
 
   useEffect(() => {
-    api<Session>(`/coach/${id}`).then(setSession, (e) => setError(e.message));
-  }, [id]);
-
-  useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [session?.messages.length]);
 
@@ -39,7 +37,7 @@ function CoachSession() {
     try {
       await runTask(`/coach/${id}/chat`, { message }, alive.current?.signal);
       setMessage("");
-      setSession(await api<Session>(`/coach/${id}`));
+      await invalidate(path);
     } catch (err) {
       if (err instanceof TaskAborted) return;
       setError((err as Error).message);
@@ -52,7 +50,7 @@ function CoachSession() {
     setFactError(null);
     try {
       await post(`/coach/${id}/facts/${factId}`, { confirmed });
-      setSession(await api<Session>(`/coach/${id}`));
+      await invalidate(path);
     } catch (err) {
       setFactError((err as Error).message);
     }
@@ -68,7 +66,8 @@ function CoachSession() {
         alive.current?.signal,
       );
       setLastReport(out.report);
-      setSession(await api<Session>(`/coach/${id}`));
+      invalidate("/builds");
+      await invalidate(path);
     } catch (err) {
       if (err instanceof TaskAborted) return;
       setError((err as Error).message);
@@ -77,7 +76,7 @@ function CoachSession() {
     }
   }
 
-  if (!session) return error ? <ErrorNote message={error} /> : <StateNote story="Turning to the right page…">Loading…</StateNote>;
+  if (!session) return read.error ? <ErrorNote message={read.error} /> : <StateNote story="Turning to the right page…">Loading…</StateNote>;
   const pending = session.facts.filter((f) => !f.confirmed);
   return (
     <div className="flex flex-col gap-4">
@@ -85,12 +84,14 @@ function CoachSession() {
         <h1 className="text-xl font-semibold">
           {session.title || "Untitled role"} {session.company && <span className="text-ink-faint">· {session.company}</span>}
         </h1>
+        <Refreshing on={read.refreshing} />
         {session.source_url && (
           <a className="text-sm text-ink-faint underline" href={session.source_url} target="_blank" rel="noreferrer">
             Open job posting
           </a>
         )}
       </div>
+      <ErrorNote message={read.error} />
       <ReportView report={session.report} />
 
       <Card title="Talk it through">

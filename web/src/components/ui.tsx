@@ -48,6 +48,15 @@ export function ErrorNote({ message }: { message: string | null }) {
   );
 }
 
+/** Quiet note while a cached page checks the server; the live region stays mounted so it is announced. */
+export function Refreshing({ on, className = "" }: { on: boolean; className?: string }) {
+  return (
+    <span role="status" aria-live="polite" className={`text-xs text-ink-faint motion-safe:animate-pulse ${className}`}>
+      {on ? "Refreshing…" : ""}
+    </span>
+  );
+}
+
 export function Chips({ items, tone }: { items: string[]; tone: Tone }) {
   if (!items.length) return <p className="text-sm text-ink-faint">None</p>;
   return (

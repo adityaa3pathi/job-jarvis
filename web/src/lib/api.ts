@@ -1,3 +1,5 @@
+import { useEffect, useState, useSyncExternalStore } from "react";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -14,7 +16,7 @@ function detail(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const isForm = init.body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -22,13 +24,22 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: isForm ? init.headers : { "Content-Type": "application/json", ...init.headers },
   });
   if (res.status === 401 && path !== "/login") {
+    clearCache();
     window.location.href = "/login";
     throw new ApiError(401, "login needed");
   }
+  return res;
+}
+
+async function readBody<T>(res: Response): Promise<T> {
   const text = await res.text();
   const body = text ? safeJson(text) : null;
   if (!res.ok) throw new ApiError(res.status, detail(body, `request failed (${res.status})`));
   return (body ?? text) as T;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return readBody<T>(await send(path, init));
 }
 
 function safeJson(text: string): unknown {
@@ -42,7 +53,198 @@ function safeJson(text: string): unknown {
 export const post = <T>(path: string, data?: unknown) =>
   api<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
-type TaskState<T> = { status: "running" | "done" | "failed"; result: T | null; error: string; code: number };
+/* Stale-while-revalidate cache for owner reads, keyed by API path. Shows the last copy
+ * at once, then asks the server with If-None-Match; a 304 keeps the copy. */
+
+type Entry = { data: unknown; etag: string | null };
+type Slot = { data: unknown; refreshing: boolean; error: string | null };
+
+const STORE_KEY = "jobagent:reads:v1";
+const MAX_ENTRIES = 40;
+const MAX_CHARS = 2_000_000; // well under the ~5 MB sessionStorage quota
+const EMPTY: Slot = { data: undefined, refreshing: false, error: null };
+
+const entries = new Map<string, Entry>(); // oldest use first, for LRU trimming
+const slots = new Map<string, Slot>(); // what hooks render; stable objects for useSyncExternalStore
+const inflight = new Map<string, Promise<unknown>>();
+const gens = new Map<string, number>(); // bumped on invalidate so older replies are ignored
+const mounted = new Map<string, number>();
+const listeners = new Set<() => void>();
+let restored = false;
+
+function restore() {
+  if (restored || typeof window === "undefined") return;
+  restored = true;
+  try {
+    const raw = sessionStorage.getItem(STORE_KEY);
+    for (const [k, e] of raw ? (JSON.parse(raw) as [string, Entry][]) : []) entries.set(k, e);
+  } catch {
+    // Blocked or corrupt storage: start empty.
+  }
+}
+
+function persist() {
+  try {
+    let list = [...entries];
+    let text = JSON.stringify(list);
+    while (list.length > 0 && text.length > MAX_CHARS) {
+      list = list.slice(1);
+      text = JSON.stringify(list);
+    }
+    sessionStorage.setItem(STORE_KEY, text);
+  } catch {
+    // Quota or blocked storage: the memory copy still works.
+  }
+}
+
+function remember(path: string, entry: Entry) {
+  entries.delete(path);
+  entries.set(path, entry);
+  for (const k of entries.keys()) {
+    if (entries.size <= MAX_ENTRIES) break;
+    entries.delete(k);
+  }
+  persist();
+}
+
+function slot(path: string): Slot {
+  restore();
+  let s = slots.get(path);
+  if (!s) {
+    s = entries.has(path) ? { ...EMPTY, data: entries.get(path)!.data } : EMPTY;
+    slots.set(path, s);
+  }
+  return s;
+}
+
+function setSlot(path: string, patch: Partial<Slot>) {
+  slots.set(path, { ...slot(path), ...patch });
+  listeners.forEach((l) => l());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** True when `path` is `prefix` itself or sits under it ("/coach" covers "/coach/3", not "/coach3"). */
+function under(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`);
+}
+
+/** Fetch `path` now (joining a request already on its way) and update the cache. */
+export function revalidate<T>(path: string): Promise<T> {
+  restore();
+  const running = inflight.get(path);
+  if (running) return running as Promise<T>;
+  const gen = gens.get(path) ?? 0;
+  const fresh = () => (gens.get(path) ?? 0) === gen;
+  setSlot(path, { refreshing: true });
+  const p = (async () => {
+    const old = entries.get(path);
+    try {
+      const res = await send(path, {
+        cache: "no-store", // the stored ETag below is the only revalidation
+        headers: old?.etag ? { "If-None-Match": old.etag } : {},
+      });
+      let data: unknown;
+      if (res.status === 304 && old) {
+        data = old.data;
+        if (fresh() && entries.has(path)) remember(path, old);
+      } else {
+        data = await readBody<unknown>(res);
+        if (fresh()) remember(path, { data, etag: res.headers.get("ETag") });
+      }
+      if (fresh()) setSlot(path, { data, refreshing: false, error: null });
+      return data as T;
+    } catch (e) {
+      if (fresh()) setSlot(path, { refreshing: false, error: (e as Error).message });
+      throw e;
+    }
+  })();
+  const settle = () => {
+    if (inflight.get(path) === p) inflight.delete(path);
+  };
+  p.then(settle, settle);
+  inflight.set(path, p);
+  return p;
+}
+
+/** Change the shown copy of `path` right away (e.g. hide a marked job) until the next fetch. */
+export function mutate<T>(path: string, change: (data: T) => T) {
+  const s = slot(path);
+  if (s.data !== undefined) setSlot(path, { data: change(s.data as T) });
+}
+
+/** Drop cached reads under `prefix` after a write; pages showing them refetch now. */
+export function invalidate(prefix: string): Promise<unknown> {
+  restore();
+  for (const k of [...entries.keys()]) if (under(k, prefix)) entries.delete(k);
+  persist();
+  const refetch: Promise<unknown>[] = [];
+  for (const k of new Set([...slots.keys(), ...inflight.keys()])) {
+    if (!under(k, prefix)) continue;
+    gens.set(k, (gens.get(k) ?? 0) + 1);
+    inflight.delete(k);
+    if (mounted.get(k)) refetch.push(revalidate(k));
+  }
+  return Promise.allSettled(refetch);
+}
+
+/** Forget every cached read, in memory and in sessionStorage (logout, 401, login). */
+export function clearCache() {
+  for (const k of new Set([...slots.keys(), ...inflight.keys(), ...entries.keys()])) {
+    gens.set(k, (gens.get(k) ?? 0) + 1);
+  }
+  entries.clear();
+  slots.clear();
+  inflight.clear();
+  try {
+    sessionStorage.removeItem(STORE_KEY);
+  } catch {
+    // Blocked storage held nothing.
+  }
+  listeners.forEach((l) => l());
+}
+
+export type CachedRead<T> = {
+  /** The newest copy for `path`, else the last one shown for an earlier path (see `key`). */
+  data: T | null;
+  key: string | null;
+  loading: boolean;
+  error: string | null;
+  refreshing: boolean;
+};
+
+/** Read `path` through the cache: cached copy first, then a quiet refetch on every mount. */
+export function useCachedApi<T>(path: string): CachedRead<T> {
+  const s = useSyncExternalStore(
+    subscribe,
+    () => slot(path),
+    () => EMPTY,
+  );
+  useEffect(() => {
+    mounted.set(path, (mounted.get(path) ?? 0) + 1);
+    revalidate(path).catch(() => {}); // the slot keeps the error
+    return () => {
+      mounted.set(path, (mounted.get(path) ?? 1) - 1);
+    };
+  }, [path]);
+  const [last, setLast] = useState<{ key: string; data: T } | null>(null);
+  if (s.data !== undefined && (last?.key !== path || last.data !== s.data)) {
+    setLast({ key: path, data: s.data as T });
+  }
+  const shown = s.data !== undefined ? { key: path, data: s.data as T } : last;
+  return {
+    data: shown?.data ?? null,
+    key: shown?.key ?? null,
+    loading: s.data === undefined && s.error === null,
+    error: s.error,
+    refreshing: s.refreshing,
+  };
+}
+
+type TaskState<T> ={ status: "running" | "done" | "failed"; result: T | null; error: string; code: number };
 
 const POLL_MS = 1500;
 const MAX_POLL_MISSES = 5;

@@ -1,40 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, istDate } from "@/lib/api";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { useState } from "react";
+import { api, invalidate, istDate, useCachedApi } from "@/lib/api";
+import { Button, Card, ErrorNote, Refreshing } from "@/components/ui";
 import { Ornament } from "@/components/Ornament";
 
 type Profile = { summary: string; has_tex: boolean; updated_at: string };
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [summary, setSummary] = useState("");
+  const { data: profile, error: loadError, refreshing } = useCachedApi<Profile>("/profile");
+  const [edited, setEdited] = useState<string | null>(null); // null: the box follows the saved summary
+  const summary = edited ?? profile?.summary ?? "";
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function show(p: Profile) {
-    setProfile(p);
-    setSummary(p.summary);
-  }
-
   /** A .tex upload must not replace unsaved text in the summary box. */
-  async function load(keepSummary: boolean) {
-    const p = await api<Profile>("/profile");
-    if (keepSummary) setProfile(p);
-    else show(p);
-  }
-
-  useEffect(() => {
-    api<Profile>("/profile").then(show, (e: Error) => setError(e.message));
-  }, []);
-
   async function run(action: () => Promise<unknown>, done: string, keepSummary = false) {
     setError(null);
     setNote(null);
     try {
       await action();
-      await load(keepSummary);
+      await invalidate("/profile");
+      if (!keepSummary) setEdited(null);
       setNote(done);
     } catch (e) {
       setError((e as Error).message);
@@ -50,9 +37,12 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-xl font-semibold">Profile</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="font-display text-xl font-semibold">Profile</h1>
+        <Refreshing on={refreshing && profile !== null} />
+      </div>
       <Ornament />
-      <ErrorNote message={error} />
+      <ErrorNote message={error ?? loadError} />
       {note && <p className="text-sm text-success">{note}</p>}
       <Card title="Career summary">
         <p className="mb-2 text-sm text-ink-muted">
@@ -69,7 +59,7 @@ export default function ProfilePage() {
           aria-label="Career summary text"
           className="h-72 w-full rounded border border-border-strong p-2 font-mono text-sm"
           value={summary}
-          onChange={(e) => setSummary(e.target.value)}
+          onChange={(e) => setEdited(e.target.value)}
         />
         <div className="mt-2 flex items-center gap-3">
           <Button

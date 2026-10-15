@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { api, ApiError, istDate, runTask, TaskAborted, type SessionRow } from "@/lib/api";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { ApiError, invalidate, istDate, runTask, TaskAborted, useCachedApi, type SessionRow } from "@/lib/api";
+import { Button, Card, ErrorNote, Refreshing } from "@/components/ui";
 import { Ornament } from "@/components/Ornament";
 
 function NewCoach() {
@@ -36,6 +36,7 @@ function NewCoach() {
           : { jd_text: jdText, title, company };
       const signal = alive.current?.signal;
       const { session_id } = await runTask<{ session_id: number }>("/coach", body, signal);
+      invalidate("/coach");
       if (!signal?.aborted) router.push(`/coach/${session_id}`);
     } catch (e) {
       if (e instanceof TaskAborted) return;
@@ -115,13 +116,11 @@ function NewCoach() {
 }
 
 function PastSessions() {
-  const [rows, setRows] = useState<SessionRow[] | null>(null);
-  useEffect(() => {
-    api<SessionRow[]>("/coach").then(setRows, () => setRows([]));
-  }, []);
+  const { data: rows, refreshing } = useCachedApi<SessionRow[]>("/coach");
   if (!rows?.length) return null;
   return (
     <Card title="Past sessions">
+      <Refreshing on={refreshing} className="mb-1 block" />
       <ul className="flex flex-col gap-1 text-sm">
         {rows.map((r) => (
           <li key={r.id} className="flex gap-2">

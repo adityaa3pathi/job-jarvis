@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { post } from "@/lib/api";
+import { clearCache, post } from "@/lib/api";
 import { Button, ErrorNote } from "@/components/ui";
 import { Ornament } from "@/components/Ornament";
 
@@ -16,6 +16,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await post("/login", { password });
+      clearCache();
       window.location.href = "/";
     } catch (err) {
       setError((err as Error).message);

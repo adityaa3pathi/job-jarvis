@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { post } from "@/lib/api";
+import { clearCache, post } from "@/lib/api";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 
 const LINKS = [
@@ -47,6 +47,7 @@ export function Nav() {
             setError(null);
             try {
               await post("/logout");
+              clearCache();
               window.location.href = "/login";
             } catch (e) {
               setError((e as Error).message);

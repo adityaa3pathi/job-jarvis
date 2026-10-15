@@ -1,23 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { api, istDate, type Build } from "@/lib/api";
+import { istDate, useCachedApi, type Build } from "@/lib/api";
 import { PdfLink } from "@/components/PdfLink";
-import { ErrorNote, StateNote } from "@/components/ui";
+import { ErrorNote, Refreshing, StateNote } from "@/components/ui";
 import { Ornament } from "@/components/Ornament";
 
 export default function ResumesPage() {
-  const [builds, setBuilds] = useState<Build[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api<Build[]>("/builds").then(setBuilds, (e) => setError(e.message));
-  }, []);
+  const { data: builds, error, refreshing } = useCachedApi<Build[]>("/builds");
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-xl font-semibold">Resumes</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="font-display text-xl font-semibold">Resumes</h1>
+        <Refreshing on={refreshing && builds !== null} />
+      </div>
       <Ornament />
       <ErrorNote message={error} />
       {builds?.length === 0 && (
