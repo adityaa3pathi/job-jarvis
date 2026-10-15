@@ -148,3 +148,46 @@ def test_cli_digest_uses_the_last_finished_run(
     assert cli.main(["digest"]) == 0
     assert len(tg.sent) == 1
     assert "already sent" in capsys.readouterr().out
+
+
+def test_a_stale_sending_claim_expires_after_30_minutes(settings: Settings) -> None:
+    db, tg = ranked(settings, 2), FakeTelegram()
+    assert db.claim_digest(3)  # the process died before it sent anything
+    assert "already sent" in send_digest(db, 3, tg.sender(), limit=5)["skipped"]
+    with db.conn:
+        db.conn.execute("UPDATE digests SET at='2026-01-01T00:00:00+00:00' WHERE run_id=3")
+    assert send_digest(db, 3, tg.sender(), limit=5)["sent"] == 2
+    assert "already sent" in send_digest(db, 3, tg.sender(), limit=5)["skipped"]
+
+
+class FailsOnce(FakeTelegram):
+    """Refuses the n-th message once, then accepts everything."""
+
+    def __init__(self, fail_at: int) -> None:
+        super().__init__()
+        self.fail_at = fail_at
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if len(self.sent) + 1 == self.fail_at:
+            self.fail_at = 0
+            self.sent.append({"failed": True})
+            return httpx.Response(502, json={"ok": False, "description": "bad gateway"})
+        return super().handler(request)
+
+
+def test_a_retry_resumes_after_the_last_sent_chunk(settings: Settings) -> None:
+    db = ranked(settings, 40)
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET title=title || ?, rank_reason=?", ("T" * 120, "r" * 200))
+    tg = FailsOnce(fail_at=2)
+    out = send_digest(db, 5, tg.sender(), limit=40)
+    assert "bad gateway" in out["error"]
+    retry = send_digest(db, 5, tg.sender(), limit=40)
+    texts = [m["text"] for m in tg.sent if "text" in m]
+    assert retry["sent"] > 0 and len(texts) >= 3
+    shown = [n for t in texts for n in range(40) if f"AI Engineer {n}T" in t]
+    assert sorted(shown) == list(range(40))  # every job once: nothing resent, nothing lost
+    assert texts[0].startswith("<b>Top 40 new jobs</b>")
+    assert "already sent" in send_digest(db, 5, tg.sender(), limit=40)["skipped"]
+    sent = db.conn.execute("SELECT COUNT(*) FROM digest_jobs WHERE run_id=5").fetchone()[0]
+    assert sent == 40

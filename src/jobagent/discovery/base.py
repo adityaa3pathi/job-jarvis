@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -113,6 +114,15 @@ class SweepContext:
     known: Callable[[str], bool] = lambda url: False
     detail_cap: int = DETAIL_CAP
     details_used: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+
+    def take_detail(self) -> bool:
+        """One slot of the per-run budget; portals run on several threads."""
+        with self._lock:
+            if self.details_used >= self.detail_cap:
+                return False
+            self.details_used += 1
+            return True
 
 
 @dataclass(frozen=True)
@@ -315,12 +325,11 @@ class Adapter[T: Target]:
             url = parsed.detail.get(posting.url)
             if url is None or ctx.known(posting.url):
                 kept.append(posting)
-            elif ctx.details_used >= ctx.detail_cap:
+            elif not ctx.take_detail():
                 capped += 1
             elif not policy.begin(self.portal, "discover").allowed:
                 failed += 1
             else:
-                ctx.details_used += 1
                 try:
                     result = fetcher.get(url)
                     if error := http_error(result):

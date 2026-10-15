@@ -12,10 +12,10 @@ from jobagent import cli
 from jobagent.config import Settings, ensure_data_dir
 from jobagent.db import Database
 from jobagent.discovery import ADAPTERS
-from jobagent.discovery.base import Company, DiscoveryResult, FetchResult
+from jobagent.discovery.base import Company, DiscoveryResult, FetchResult, SweepContext
 from jobagent.models import Posting
 from jobagent.policy import Policy
-from jobagent.runs import RunTally, save_portal, sweep_context
+from jobagent.runs import RunTally, rules_swept, save_portal, sweep_context
 from jobagent.web.store import Store
 from tests.test_discovery import FakeFetcher, saved_sources
 
@@ -135,7 +135,9 @@ def sweep(
 ) -> DiscoveryResult:
     """One run of the Acme board, saved the way the CLI saves it."""
     got = ADAPTERS["greenhouse"].discover(GH, server, policy, sweep_context(db, cap))
-    save_portal(got, db=db, st=st, run_id=st.start_run(), tally=RunTally(), after_runs=3)
+    tally = RunTally()
+    save_portal(got, db=db, st=st, run_id=st.start_run(), tally=tally, after_runs=3)
+    rules_swept(db, tally)
     return got
 
 
@@ -214,3 +216,65 @@ def test_capped_greenhouse_ids_are_not_saved(settings: Settings, policy: Policy)
     assert db.conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 3
     db.close()
     st.close()
+
+
+def test_a_failed_detail_fetch_is_not_saved_and_is_read_next_run(
+    settings: Settings, policy: Policy
+) -> None:
+    ensure_data_dir(settings)
+    db, st = Database(settings.db_path), Store(settings.db_path)
+    pages = {GH_LIST: board(listed(1), listed(2)).text, detail_url(1): detail(1)}
+    server = Server(pages)  # job 2's page is missing: a 404
+    got = sweep(db, st, server, policy)
+    assert any("could not be read" in n for n in got.notes)
+    assert [r[0] for r in db.conn.execute("SELECT title FROM jobs")] == ["AI Engineer 1"]
+    assert db.fetch_validators() == {}
+    server.pages[detail_url(2)] = detail(2)
+    got = sweep(db, st, server, policy)
+    assert got.unchanged == [] and server.calls[-2:] == [(GH_LIST, {}), (detail_url(2), {})]
+    assert db.conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 2
+    assert GH_LIST in db.fetch_validators()
+    db.close()
+    st.close()
+
+
+def test_a_rules_bump_rereads_unchanged_boards_once(
+    settings: Settings, policy: Policy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ensure_data_dir(settings)
+    db, st = Database(settings.db_path), Store(settings.db_path)
+    server = Server({GH_LIST: board(gh_job(1), gh_job(2)).text})
+    sweep(db, st, server, policy)
+    assert sweep(db, st, server, policy).unchanged == ["Acme"]
+    with db.conn:  # dropped by an old rule the new version no longer has
+        db.conn.execute(
+            "UPDATE jobs SET status='dropped', drop_reason='too_senior', rules_version=1 WHERE id=1"
+        )
+    monkeypatch.setattr("jobagent.db.RULES_VERSION", 99)
+    got = sweep(db, st, server, policy)
+    assert got.unchanged == [] and server.calls[-1] == (GH_LIST, {})
+    assert db.get_job(1)["status"] == "found" and db.get_job(1)["rules_version"] == 99
+    assert sweep(db, st, server, policy).unchanged == ["Acme"]
+    db.close()
+    st.close()
+
+
+def test_detail_slots_are_never_over_spent_across_threads() -> None:
+    import threading
+
+    ctx = SweepContext(detail_cap=10)
+    got: list[bool] = []
+    lock = threading.Lock()
+
+    def take() -> None:
+        for _ in range(20):
+            ok = ctx.take_detail()
+            with lock:
+                got.append(ok)
+
+    threads = [threading.Thread(target=take) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert got.count(True) == 10 and ctx.details_used == 10

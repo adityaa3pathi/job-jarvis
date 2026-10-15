@@ -94,11 +94,12 @@ def test_all_bullets_are_rewritten_in_one_call_and_checked_one_by_one() -> None:
     assert bullets and len(bullets) + len(reasons) == len(sent)
 
 
-def test_a_bullet_the_model_left_out_stays_as_it_was() -> None:
+def test_a_bullet_the_model_left_out_stays_as_it_was_and_is_reported() -> None:
     llm = StubLLM(lambda s, u: {"items": [{"id": 1, "text": bold_first_word(bullets_in(u)[1][1])}]})
     result = tailor_resume(parse(SAMPLE), CARDS, PROFILE, match_profile(PROFILE, CARDS), llm)
     assert len([c for c in result.changes if c.kind == "bullet"]) == 1
-    assert not result.failed and not result.rejected
+    assert result.failed and not result.rejected
+    assert {cause for _, cause in result.failed} == {"model reply left this bullet out"}
 
 
 def test_cli_thinks_at_temperature_0_and_writes_at_0_5() -> None:

@@ -567,6 +567,24 @@ def test_old_database_upgrades_through_each_migration_once(
     db.close()
 
 
+def test_judgements_made_before_keys_existed_keep_their_cap(tmp_path: Path) -> None:
+    path = tmp_path / "v3.db"
+    db = Database(path)
+    db.upsert_posting(
+        Posting(source="lever", url="https://x.example/1", company="Co", title="AI Engineer",
+                location="Pune", description="Text")
+    )  # fmt: skip
+    with db.conn:
+        db.conn.execute("UPDATE jobs SET judged_on='2026-10-14', judge_score=20, judge_key=NULL")
+        db.conn.execute("UPDATE flags SET value='3' WHERE name='schema_version'")
+    db.close()
+    db = Database(path)
+    key = db.conn.execute("SELECT judge_key FROM jobs").fetchone()[0]
+    assert key == db_module.judge_key(sha("Text"), "")
+    assert db.claim_digest(1) and db.digest_progress(1) == (0, 0)
+    db.close()
+
+
 # --- lean batch saves (U3, efficiency audit #3) ---
 
 SENIOR_TEXT = "Needs 8+ years of experience."
