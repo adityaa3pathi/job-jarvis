@@ -323,6 +323,7 @@ class Store:
                 (_now(), ist_day(), usage.step, usage.model, usage.tokens_in, usage.tokens_out,
                  usage.tokens_cached, usage.ms),
             )  # fmt: skip
+        self.add_trace(usage)
 
     def usage_today(self, day: str | None = None) -> dict[str, int]:
         """Calls and tokens (in + out) used on one IST day, today by default."""
@@ -341,6 +342,30 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # --- trace of AI steps (U16) ---
+
+    def add_trace(self, usage: Usage) -> None:
+        self._llm_tables()
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO trace(at, run_id, step, model, prompt_version, input_hash, output,"
+                " tokens_in, tokens_out, tokens_cached, ms, verdict)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (datetime.now(IST).isoformat(timespec="seconds"), usage.run_id, usage.step,
+                 usage.model, usage.prompt_version, usage.input_hash, usage.output,
+                 usage.tokens_in, usage.tokens_out, usage.tokens_cached, usage.ms, usage.verdict),
+            )  # fmt: skip
+
+    def trace_rows(self, run_id: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
+        """Trace rows oldest first: one run, or the latest `limit` rows of all runs."""
+        self._llm_tables()
+        where, args = ("WHERE run_id=?", (run_id,)) if run_id else ("", ())
+        rows = self.conn.execute(
+            f"SELECT * FROM (SELECT * FROM trace {where} ORDER BY id DESC LIMIT ?) ORDER BY id",
+            (*args, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
 
 LLM_SCHEMA = """
 CREATE TABLE IF NOT EXISTS llm_cache (
@@ -352,6 +377,13 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   tokens_cached INTEGER NOT NULL, ms INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS llm_usage_day ON llm_usage(day);
+CREATE TABLE IF NOT EXISTS trace (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, run_id TEXT NOT NULL, step TEXT NOT NULL,
+  model TEXT NOT NULL, prompt_version TEXT NOT NULL, input_hash TEXT NOT NULL,
+  output TEXT NOT NULL, tokens_in INTEGER NOT NULL, tokens_out INTEGER NOT NULL,
+  tokens_cached INTEGER NOT NULL, ms INTEGER NOT NULL, verdict TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS trace_run ON trace(run_id);
 """
 IST = timezone(timedelta(hours=5, minutes=30))
 

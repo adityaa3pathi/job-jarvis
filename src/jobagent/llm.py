@@ -7,11 +7,12 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
@@ -51,28 +52,63 @@ class Usage:
     tokens_out: int
     tokens_cached: int
     ms: int
+    # Trace fields (U16), filled by `ask` once the reply is checked.
+    run_id: str = ""
+    prompt_version: str = ""
+    input_hash: str = ""
+    output: str = ""
+    verdict: str = ""
 
+
+MAX_TRACE_OUTPUT = 4000
 
 # Set by `ask` and `usage_sink` for the current thread, so the LLM protocol stays one method.
 _STEP: ContextVar[str] = ContextVar("llm_step", default="")
 _SINK: ContextVar[Callable[[Usage], None] | None] = ContextVar("llm_sink", default=None)
+_RUN: ContextVar[str] = ContextVar("llm_run", default="")
+_PENDING: ContextVar[list[Usage] | None] = ContextVar("llm_pending", default=None)
 
 
 def current_step() -> str:
     return _STEP.get()
 
 
+def current_run_id() -> str:
+    return _RUN.get()
+
+
+@contextmanager
+def run_scope(run_id: str | None = None) -> Iterator[str]:
+    """All AI steps inside this block share one run id (one web task or CLI command)."""
+    token = _RUN.set(run_id or secrets.token_hex(6))
+    try:
+        yield _RUN.get()
+    finally:
+        _RUN.reset(token)
+
+
 @contextmanager
 def usage_sink(record: Callable[[Usage], None]) -> Iterator[None]:
-    """Every model reply inside this block is passed to `record`."""
+    """Every model reply inside this block is passed to `record`. Starts a run if none is set."""
     token = _SINK.set(record)
+    run = None if _RUN.get() else _RUN.set(secrets.token_hex(6))
     try:
         yield
     finally:
+        if run is not None:
+            _RUN.reset(run)
         _SINK.reset(token)
 
 
 def report_usage(usage: Usage) -> None:
+    pending = _PENDING.get()
+    if pending is not None:
+        pending.append(usage)  # `ask` adds the verdict, then sends it on
+        return
+    _deliver(usage)
+
+
+def _deliver(usage: Usage) -> None:
     record = _SINK.get()
     if record is None:
         return
@@ -106,12 +142,23 @@ def short_cause(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
 
 
-def ask[T: BaseModel](llm: LLM, schema: type[T], *, system: str, user: str, step: str = "") -> T:
-    """Call the model and validate its JSON. Any failure becomes LLMError."""
-    token = _STEP.set(step)
+def _sha(*parts: str) -> str:
+    return hashlib.sha256("\x00".join(parts).encode()).hexdigest()
+
+
+def ask[T: BaseModel](
+    llm: LLM, schema: type[T], *, system: str, user: str, step: str = "", version: str = ""
+) -> T:
+    """Call the model and validate its JSON. Any failure becomes LLMError.
+    Without `version`, the trace names the prompt by a hash of `system`."""
+    token, pending = _STEP.set(step), _PENDING.set([])
+    full, raw, verdict = f"{SYSTEM_RULE}\n{system}", "", "error"
     try:
-        raw = llm.complete_json(system=f"{SYSTEM_RULE}\n{system}", user=user)
-        return schema.model_validate(json.loads(raw))
+        raw = llm.complete_json(system=full, user=user)
+        verdict = "malformed"
+        result = schema.model_validate(json.loads(raw))
+        verdict = "ok"
+        return result
     except LLMError:
         raise
     except (ValueError, ValidationError, TypeError) as exc:
@@ -119,6 +166,13 @@ def ask[T: BaseModel](llm: LLM, schema: type[T], *, system: str, user: str, step
     except Exception as exc:
         raise LLMError(f"model call failed: {short_cause(exc)}") from exc
     finally:
+        replies = _PENDING.get() or []
+        _PENDING.reset(pending)
+        for usage in replies:
+            _deliver(replace(
+                usage, run_id=_RUN.get(), prompt_version=version or f"sys-{_sha(system)[:8]}",
+                input_hash=_sha(full, user)[:16], output=raw[:MAX_TRACE_OUTPUT], verdict=verdict,
+            ))  # fmt: skip
         _STEP.reset(token)
 
 

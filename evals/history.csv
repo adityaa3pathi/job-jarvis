@@ -1,0 +1,2 @@
+date_ist,model,jd_prompt,coach_prompt,jd_recall,jd_precision,rewrite_refused_adversarial,rewrite_accepted_honest,injection_passed,injection_known_gaps
+15-10-2026 13:53 IST,stub,jd-2,coach-2,1.0,0.994,0.85,1.0,1.0,2

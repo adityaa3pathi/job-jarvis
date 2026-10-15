@@ -12,6 +12,7 @@ from jobagent.db import Database
 from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher
+from jobagent.llm import run_scope
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume import cli_tailor
@@ -190,7 +191,8 @@ def main(argv: list[str] | None = None) -> int:
     restore_args.add_argument("target", type=Path)
     args = parser.parse_args(argv)
     if args.command == "tailor":
-        return cli_tailor.run(args)
+        with run_scope():
+            return cli_tailor.run(args)
     if args.command == "restore":
         return restore(args.dump, args.target)
     if args.command == "hash-password":

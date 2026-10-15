@@ -1,0 +1,909 @@
+# JD extraction golden set (U16). Built by evals/make_jd_golden.py from a DB copy.
+# OWNER: `expected` came from the code ontology scan, not a person. Check each list:
+# delete plain-word hits the job does not ask for, add skills the scan missed.
+cases:
+- id: lever-22425
+  source: lever
+  role: full_stack
+  company: Acceldata
+  title: Staff Engineer ( Full Stack )
+  expected:
+  - PostgreSQL
+  - JavaScript
+  - React
+  - Redis
+  - Java
+  - Kubernetes
+  - Kafka
+  - Spark
+  - MySQL
+  - Microservices
+  text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
+    \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
+    \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
+    \ across various environments. Our platform empowers data teams to manage products effectively by\
+    \ ensuring data quality, preventing failures, and controlling costs.\nAs a Staff Full Stack Engineer\n\
+    You’ll be responsible for architecting, building and scaling the core features and capabilities of\
+    \ our Kubernetes-native Data product. You’ll also work closely with the frontend and product teams\
+    \ to create a reliable and scalable platform. \nA day in the life of Staff Full Stack Engineer\nArchitect,\
+    \ design, and build scalable distributed systems using Java. \nLead system design and architecture\
+    \ decisions across services, APIs, and data layers.\nBuild and optimize high-throughput, low-latency\
+    \ microservices.\nDesign and implement event-driven architectures using Apache Kafka.\nDevelop and\
+    \ optimize data processing pipelines leveraging Apache Spark (or similar technologies).\nEnsure system\
+    \ reliability through:\n-Fault tolerance, retries, circuit breakers\n-Observability (logging, metrics,\
+    \ tracing)\nOptimize performance across:\n-CPU, memory, I/O, and database queries\nDrive code quality,\
+    \ design reviews, and engineering best practices\nMentor engineers and provide technical leadership\
+    \ across teams\nYou are a great fit for this role if you have\n 10+ years of experience in software\
+    \ engineering with strong backend focus\nDeep expertise in Java and backend frameworks like Spring\
+    \ Boot\nStrong experience in:\n-Distributed systems design\n-Microservices architecture\n-Concurrency\
+    \ and asynchronous processing\nHands-on experience with:\n-Apache Spark \n-PostgreSQL / MySQL\n-Caching\
+    \ systems like Redis\nExperience with cloud-native architectures on platforms like Amazon Web Services\n\
+    Strong understanding of API design, scalability, and performance optimization\nExperience in frontend\
+    \ technologies (JavaScript, React)\nStrong debugging, problem-solving, and system design skills\n\
+    Bonus Points for\n - Experience in Kubernetes\n - Experience in Big Data Systems or Hadoop components.\n\
+    We care for our team\n·      Mentorship & Growth\n·      ESOPs\n·      Medical and Life Insurance\n\
+    ·      Paid Maternity & Parental Leave\n·      Corporate Uber Program\n·      Learning & Development\
+    \ Support\nAcceldata for All"
+- id: cutshort-95
+  source: cutshort
+  role: frontend
+  company: Auxo AI
+  title: Full Stack Engineer (Frontend Focus)
+  expected:
+  - TypeScript
+  - JavaScript
+  - LangChain
+  - Next.js
+  - Docker
+  - CrewAI
+  - React
+  - RAG
+  - Kubernetes
+  - AWS
+  - Google Cloud
+  - Azure
+  - REST
+  - Node.js
+  text: "Role \n: Senior Full Stack Engineer (Frontend Focus)\nLocation \n: Hyderabad/Bangalore/Gurgaon/Mumbai\n\
+    Role Summary\nWe're looking for a **Senior Full Stack Engineer (Frontend Focus)** to build modern,\
+    \ AI-powered enterprise applications. You'll primarily focus on creating scalable, high-performance\
+    \ frontend experiences using React and Next.js, while contributing to backend services, APIs, and\
+    \ AI integrations where needed. You'll work closely with Product, Design, and AI teams to build intuitive,\
+    \ performant, and production-ready applications.\nMinimum Qualifications\n* 3–7 years of software\
+    \ engineering experience.\n* Strong experience with \nReact, Next.js, TypeScript, JavaScript, HTML,\
+    \ and CSS.\n* Experience building and shipping production-grade frontend applications, including enterprise\
+    \ dashboards and data-intensive applications.\n* Strong understanding of \nfrontend architecture\n\
+    , state management (Redux, Zustand, Context API, or similar), rendering lifecycle, and performance\
+    \ optimization, including code splitting, lazy loading, bundle optimization, caching strategies, and\
+    \ Core Web Vitals.\n* Experience building complex UI experiences using modern frontend technologies,\
+    \ including data visualization, Canvas, WebGL, Service Workers, and Web Workers.\n* Experience building\
+    \ and integrating \nREST APIs and backend services using Node.js.\nPreferred Qualifications\n* Experience\
+    \ building AI-powered applications or AI agents using LangChain, LlamaIndex, CrewAI, or similar AI\
+    \ frameworks.\n* Experience with vector databases and Retrieval-Augmented Generation (RAG) applications.\n\
+    * Experience with DevOps practices and cloud platforms such as AWS, Azure, or GCP.\n* Experience with\
+    \ Docker and Kubernetes.\n* Experience building reusable component libraries, design systems, or micro-frontend\
+    \ architectures."
+- id: cutshort-107
+  source: cutshort
+  role: backend
+  company: unhr
+  title: Sr Backend Developer (Full Stack – Python / Django)
+  expected:
+  - PostgreSQL
+  - JavaScript
+  - Python
+  - Django
+  - Redis
+  - AWS
+  - REST
+  - Celery
+  - Agile
+  text: "Sr Backend Developer (Full Stack – Python / Django)\nPreference: Please apply only if you are\
+    \ an IIT/NIT graduate and have strong hands-on experience in full-stack development with Python &\
+    \ Django.\nInsurance/InsurTech experience is preferred. Strong engineering fundamentals and a willingness\
+    \ to learn the domain are more important.\nOffice location – Bangalore\nWork mode – Onsite\nWorking\
+    \ Days – 5 days a week\nBudget - 12-15 LPA \nWork Experience - 2-5 years\nRole Summary\nWe’re hiring\
+    \ Sr Backend Developers with strong full-stack Django expertise to own backend workstreams end-to-end\
+    \ and contribute to frontend development when needed. Hands-on Python/Django experience is essential.\n\
+    (HTML, JavaScript, jQuery, CSS). \nKey Responsibilities\n Design, build, and maintain scalable backend\
+    \ services and APIs for Fuse-OS\n Own medium-to-complex workstreams end-to-end: data models, APIs,\
+    \ background jobs, and light UI \nwiring\n Improve reliability, performance, observability, and maintainability\
+    \ of production systems\n Apply sound engineering practices for multi-tenant SaaS (security, permissions,\
+    \ data isolation)\n Collaborate closely with frontend, QA, and product/delivery to ship high-quality\
+    \ releases\n Mentor other backend engineers through design discussions, pairing, and code reviews\n\
+     Participate in architecture discussions and help evolve platform technical standards\n Support\
+    \ production troubleshooting and continuous improvement of engineering quality\nRequired Skills &\
+    \ Qualifications\n Solid experience with Django REST Framework, asynchronous job processing (e.g.,\
+    \ Celery), Redis, and\nPostgreSQL\n Proven ability to design data models, write migrations, and ship\
+    \ maintainable APIs\n Full-stack capability: HTML, JavaScript, jQuery, and CSS sufficient to complete\
+    \ UI wiring without blocking\nfrontend\n Strong debugging skills across application, database, and\
+    \ background-job layers\n Experience collaborating in Agile teams with clear quality standards and\
+    \ delivery cadence\nPreferred / Nice to Have\n Hands-on Selenium automation experience with Python\
+    \ (big plus)\n AWS familiarity (compute, storage, messaging, monitoring, IAM basics) — optional but\
+    \ strongly preferred\n Experience with multi-tenant architectures, containers, and production SaaS\
+    \ operations\n Exposure to document/data processing pipelines, reconciliation-style systems, or enterprise\
+    \ integrations\n Awareness of application security, RBAC, auditability, and privacy-by-design practices"
+- id: wellfound-6497
+  source: wellfound
+  role: full_stack
+  company: Proverse Talent
+  title: Software Engineer - Fullstack
+  expected:
+  - TypeScript
+  - Next.js
+  - Python
+  - React
+  - AWS
+  - Google Cloud
+  - SQL
+  text: '**About the job**
+
+    Role: Software Engineer - Full stack
+
+    Experience: 3–6 years of software development experience
+
+    Location: Bengaluru (WFO - 5 Days)
+
+    Compensation: 30–35 Fixed LPA + N/A-5 Variable
+
+    Focus: End-to-end B2B product development, Python, TypeScript, ReactJS/NextJS, SQL & NoSQL databases,
+    and cloud infrastructure (AWS/GCP)
+
+    **About the Company:**
+
+    A lean team building modern, automated AI research infrastructure that uses autonomous agents and
+    smart web scrapers to transform consumer data into rapid market research reports.
+
+    **Job Description:**
+
+    This role combines independent feature ownership across the tech stack with rigorous engineering standards.
+
+    What you''d actually be doing
+
+    **1. End-to-End Ticket Ownership (Primary Focus):** Own tickets from problem understanding all the
+    way to feature shipping, ensuring a tight, reliable engineering process that delivers value to major
+    brands.
+
+    **2. Full-Stack Feature Building:** Build, scale, and maintain features across both the frontend and
+    backend stack.
+
+    **3. Debugging & Optimization:** Debug and optimize production systems to ensure maximum performance,
+    reliability, and speed.
+
+    **4. Collaboration & Adaptation:** Collaborate closely with product and design teams while continuously
+    learning and adapting to evolving technology stacks.
+
+    **What good looks likeBy Outcome**
+
+    **30 days:** Quick ramp-up on the codebase, active ownership of initial tickets, and adherence to
+    reliable engineering workflows.
+
+    **60 days:** Consistent shipping of full-stack features, proactive debugging of production environments,
+    and tight cross-functional collaboration with product and design.
+
+    **90 days:** Autonomous end-to-end delivery of complex features, performance optimizations in production,
+    and seamless adaptation to the evolving tech stack.
+
+    What we''re looking for
+
+    **Required:**
+
+    * 3 to 6 years of experience in software development.
+
+    * Strong proficiency in Python.
+
+    * Experience building end-to-end B2B products is mandatory, with critical product-based startup experience.
+
+    * Hands-on experience with TypeScript, ReactJS/NextJS, SQL & NoSQL databases, and AWS/GCP—all mandatory.
+
+    **Preferred:**
+
+    * Direct background in fast-paced product-based startups building scalable B2B infrastructure.
+
+    **Career Progression:**'
+- id: greenhouse-9048
+  source: greenhouse
+  role: frontend
+  company: Agoda
+  title: Frontend/Full Stack Engineer Manager (Bangkok based, Relocation provided)
+  expected:
+  - TypeScript
+  - React
+  - GraphQL
+  - REST
+  text: "About Agoda\nAt Agoda, we bridge the world through travel. Our story began in 2005, when two\
+    \ lifelong friends and entrepreneurs, driven by their passion for travel, launched Agoda to make it\
+    \ easier for everyone to explore the world. \nToday, we are part of Booking Holdings [NASDAQ: BKNG],\
+    \ with a diverse team of over 7,000 people from 90 countries, working together in offices around the\
+    \ globe. Every day, we connect people to destinations and experiences, with our great deals across\
+    \ our millions of hotels and holiday properties, flights, and experiences worldwide.\nNo two days\
+    \ are the same at Agoda. Data and technology are at the heart of our culture, fueling our curiosity\
+    \ and innovation. If you’re ready to begin your best journey and help build travel for the world,\
+    \ join us.\nGet to Know our Team:\nJoin a team of talented engineers who are passionate about front-end\
+    \ development. Our team is dedicated to building cutting-edge web applications using Typescript, React,\
+    \ and Redux. \nThe Opportunity:\nAs a Front-End Engineering Manager at Agoda, you will lead a team\
+    \ of talented engineers building scalable, high-performance web applications that power user experiences\
+    \ at global scale. You will work closely with product managers, designers, data scientists, and cross-functional\
+    \ engineering teams to develop user-facing applications and platforms at global scale..\nIn this Role,\
+    \ you’ll get to:\nLead a team of engineers building scalable, reliable, and user-friendly web applications\
+    \ and product experiences.\nDrive the development of front-end and full-stack solutions across core\
+    \ product areas\nCollaborate with product, design, data, and engineering teams to deliver intuitive\
+    \ and impactful customer or internal user experiences.\nShape architecture across areas such as state\
+    \ management, SSR, micro-frontends, and API integration.\nEnsure new features are performant, maintainable,\
+    \ observable, and production-ready.\nGuide the team in designing interfaces and workflows that surface\
+    \ recommendations, automation, or intelligent product enhancements in a usable and reliable way.\n\
+    Improve application quality through engineering best practices including code reviews, testing, experimentation,\
+    \ and continuous delivery.\nSupport integration with backend services through REST, GraphQL, WebSockets,\
+    \ and other service interfaces.\nDrive technical decisions around performance, reliability, monitoring,\
+    \ and maintainability in production."
+- id: cutshort-98
+  source: cutshort
+  role: other
+  company: Craft My Plate
+  title: Founding Engineer Lead
+  expected:
+  - Go
+  - AWS
+  - REST
+  text: 'Read This Before Anything Else
+
+    We have 6 developers who can ship. What we don''t have is someone who turns that into a real engineering
+    function: real architecture, real leverage, real AI-driven advantage. If that gap sounds like an opportunity
+    rather than a headache, you''re in the right place. If it sounds like a lot of undefined work with
+    no playbook handed to you, this one probably isn''t for you. That''s completely okay. There are plenty
+    of great roles that fit differently.
+
+    About CraftMyPlate
+
+    CraftMyPlate is Hyderabad''s go-to platform for food experiences for micro-events: house parties,
+    birthdays, office celebrations, festive gatherings, and more. We''re building the operating system
+    for how India discovers, customises, and orders food for smaller events. We''re backed by established
+    founders and investors, and we''re funded and growing fast. The next phase of that growth runs through
+    engineering.
+
+    Where We Stand
+
+    Some numbers, because they matter more than adjectives. Order volume has grown 50x in two years, and
+    we''re compounding at roughly 3x year over year, without giving up equity to fund it. That means the
+    business runs on its own economics. The growth is real demand, not runway bought with dilution, and
+    every efficient architectural decision this role makes directly protects that.
+
+    Most people size up an opportunity by asking what''s going to change in ten years. The more useful
+    question, and the one this company is built around, is what won''t change. People will keep gathering.
+    They''ll keep celebrating, hosting, and marking festivals, in 10 years and in 20. That permanence
+    is the bet. You''re not building infrastructure for a trend cycle. You''re building for a category
+    that outlasts the current AI wave, the next funding round, and probably us too.
+
+    The Technical Reality
+
+    Here''s an honest read of the engineering problem, not a sanitized version of it.
+
+    Event-driven commerce doesn''t scale like typical e-commerce. Demand isn''t smooth, it''s spiky: weekends,
+    festival calendars, and event dates create real load concentration, and each order is tied to a hard
+    deadline that can''t slip the way a shipped package can. That has direct architectural consequences:
+    systems need to handle bursty, unpredictable traffic without paying for idle capacity the rest of
+    the time, which is exactly why we''re serverless-first on AWS rather than running a fixed fleet sized
+    for peak.'
+- id: wellfound-6509
+  source: wellfound
+  role: ai_ml
+  company: Businessonbot (Y Combinator W21)
+  title: AI Engineer (3+ years mandatory)
+  expected:
+  - FastAPI
+  - Python
+  - RAG
+  - LLM
+  text: "**About Us**\nBusinessonbot is a fast-growing B2B SaaS platform doing $1.5M ARR, serving D2C\
+    \ brands across India for WhatsApp-first marketing, support automation, and AI-powered customer journeys.\
+    \ Our stack connects WhatsApp, Instagram, Messenger, Email, and Voice channels to e-commerce platforms\
+    \ (Shopify, WooCommerce), payments, and CRM — all in real-time, at scale, for hundreds of active business\
+    \ clients. \nWe move fast, operate lean, and take reliability seriously because downtime for our clients\
+    \ means lost revenue\n**Role**\nWe're looking for an AI Engineer who can own our agent stack end to\
+    \ end — design, build, ship, and keep it healthy in production.\nThis is not a research role. You\
+    \ won't be reading papers and running benchmarks in a notebook. Our AI agents talk to real customers\
+    \ of real D2C brands, on WhatsApp and on voice, about their orders and their money. When an agent\
+    \ hallucinates a discount code or loops on a tool call, a business owner notices and a customer is\
+    \ unhappy. So the job is: build agents that work reliably, prove they work with evals and traces,\
+    \ keep them from doing dumb or dangerous things with guardrails, and do all of it without the inference\
+    \ bill quietly doubling every quarter.\nYou'll be the person who holds the entire agent architecture\
+    \ in their head. That means being independent — you'll get direction on what the product needs, not\
+    \ a spec for how to build it\n**What You'll Own**\n1. Agent Architecture, End to End\n* Own the design\
+    \ and implementation of production LLM agents — tool calling, memory, state, multi-step reasoning,\
+    \ handoff to humans\n* Build and maintain Python/FastAPI services that expose these agents to our\
+    \ platform, reliably and at low latency\n* Decide agent boundaries: what's one agent vs. many, what's\
+    \ a tool vs. a workflow step, what should never be an LLM call at all\n* Integrate with our core backend,\
+    \ messaging channels, and e-commerce/CRM data sources so agents actually have the context they need\n\
+    2. RAG & Retrieval Quality\n* Build and own retrieval pipelines — chunking, embedding, indexing, reranking,\
+    \ refresh strategy\n* Debug retrieval failures properly: is it the chunking, the query, the index,\
+    \ or the prompt? Know how to tell the difference\n* Handle multi-tenant data isolation in retrieval\
+    \ as a correctness and security requirement, not an afterthought\n* Keep retrieval fresh as brand\
+    \ catalogs, policies, and offers change\n3. Guardrails & Safety"
+- id: greenhouse-8644
+  source: greenhouse
+  role: backend
+  company: Addepar
+  title: Software Engineering Manager(Backend)
+  expected:
+  - Docker
+  - Java
+  - Kubernetes
+  - AWS
+  - Kafka
+  - CI/CD
+  - Terraform
+  - SQL
+  text: "Who We Are\nAddepar is a global data and AI platform empowering investment professionals to turn\
+    \ complex financial information into actionable intelligence. Addepar unifies portfolio, market and\
+    \ client data in a total portfolio view and delivers AI-powered insights within investment and client\
+    \ workflows. More than 1,500 firms in 60 countries use Addepar to manage and advise on nearly $10\
+    \ trillion in assets. Its open platform integrates with 650 software, data and consulting partners\
+    \ to power end-to-end investment operations across firms of all sizes and levels of complexity. Addepar\
+    \ supports clients worldwide with offices in New York City, Salt Lake City, São Paulo, London, Edinburgh,\
+    \ Geneva, Warsaw, Dubai, Pune and Singapore.\nThe Role\nAddepar is seeking a highly skilled and motivated\
+    \ Engineering Manager to join our world-class team.In this high-impact role, you won't just lead a\
+    \ group of engineers—you'll be the driving force behind scaling the Addepar Platform and architecting\
+    \ cross-cutting solutions that redefine how our products interact.\nApplicants must have legal authorization\
+    \ to work in the country where this role is based on the first day of employment. Visa sponsorship\
+    \ is not available for this position.\nWhat You’ll Do\nYour responsibilities will include:\nDriving\
+    \ the technical direction for cross cutting products across Addepar.\nCollaborating with teams from\
+    \ various departments to successfully implement platform strategies.\nBuilding and managing a team\
+    \ of exceptional engineers.\nEnsuring flawless and timely execution of deliverables.\nDeveloping and\
+    \ maintaining relationships with partners across Addepar.\nWho You Are\nMinimum 10+ years of experience\
+    \ in software engineering \nProven experience in leading engineering teams in fintech space.\nStrong\
+    \ problem-solving and decision-making skills\nGood experience and knowledge in the below tech stack\
+    \ including :\nJava (Version 17 OR 21) , Kafka, Spring Boot, Quarkus, AWS , SQL/noSQL Databases\n\
+    Nice to have experience with CI/CD pipelines ,terraform, docker, kubernetes, etc\nOur Values \nAct\
+    \ Like an Owner - \nThink and operate with intention, purpose and care. Own outcomes.\nBuild Together\
+    \ - \nCollaborate to unlock the best solutions. Deliver lasting value. \nChampion Our Clients - \n\
+    Exceed client expectations. Our clients’ success is our success. \nDrive Innovation - \nBe bold and\
+    \ unconstrained in problem solving. Transform the industry. \nEmbrace Learning - "
+- id: ashby-1709
+  source: ashby
+  role: full_stack
+  company: Allwyn
+  title: 'Mid Level: Full-Stack Software Engineer'
+  expected:
+  - PostgreSQL
+  - JavaScript
+  - MongoDB
+  - Redis
+  - Java
+  - C++
+  - Go
+  - GraphQL
+  - MySQL
+  - SQL
+  - Node.js
+  - Linux
+  - Agile
+  - Microservices
+  text: "Role: Full Stack Developer - Mid-Level \nLocation: Bengaluru (MG Road), Karnataka\nNote: We are\
+    \ looking for candidates who are currently based in Bengaluru\nWork Model\n - Hybrid (3 days in office,\
+    \ 2 days remote)\n - Monday to Friday\n - Indian holidays observed\nWork Hours: 12:30 PM – 9:30 PM\
+    \ IST\nThis schedule ensures overlap with our US-based engineering team until 12:00 Noon ET.\nTelecom\
+    \ experience is good to have.\nRESPONSIBILITIES\n - Design and implement web application features\
+    \ using modern web frameworks and techniques, from requirements to production and deployment\n - Add\
+    \ new functionality and solve customer-facing bugs within an existing web application\n - Contribute\
+    \ to the architecture and design of new and existing User Interfaces\n - Prepare prototypes/screenshots\
+    \ to share with stakeholders for review and approval\n - Advice on best practices, new techniques,\
+    \ software quality, and process improvement\n - Create, modify, and maintain RESTful Web Services\n\
+    \ - Develop applications built with Go, GraphQL, Vue, and similar modern technologies\n - Assist with\
+    \ the estimation of time and effort required to implement new features\n - Participate in design reviews,\
+    \ peer code reviews, and improve overall product quality\n - Interface with cross-functional teams\
+    \ to successfully implement feature dependencies\n - Act as a member of an Agile scrum team\nQUALIFICATIONS\n\
+    \ - 5+ years of related full-stack development\n - Proven working experience in front and back-end\
+    \ application development\n - Strong expertise with various JavaScript frameworks (Vue, Angular, etc.)\n\
+    \ - Strong expertise with Web Services and RESTful Applications\n - Expertise with NodeJS, WebSockets\
+    \ and in-depth understanding of Microservices methodologies\n - Familiarity with HTML5 and CSS3\n\
+    \ - Familiarity with system-level issues such as scaling, security, and responsiveness\n - Solid programming\
+    \ experience in object-oriented design and development\n - Linux or a POSIX O/S environment\n - Familiarity\
+    \ with software configuration management, defect tracking tools, and peer review\n - Strong documentation\
+    \ and writing skills\nAdditional experience in the following areas is a plus\n - Knowledge of satellite\
+    \ communication protocols\n - C++, Java, or other object-oriented programming language\n - Understanding\
+    \ of SQL and database access for relational Databases; PostgreSQL, MariaDB, MySQL\n - Working knowledge\
+    \ of NoSQL databases (Redis, MongoDB, etc.)\n - Familiarity with Responsive Design Frameworks such\
+    \ as Bootstrap"
+- id: lever-22426
+  source: lever
+  role: frontend
+  company: Acceldata
+  title: Staff Frontend Engineer
+  expected:
+  - TypeScript
+  - JavaScript
+  - Vue.js
+  - React
+  - Kubernetes
+  - Spark
+  - Node.js
+  text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
+    \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
+    \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
+    \ across various environments. Our platform empowers data teams to manage products effectively by\
+    \ ensuring data quality, preventing failures, and controlling costs.\nA day in the life of a Principal\
+    \ Frontend Engineer\nArchitect and build a scalable frontend platform using React and TypeScript for\
+    \ a Kubernetes-native data product. \nDesign intuitive UIs for:\n-Kubernetes cluster visibility (nodes,\
+    \ pods, workloads).\n-Spark job lifecycle management (submission, monitoring, debugging).\n-Data pipeline\
+    \ observability and performance metrics.\nDefine frontend patterns for:\n-Real-time data streaming,\
+    \ polling, and state synchronization\n-Handling large datasets (tables, logs, metrics, traces)\nCollaborate\
+    \ with backend teams to integrate with:\n-Kubernetes APIs (resources, events, logs)\n-Spark execution\
+    \ and monitoring systems\nBuild high-performance, data-intensive dashboards with efficient rendering\
+    \ and virtualization. \nEstablish a lean, extensible frontend architecture suitable for an early-stage\
+    \ product (avoid over-engineering).\nDefine API contracts, data-fetching strategies, and error-handling\
+    \ standards for distributed systems.\nOptimize frontend performance (lazy loading, code splitting,\
+    \ caching, minimizing re-renders).\nImplement frontend observability (error tracking, performance\
+    \ monitoring) for production systems\nMentor engineers and establish frontend best practices, coding\
+    \ standards, and design guidelines\nYou are a great fit for the role, if you have\n12-15 years of\
+    \ experience in building modern, scalable frontends using frameworks such as Angular, React or Typescript.\
+    \ \nStrong experience in frontend architecture & system design (modular design, state management,\
+    \ API layers). \nProven experience building data-intensive UIs (dashboards, large tables, logs, analytics\
+    \ tools). \nExpertise in JavaScript / TypeScript, HTML, CSS, Material UI, Vue.JS. \nDevelop and integrate\
+    \ backend services using Node.JS\nWrite unit and integration tests using Jasmine and Karma to ensure\
+    \ code quality.\nStrong performance optimization skills (rendering, virtualization, lazy loading,\
+    \ re-render control).\nSolid experience with API integration & async data handling (pagination, retries,\
+    \ error states)."
+- id: cutshort-7280
+  source: cutshort
+  role: mobile
+  company: Ebullient Gaming India Pvt Ltd
+  title: Full Stack Mobile Developer
+  expected:
+  - JavaScript
+  - MongoDB
+  - Python
+  - React
+  - Java
+  - Go
+  - AWS
+  - Google Cloud
+  - Azure
+  - CI/CD
+  - REST
+  - Node.js
+  text: "Ebullient Gaming India\n is India’s biggest network of gaming generating 250 Million+ Views per\
+    \ month for gaming content. It is powered by a Talent management agency, an Online Publication, an\
+    \ Event arm and a creative agency that works with the best brands and gaming talent of the country.\n\
+    Ebullient\n is hiring for a \nFull Stack Mobile Developer\n to build and maintain their technology\
+    \ platform.\nWho Should Apply?\nPassionate about building new things from scratch\nGood with managing\
+    \ and organising work amongst the team to get the job done\nExcellent in hiring a team for new projects\
+    \ and retaining good talents to build an in-house team\nWill to learn from the mentors and kind to\
+    \ share the experience with the mentees\nWhy Will I Apply?\nI will have Experience to be a part of\
+    \ a brand journey from scratch\nI will have freedom to fail in pursuit of disruption\nI will work\
+    \ and compete with the brightest minds in the category\nI will enjoy the pressure and perks of higher\
+    \ hierarchy\nWhat are your Roles and Responsibilities?\nAbility to handle the entire lifecycle of\
+    \ a mobile application which involves client/server side coding, infrastructure deployment and management\
+    \ on cloud, and publishing application on Google Play Store and Apple App Store\nWork collaboratively\
+    \ with subject matter experts to translate complex industry-specific problems into a working software\n\
+    Ability to build and maintain high performing systems at scale\nEventually, take ownership of the\
+    \ product and lead an entire team of engineers\nWhat are the must-haves for the job?\nBachelor’s Degree\
+    \ in Computer Science or relevant work experience\nUnderstanding of programming paradigms\nProficient\
+    \ in JavaScript and some of its frameworks, including React\nProficient in building mobile applications\
+    \ using React Native\nHands-on with at least one of the server-side languages, framework or runtime\
+    \ such as Golang, Nodejs, Python, Java or .Net\nFamiliarity with database concepts and technologies\n\
+    Hands-on with at least one of the NoSql databases such as Mongo DB, Elastic Search or Cassandra\n\
+    Understanding of micro services architecture and inter-service communication using REST and RPC APIs\n\
+    Familiarity with cloud service technologies with a provider such as AWS, Azure or GCP\nUnderstanding\
+    \ of scalable design patterns\nFamiliarity with CI/CD pipeline\nExperience: \n2-7 years\nSalary:\n\
+    \ According to Eligibility\nLocation: \nDelhi NCR\nContact Person:\n Neelam"
+- id: lever-22413
+  source: lever
+  role: backend
+  company: Acceldata
+  title: Senior Software Engineer - Backend
+  expected:
+  - MongoDB
+  - Kotlin
+  - Java
+  - Kafka
+  - Spark
+  - SQL
+  text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
+    \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
+    \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
+    \ across various environments. Our platform empowers data teams to manage products effectively by\
+    \ ensuring data quality, preventing failures, and controlling costs.\nAs a Senior Software Engineer\n\
+    You’ll be responsible for building, scaling and maintaining the core features and capabilities of\
+    \ our Data Observability suite. You’ll work closely with the frontend and product teams to create\
+    \ a reliable and scalable platform. \nA day in the life of Senior Software Engineer\n - Designing,\
+    \ building and improving the capabilities of some of the key features of the product. \n - Investigating\
+    \ software-related complaints and making necessary adjustments to ensure  optimal software performance.\n\
+    \ - Diving deep into open-source data engines and work on optimising their performance.\n - Designing,\
+    \ building and maintaining low-latency APIs.\n - Developing services that will be consumed by the\
+    \ frontend and solution engineers.\n - Regularly attending team meetings to discuss projects, brainstorm\
+    \ ideas, and put forward solutions to any issues.\nYou are a great fit for this role if you have\n\
+    \ - 4-8 years of experience in JVM (Java, Scala, Kotlin) \n - Strong data structure, algorithm design,\
+    \ and problem-solving skills.\n - Experience with database systems, RDBMS, Mongo, and Elastic Search.\n\
+    \ - Experience in cloud technologies\n - Knowledge of distributed systems, experience in enterprise\
+    \ software and SQL.\nBonus Points for\n - Experience in Spark / Kafka.\n - Experience in Data Quality\
+    \ / Data Catalog is preferred.\nWe care for our team\n·      Mentorship & Growth\n·      ESOPs\n·     \
+    \ Medical and Life Insurance\n·      Paid Maternity & Parental Leave\n·      Corporate Uber Program\n\
+    ·      Learning & Development Support\nAcceldata for All\nWe are a fast-growing company, solving complex\
+    \ data problems at scale. We are driven by strong work ethics, high standards of excellence, and a\
+    \ spirit of collaboration. We promote innovation, commitment, and accountability. Our goal is to cultivate\
+    \ a healthy work environment that fosters a sense of belonging, encourages teamwork, and brings out\
+    \ the best in every individual.\nWhy Acceldata?"
+- id: cutshort-99
+  source: cutshort
+  role: full_stack
+  company: MNC
+  title: Java Full Stack Developer
+  expected:
+  - TypeScript
+  - JavaScript
+  - Docker
+  - Java
+  - Kubernetes
+  - AWS
+  - Azure
+  - CI/CD
+  - REST
+  - SQL
+  - Git
+  - Agile
+  - Microservices
+  text: "Job Summary\nWe are looking for an experienced \nJava Full Stack Developer\n with strong hands-on\
+    \ experience in \nJava, Spring Boot, and Angular\n. The candidate will be responsible for developing\
+    \ scalable applications, building responsive user interfaces, developing REST APIs, and collaborating\
+    \ with cross-functional teams throughout the software development lifecycle.\nKey Skills\nJava\nSpring\
+    \ Boot\nAngular\nRESTful APIs\nMicroservices\nHTML, CSS, JavaScript/TypeScript\nSQL / Database\nGit\n\
+    Agile/Scrum\nUnit Testing\nCI/CD and DevOps practices\nRoles & Responsibilities\nDesign, develop,\
+    \ test, and maintain scalable full-stack applications using \nJava, Spring Boot, and Angular\n.\n\
+    Develop responsive and user-friendly front-end applications using \nAngular, TypeScript, HTML, and\
+    \ CSS\n.\nDesign and develop \nRESTful APIs and microservices\n using Java and Spring Boot.\nIntegrate\
+    \ Angular applications with backend services and APIs.\nWrite clean, reusable, maintainable, and efficient\
+    \ code following coding standards and best practices.\nWork with relational databases and develop\
+    \ efficient SQL queries.\nPerform unit testing, debugging, and troubleshooting of application issues.\n\
+    Participate in code reviews and contribute to improving application quality and performance.\nCollaborate\
+    \ with business analysts, architects, QA engineers, and other development teams to deliver application\
+    \ features.\nParticipate in Agile/Scrum ceremonies including sprint planning, daily stand-ups, reviews,\
+    \ and retrospectives.\nTroubleshoot production issues and provide timely fixes and technical support.\n\
+    Work with Git and CI/CD tools as part of the software development lifecycle.\nContribute to application\
+    \ performance, scalability, security, and reliability improvements.\nRequired Qualifications\n4.5\
+    \ to 8 years of hands-on experience in \nFull Stack Java Development\n.\nStrong experience in \nCore\
+    \ Java and Spring Boot\n.\nStrong hands-on experience with \nAngular\n and TypeScript.\nGood understanding\
+    \ of \nREST APIs and Microservices architecture\n.\nExperience with SQL and relational databases.\n\
+    Good understanding of software development and testing practices.\nStrong problem-solving and communication\
+    \ skills.\nExperience working in an \nAgile development environment\n.\nPreferred Skills\nExperience\
+    \ with cloud platforms such as \nAWS or Azure\n.\nKnowledge of Docker/Kubernetes.\nExperience with\
+    \ CI/CD tools.\nKnowledge of automated testing frameworks.\nExposure to performance and application\
+    \ security best practices."
+- id: wellfound-6539
+  source: wellfound
+  role: frontend
+  company: Kraftbase
+  title: Software Engineer - Frontend
+  expected:
+  - TypeScript
+  - JavaScript
+  - Next.js
+  - React
+  - Jest
+  - Git
+  text: "We are seeking an experienced Frontend Engineer to join our dynamic team. You will be responsible\
+    \ for developing and maintaining our cutting-edge web applications using modern front-end technologies\
+    \ like React, Next.js, TypeScript, and JavaScript.\n**Responsibilities:**\n1. Develop high-quality,\
+    \ responsive, and accessible user interfaces using React and Next.js.\n2. Write clean, maintainable,\
+    \ and well-documented code following best practices and coding standards.\n3. Collaborate closely\
+    \ with designers to pixel-perfectly translate UI designs from tools like Figma into functional and\
+    \ visually appealing components.\n4. Optimize web applications for performance, accessibility, and\
+    \ search engine optimization (SEO) using techniques such as code splitting, caching, and server-side\
+    \ rendering.\n5. Implement state management solutions and integrate with APIs and backend services.\n\
+    6. Ensure cross-browser compatibility and responsiveness across various devices and screen sizes.\n\
+    7. Participate in code reviews and provide constructive feedback to maintain high code quality.\n\
+    8. Stay up-to-date with the latest front-end technologies, trends, and best practices.\n9 . We have\
+    \ 6 days a week. \n**Requirements and Qualifications:**\n1. Bachelor's degree in Computer Science,\
+    \ Information Technology, or a related field, or equivalent experience.\n2. Minimum of 2+ years of\
+    \ experience in front-end development, with a strong emphasis on React and Next.js.\n3. Proficiency\
+    \ in TypeScript, JavaScript (ES6+), and related front-end technologies like HTML, CSS, and CSS preprocessors.\n\
+    4. Experience with state management libraries such as Redux or React Context API.\n5. Familiarity\
+    \ with modern front-end build tools and workflows (e.g., Webpack, Babel, npm, yarn).\n6. Knowledge\
+    \ of performance optimization techniques, accessibility standards, and SEO best practices.\n7. Ability\
+    \ to pixel-perfectly replicate UI designs from tools like Figma, Sketch, or Adobe XD.\n8. Experience\
+    \ with version control systems, preferably Git.\n9. Strong problem-solving and debugging skills.\n\
+    10. Excellent communication and collaboration skills, with the ability to work in a team environment.\n\
+    11. Passion for learning and staying up-to-date with the latest front-end technologies and trends.\n\
+    **Preferred Qualifications:**\n1. Experience with server-side rendering (SSR) and static site generation\
+    \ (SSG) using Next.js.\n2. Familiarity with testing frameworks such as Jest, Enzyme, or Cypress."
+- id: cutshort-91
+  source: cutshort
+  role: ai_ml
+  company: appscrip
+  title: Full-Stack Engineer (AI-Native)
+  expected:
+  - TypeScript
+  - PostgreSQL
+  - Express.js
+  - JavaScript
+  - Next.js
+  - Prisma
+  - React
+  - Redis
+  - LLM
+  - GraphQL
+  - REST
+  - Node.js
+  text: "Full-Stack Engineer (AI-Native) | 2-4 Years Experience\nAbout the Role\nWe're hiring a Full-Stack\
+    \ Engineer who is equally comfortable building a polished Next.js interface and a reliable NestJS\
+    \ API behind it. You'll build customer-facing products, including AI-powered features like chat interfaces,\
+    \ streaming responses, and agent-driven workflows. You'll own features end to end, from database schema\
+    \ to UI, and use AI tools daily to ship faster without lowering the quality bar.\nWhat You'll Do\n\
+    Frontend\nBuild responsive, accessible, high-performance UIs with React, Next.js (App Router, RSC)\
+    \ and TypeScript\nBuild AI-facing interfaces: streaming chat UIs, tool-call/agent-status displays,\
+    \ and loading, error, and retry states for non-deterministic outputs\nMonitor web vitals and fix performance\
+    \ regressions\nBackend\nDesign and build scalable REST/GraphQL APIs and services with Node.js and\
+    \ NestJS\nModel, query, and optimize data in PostgreSQL (schema design, indexing, migrations) using\
+    \ an ORM like Prisma or Drizzle\nImplement auth, authorization, validation, background jobs, queues,\
+    \ and caching (Redis)\nIntegrate LLM APIs (OpenAI, Anthropic, Gemini), including streaming (SSE/WebSockets),\
+    \ tool calling, retries, rate limits, and cost/latency control\nAI-Assisted Engineering\nUse AI coding\
+    \ tools (Cursor, Claude Code, Copilot, etc.) for scaffolding, refactoring, debugging, and test writing\n\
+    Write and maintain project context for AI tools (rules files, AGENTS.md/CLAUDE.md, reusable prompts)\
+    \ so the whole team gets better output\nReview AI-generated code critically for correctness, security,\
+    \ performance, and maintainability\nTeam and Delivery\nWrite unit, integration, and E2E tests, using\
+    \ AI to speed them up rather than skip them\nTake part in code reviews, sprint planning, architecture\
+    \ discussions, and on-call/incident follow-ups\nDocument APIs, decisions, and runbooks clearly\nMust-Have\
+    \ (Non-Negotiable)\nFrontend\nStrong JavaScript (ES6+) and \nTypeScript\nReact\n (hooks, state management,\
+    \ rendering behavior) and \nNext.js\n (App Router, SSR/SSG/RSC)\nHTML/CSS fundamentals, Tailwind or\
+    \ similar, responsive design, and accessibility basics\nBackend\nProduction experience with \nNode.js\n\
+    \ and a structured framework (\nNestJS\n preferred; Express/Fastify with good architecture is fine)\n\
+    Solid \nPostgreSQL\n skills: relational modeling, joins, indexes, transactions, query optimization\n\
+    API design: REST principles, pagination, versioning, error handling, input validation"
+- id: wellfound-6486
+  source: wellfound
+  role: backend
+  company: ToolJet
+  title: Software Engineer (Backend)
+  expected:
+  - TypeScript
+  - PostgreSQL
+  - JavaScript
+  - Prisma
+  - Redis
+  - Kafka
+  - REST
+  - RabbitMQ
+  - Node.js
+  text: '**About the company :**
+
+    **ToolJet** is an AI platform that empowers teams to build and deploy internal tools in minutes -
+    turning ideas into business applications faster than ever. With 35K+ stars on GitHub, we’re one of
+    the most loved open source platforms in the developer community. We partner with industry leaders
+    - from telecom giants, to financial institutions, to cutting-edge unicorns and startups across the
+    globe.
+
+    Our 50+ member team works across the US and India, building at the intersection of AI and productivity.
+    Backed by Microsoft’s M12, Nexus Venture Partners, January Capital, and Ratio Ventures, we’re on a
+    mission to redefine how businesses create software - faster, smarter, and more accessible for everyone.
+
+    **Responsibilities**
+
+    * Design, build, and maintain robust backend services, REST APIs, and data pipelines that power ToolJet''s
+    platform at scale.
+
+    * Own the full data lifecycle including schema design, query optimization, indexing strategies, and
+    migrations using PostgreSQL as the primary database.
+
+    * Build and maintain scalable server-side architecture using Node.js and NestJS, applying clean code
+    principles and strong separation of concerns.
+
+    * Collaborate with Product Managers and Frontend Engineers to define API contracts and deliver reliable,
+    high-performance integrations.
+
+    * Identify and resolve performance bottlenecks across the backend stack, from slow queries and N+1
+    problems to memory leaks and latency spikes.
+
+    **What we are looking for:**
+
+    * 3+ years of experience in backend or fullstack engineering with a strong backend focus.
+
+    * Deep hands-on expertise with Node.js and NestJS, with a proven track record of shipping production-grade
+    services.
+
+    * Strong proficiency in TypeScript and JavaScript, with a habit of writing type-safe, well-structured
+    code by default.
+
+    * Solid command of PostgreSQL including complex queries, indexing, query planning, transactions, and
+    schema design.
+
+    * Familiarity with ORM and query builder tools such as TypeORM, Prisma, or Knex.
+
+    * A sound understanding of database performance patterns and how to apply them in production environments.
+
+    * Strong grasp of SOLID principles, RESTful API design, and building services that are maintainable
+    and extensible.
+
+    * Experience with caching strategies using Redis and message queues such as BullMQ, RabbitMQ, or Kafka
+    is a strong plus.'
+- id: ashby-1207
+  source: ashby
+  role: frontend
+  company: AiPrise
+  title: Software Engineer II, Frontend (Bangalore, India)
+  expected:
+  - TypeScript
+  - JavaScript
+  - Python
+  - React
+  text: "ABOUT AIPRISE\nAiPrise is a global compliance orchestration platform helping fintechs, marketplaces,\
+    \ and payment companies verify and onboard customers worldwide. We integrate with 80+ identity and\
+    \ compliance vendors to deliver a holistic view of risk. We're now building AI-powered compliance\
+    \ agents to revolutionize KYB, AML, sanctions screening, and risk scoring, enabling our customers\
+    \ to onboard faster, reduce manual reviews, and prevent financial crime.\nROLE OVERVIEW\nWe're hiring\
+    \ a Software Engineer II, Frontend to own the onboarding flow, the part of AiPrise that end users\
+    \ actually see.\nUsers enter their details, scan an ID, take a selfie and upload documents. The flow\
+    \ is a React app, and customers embed it in their own products through our Web, Flutter and React\
+    \ Native SDKs. Every customer configures their own steps, theme and language, so one codebase has\
+    \ to work well for many setups, on every kind of phone and browser.\nThis is a build it, ship it,\
+    \ own it role. It's a small team, and you'll own large parts of the flow from day one.\nWHAT YOU'LL\
+    \ DO\nBUILD & OWN THE ONBOARDING FLOW\n - Build and improve onboarding screens for individuals (KYC)\
+    \ and businesses (KYB)\n - Build camera features like ID capture, selfie and liveness, and make them\
+    \ reliable on iPhones, low-end Android phones and inside mobile apps\n - Maintain and improve our\
+    \ Web, Flutter and React Native SDKs so the flow feels native inside customer apps\nDRIVE TECHNICAL\
+    \ EXCELLENCE\n - Keep the flow fast and stable, including on low-end devices and slow networks\n -\
+    \ Use data to find and fix where users drop off\n - Write clean, well-tested code and take part in\
+    \ code reviews\n - Debug production issues with urgency; own them until they're fixed\nCOLLABORATE\n\
+    \ - Work closely with product, design and backend engineers\n - Pick up backend work (Python) when\
+    \ a feature needs it\nWHAT WE'RE LOOKING FOR\nMUST-HAVE:\n - 2-4 years of building and shipping web\
+    \ products in production\n - Strong JavaScript, TypeScript and React, including performance and state\
+    \ management\n - Good HTML and CSS, with mobile-first, responsive layouts\n - Good understanding of\
+    \ how browsers work on mobile, including camera access, permissions and cross-browser issues\n - Solid\
+    \ problem-solving and DSA fundamentals\n - Proven ability to own features end-to-end, from an unclear\
+    \ requirement to production\n - You care about user experience and notice when a flow feels off\n\
+    NICE-TO-HAVE:\n - Flutter or React Native experience"
+- id: lever-22521
+  source: lever
+  role: full_stack
+  company: AHEAD
+  title: Full Stack Engineer
+  expected:
+  - JavaScript
+  - Python
+  - React
+  - RAG
+  - LLM
+  - GraphQL
+  - CI/CD
+  - REST
+  text: "AHEAD builds platforms for digital business. By weaving together advances in cloud infrastructure,\
+    \ automation and analytics, and software delivery, we help enterprises deliver on the promise of digital\
+    \ transformation.\nAt AHEAD, we prioritize creating a culture of belonging, where all perspectives\
+    \ and voices are represented, valued, respected, and heard. We create spaces to empower everyone to\
+    \ speak up, make change, and drive the culture at AHEAD. \nWe are an equal opportunity employer, and do\
+    \ not discriminate based on an individual's race, national origin, color, gender, gender identity,\
+    \ gender expression, sexual orientation, religion, age, disability, marital status, or any other protected\
+    \ characteristic under applicable law, whether actual or perceived. \nWe embrace all candidates that will contribute\
+    \ to the diversification and enrichment of ideas and perspectives at AHEAD. \nWe’re hiring a full\
+    \ stack engineer who is comfortable across all parts of the stack (Python, JavaScript, React/Vue,\
+    \ APIs, AI/LLM integration) and can help ship production-grade UI using established designs and component\
+    \ libraries. You must be able to own and deliver full end-to-end features across the stack.\nWhat\
+    \ You'll Do\nDesign, build, and maintain backend services in Python, including REST/GraphQL APIs and\
+    \ integrations with internal and external systems.\nImplement and integrate AI/LLM-powered workflows\
+    \ (e.g., RAG, agentic workflows, orchestration, prompt/guardrail patterns).\nWork across our agentic\
+    \ platform stack to connect services, tools, and data sources into reliable, observable workflows.\n\
+    Translate UX designs and design systems into clean, maintainable frontend code (React), wiring up\
+    \ APIs, state, and components.\nCollaborate with product, UX, and other engineers to break down requirements,\
+    \ estimate work, and deliver in iterative increments while meeting business timelines.\nWrite readable,\
+    \ testable code with appropriate unit/integration tests and participate in code reviews.\nHelp ensure\
+    \ engineering standards, tooling, and CI/CD practices for secure, scalable AI workloads.\nDiagnose\
+    \ and resolve issues across the stack (backend, integrations, and frontend behavior).\nUse agentic\
+    \ development for rapid quality code and be excited about staying at the forefront of AI skills.\n\
+    Core Skills & Experience\nMust have\n7+ years of software engineering experience, with significant\
+    \ time in Python building production services."
+- id: cutshort-7220
+  source: cutshort
+  role: frontend
+  company: Deqode
+  title: Java + Angular Developer
+  expected:
+  - TypeScript
+  - JavaScript
+  - React
+  - Java
+  - AWS
+  - SQL
+  - Git
+  text: "Job Overview :\nWe are seeking a passionate and experienced Full Stack Developer with a strong\
+    \ background in Java and modern front-end technologies. The ideal candidate should possess a keen\
+    \ analytical mindset, be comfortable working in a cross-functional, fast-paced environment, and demonstrate\
+    \ the ability to take ownership of technical challenges. This role involves end-to-end development,\
+    \ from understanding business requirements to delivering scalable, high-quality solutions, while continuously\
+    \ seeking improvement and innovation. \nKEY RESPONSIBILITIES \nAnalyze entity relationships to design\
+    \ and implement efficient, scalable code solutions.\nDevelop reports and conduct thorough analysis\
+    \ to identify defects and recommend enhancements. \nPerform root cause analysis to resolve issues\
+    \ effectively and prevent recurrence. \nOffer technical recommendations and develop improvement plans\
+    \ based on data-driven insights. \nApply a curious, problem-solving mindset to tackle complex business\
+    \ challenges and propose innovative solutions. \n REQUIRED QUALIFICATIONS: \n5+ years of hands-on\
+    \ experience with Java, HTML5, Angular, TypeScript, JavaScript, and React. \nDemonstrated knowledge\
+    \ or strong interest in full stack development. \nSolid experience working with RESTful services,\
+    \ independent of platform.\nProficiency in Oracle or SQL Server, with the ability to define data flow,\
+    \ high-level data design, and relationships.\nExposure to AWS Cloud technologies and cloud-based development.\
+    \ \nWorking knowledge of version control tools such as Git or SVN.\nExperience implementing automated\
+    \ testing platforms and writing unit tests. \nProven ability to collaborate with cross-functional\
+    \ teams including Technical Leads, Product Managers, and Designers. \nStrong communication skills\
+    \ with a flexible, team-oriented approach. \nPrior experience working with US-based clients and adaptability\
+    \ to shifting priorities. \nSelf-driven and accountable, with a strong sense of ownership and responsibility."
+- id: cutshort-115
+  source: cutshort
+  role: backend
+  company: CareValidate
+  title: Backend Fullstack
+  expected:
+  - TypeScript
+  - PostgreSQL
+  - Express.js
+  - JavaScript
+  - Prisma
+  - Google Cloud
+  - GraphQL
+  - CI/CD
+  - REST
+  - Node.js
+  text: 'Senior Full-Stack Engineer — Backend-Focused
+
+    Remote · Platform Engineering · Full-time · 4–5 years experience
+
+    About the Role
+
+    We''re a healthcare technology company building a multi-tenant case-management platform that orchestrates
+
+    complex clinical, payment, and communication workflows. You''ll build backend services that power
+    the product
+
+    — a TypeScript GraphQL API on Node.js, backed by PostgreSQL/Prisma and deployed on Google Cloud,
+
+    integrating a broad ecosystem of third-party healthcare, payment, and communication providers.
+
+    This is a senior, high-ownership role on a remote-first team. You''ll design systems, lead complex
+    integrations,
+
+    mentor engineers, and influence our architecture as we scale.
+
+    What You''ll Do
+
+    • Design, build, and operate backend features on our Node.js + TypeScript platform using Express +
+    Apollo
+
+    GraphQL in a modular-monolith architecture.
+
+    • Model and evolve a large, multi-tenant data layer with Prisma 7 on PostgreSQL (including read replicas),
+
+    with attention to performance, indexing, and data integrity.
+
+    • Build and harden third-party integrations — payments (Stripe, NMI), communications (SendGrid, Twilio),
+
+    CRM (HubSpot), scheduling (Calendly), and healthcare systems (Dosespot, pharmacy/consult-provider
+
+    APIs).
+
+    • Design event-driven and asynchronous workflows using Google Cloud Pub/Sub, scheduled jobs (App
+
+    Engine Cron), and Cloud Functions — for payment retries, follow-ups, escalations, and batch processing.
+
+    • Implement secure authentication and RBAC (Firebase Admin, JWT, OTP flows, granular permissions)
+    in a
+
+    multi-tenant, compliance-sensitive context.
+
+    • Work with GCP services — App Engine, Cloud Storage, BigQuery, Document AI, Secret Manager — and
+
+    contribute to CI/CD via GitHub Actions and Prisma migration pipelines.
+
+    • Make full-stack changes when needed — wiring up the Vue 3 / Apollo frontend to ship a feature completely.
+
+    • Write robust tests with Vitest + Supertest and Firebase emulators; ensure reliability, observability
+
+    (Winston/Cloud Logging), and safe rollouts.
+
+    • Mentor engineers, lead design discussions, and own systems end-to-end in production.
+
+    What We''re Looking For
+
+    • 4–5 years of professional backend or full-stack engineering experience, with a track record on
+
+    medium-to-large-scale production systems.
+
+    • Strong Node.js + TypeScript expertise and solid API design skills (GraphQL strongly preferred; strong
+
+    REST background welcome).
+
+    • Deep relational database experience — schema design, query optimization, migrations — ideally with'
