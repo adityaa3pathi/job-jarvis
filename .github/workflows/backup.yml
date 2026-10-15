@@ -1,0 +1,39 @@
+# Daily Turso dump at 03:00 IST (21:30 UTC), away from the 08:53 IST search.
+# Kept 30 days as a private artifact. Restore: job-agent restore <file.sql.gz> <new.sqlite3>
+name: daily-backup
+on:
+  schedule:
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --no-dev --extra agent --extra turso
+      - name: Dump the database
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$TURSO_DATABASE_URL" || { echo "::error::TURSO_DATABASE_URL is not set"; exit 1; }
+          out="jobagent-$(date -u +%Y%m%d-%H%M).sql.gz"
+          uv run --no-sync job-agent backup "$out"
+          # Prove the dump loads before keeping it.
+          uv run --no-sync job-agent restore "$out" /tmp/check.sqlite3
+          echo "FILE=$out" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jobagent-db-${{ github.run_id }}
+          path: ${{ env.FILE }}
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
