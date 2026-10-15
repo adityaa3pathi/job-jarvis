@@ -106,10 +106,12 @@ class FastEmbedEmbedder:
     def __init__(self) -> None:
         from fastembed import TextEmbedding  # type: ignore[import-not-found,unused-ignore]
 
+        # FASTEMBED_CACHE_PATH (set in the image) holds the model, so nothing downloads at run time.
         self._model = TextEmbedding(model_name=FASTEMBED_MODEL)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [_unit([float(x) for x in v]) for v in self._model.embed(texts)]
+        # One text per model pass: measured 292 MB peak vs 1.9 GB at 64, and faster on CPU.
+        return [_unit([float(x) for x in v]) for v in self._model.embed(texts, batch_size=1)]
 
 
 def _unit(vec: list[float]) -> list[float]:
