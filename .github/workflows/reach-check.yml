@@ -2,6 +2,8 @@
 name: reach-check
 on:
   workflow_dispatch:
+  push:  # also runs when this check changes, as dispatch needs the file on main first
+    paths: [".github/workflows/reach-check.yml", "src/jobagent/discovery/reach.py"]
 permissions:
   contents: read
 jobs:
