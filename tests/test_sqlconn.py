@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from jobagent.config import Settings
 from jobagent.db import Database
 from jobagent.models import Posting
-from jobagent.sqlconn import LibsqlConnection
+from jobagent.sqlconn import LibsqlConnection, Row
 from tests import test_web
 
 
@@ -146,3 +146,9 @@ def test_known_batch_saves_when_the_server_qualifies_column_names(
     # Before the fix: ValueError: 'key' is not in list, from the batch's by-key preload.
     assert [r.outcome for r in db.upsert_many(batch)].count("merged") == 2
     db.close()
+
+
+def test_row_reads_keyword_columns_the_server_upper_cases() -> None:
+    # Turso returns a plain `j.key` column as "KEY" (seen live 15-10-2026).
+    row = Row(["link_url", "id", "KEY", "j.Title"], ["u", 1, "k", "t"])
+    assert (row["key"], row["title"], row["id"]) == ("k", "t", 1)
