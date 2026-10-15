@@ -312,7 +312,8 @@ export type Job = {
   source: string;
   status: string;
   drop_reason: string | null;
-  score: number | null;
+  score: number | null; // 0-100 "Best match" score
+  rank_reason: string | null;
   url: string | null;
   min_years: number | null;
   max_years: number | null;

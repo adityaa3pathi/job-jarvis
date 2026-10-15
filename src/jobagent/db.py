@@ -81,6 +81,9 @@ LAST_EVENT = (
     " ORDER BY e.id DESC LIMIT 1)"
 )
 LAST_NOTE, LAST_AT = LAST_EVENT.format("note"), LAST_EVENT.format("at")
+POSITIVE = frozenset({"applied", "interview"})  # owner marks that count as a yes label
+RANK_TEXT_CHARS = 1500  # the embedded head of a posting (U14)
+JUDGE_TEXT_CHARS = 4000
 PRUNE_AFTER_DAYS = 30  # owner, 15-10-2026: dropped jobs keep their text this long (R4)
 # Every jobs column but the text: a batch preload reads its length and hash instead (KTD4).
 LEAN = ", ".join(
@@ -127,10 +130,11 @@ DAY = "substr(COALESCE(NULLIF(j.posted_date, ''), j.seen_date), 1, 10)"
 ORDERS = {
     "newest": f"{DAY} DESC, j.id DESC",
     "fewest_years": f"j.min_years IS NULL, j.min_years, {DAY} DESC, j.id DESC",
+    "best": f"j.score IS NULL, j.score DESC, {DAY} DESC, j.id DESC",
 }
 JOB_COLUMNS = (
     "j.id, j.company, j.title, j.location, j.experience_text, j.posted_date, j.seen_date,"
-    " j.source, j.status, j.drop_reason, j.score,"
+    " j.source, j.status, j.drop_reason, j.score, j.rank_reason,"
     " (SELECT url FROM job_links l WHERE l.job_id=j.id ORDER BY rowid LIMIT 1) AS url,"
     " j.min_years, j.max_years, j.role, j.work_mode, j.city"
 )
@@ -210,8 +214,33 @@ def _m2_lean_text(conn: Any) -> None:
     hash_missing(conn)
 
 
+RANK_SCHEMA = """
+CREATE INDEX IF NOT EXISTS jobs_status_score ON jobs(status, score);
+CREATE TABLE IF NOT EXISTS labels (
+  job_id INTEGER PRIMARY KEY, label INTEGER NOT NULL, status TEXT NOT NULL, role TEXT NOT NULL,
+  source TEXT NOT NULL, company TEXT NOT NULL, work_mode TEXT NOT NULL, at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS embeddings (
+  key TEXT PRIMARY KEY, model TEXT NOT NULL, vec BLOB NOT NULL, at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS digests (
+  run_id INTEGER PRIMARY KEY, status TEXT NOT NULL, jobs INTEGER NOT NULL DEFAULT 0,
+  at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS digest_jobs (job_id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL);
+"""
+
+
+def _m3_ranking(conn: Any) -> None:
+    for name in ("judge_score INTEGER", "judge_reason TEXT", "judged_on TEXT"):
+        _add_column(conn, *name.split(" "))
+    for statement in filter(str.strip, RANK_SCHEMA.split(";")):
+        conn.execute(statement)
+    conn.commit()
+
+
 # Run once each, in order; a step must be safe to re-run (two handles may open at once).
-MIGRATIONS: tuple[Callable[[Any], None], ...] = (_m1_columns, _m2_lean_text)
+MIGRATIONS: tuple[Callable[[Any], None], ...] = (_m1_columns, _m2_lean_text, _m3_ranking)
 
 
 def schema_version(conn: Any) -> int:
@@ -760,6 +789,148 @@ class Database:
                 self._set_status(job_id, "dropped", drop_reason)
             elif score is not None:
                 self._set_status(job_id, "ranked", f"score {score}")
+
+    # --- owner marks, labels and ranking (U14) ---
+
+    def mark(self, job_id: int, status: JobStatus) -> None:
+        """An owner mark, plus its training label in the same write: applied or interview
+        is a yes, dropped a no, back to found clears it; other marks keep the last label."""
+        with self.conn:
+            self._set_status(job_id, status, OWNER)
+            if status == "found":
+                self.conn.execute("DELETE FROM labels WHERE job_id=?", (job_id,))
+            elif status in POSITIVE or status == "dropped":
+                job = self.conn.execute(
+                    "SELECT role, source, company, work_mode FROM jobs WHERE id=?", (job_id,)
+                ).fetchone()
+                self.conn.execute(
+                    "INSERT INTO labels(job_id, label, status, role, source, company, work_mode,"
+                    " at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET"
+                    " label=excluded.label, status=excluded.status, at=excluded.at",
+                    (job_id, int(status in POSITIVE), status, job["role"], job["source"],
+                     normalize_company(job["company"]), job["work_mode"], _now()),
+                )  # fmt: skip
+
+    def labels(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM labels ORDER BY job_id").fetchall()
+        return [dict(r) for r in rows]
+
+    def rank_rows(self) -> list[dict[str, Any]]:
+        """Every found job with the head of its text: all the cheap score reads."""
+        rows = self.conn.execute(
+            "SELECT id, title, company, source, role, work_mode, min_years, desc_hash, score,"
+            " rank_reason, judge_score, judge_reason, stack_words,"
+            f" substr(description, 1, {RANK_TEXT_CHARS}) AS head FROM jobs WHERE status='found'"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def save_ranks(self, rows: Sequence[tuple[int | None, str, int]]) -> None:
+        """(score, reason, id) rows; one version bump for the whole batch."""
+        if not rows:
+            return
+        with self.conn:
+            self.conn.executemany("UPDATE jobs SET score=?, rank_reason=? WHERE id=?", rows)
+            bump_version(self.conn)
+
+    def judge_candidates(self, limit: int) -> list[dict[str, Any]]:
+        """Found jobs the AI judge never saw, best cheap score first."""
+        rows = self.conn.execute(
+            "SELECT id, title, location, desc_hash, score, rank_reason,"
+            f" substr(description, 1, {JUDGE_TEXT_CHARS}) AS head FROM jobs"
+            " WHERE status='found' AND judged_on IS NULL AND score IS NOT NULL"
+            " ORDER BY score DESC, id LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def judged_on(self, day: str) -> int:
+        row = self.conn.execute("SELECT COUNT(*) FROM jobs WHERE judged_on=?", (day,)).fetchone()
+        return int(row[0])
+
+    def save_judgement(
+        self, job_id: int, *, day: str, cap: int | None, reason: str, score: int | None,
+        rank_reason: str,
+    ) -> None:  # fmt: skip
+        with self.conn:
+            self.conn.execute(
+                "UPDATE jobs SET judged_on=?, judge_score=?, judge_reason=?, score=?,"
+                " rank_reason=? WHERE id=?",
+                (day, cap, reason, score, rank_reason, job_id),
+            )
+            bump_version(self.conn)
+
+    def vectors(self, keys: Sequence[str]) -> dict[str, bytes]:
+        out: dict[str, bytes] = {}
+        for chunk in _chunks(sorted(set(keys))):
+            marks = ",".join("?" * len(chunk))
+            sql = f"SELECT key, vec FROM embeddings WHERE key IN ({marks})"
+            out |= {r["key"]: bytes(r["vec"]) for r in self.conn.execute(sql, chunk).fetchall()}
+        return out
+
+    def save_vectors(self, model: str, items: Mapping[str, bytes]) -> None:
+        if not items:
+            return
+        now = _now()
+        with self.conn:
+            self.conn.executemany(
+                "INSERT INTO embeddings(key, model, vec, at) VALUES (?,?,?,?)"
+                " ON CONFLICT(key) DO NOTHING",
+                [(key, model, vec, now) for key, vec in items.items()],
+            )
+
+    def profile_text(self) -> str:
+        """The owner's career summary plus every confirmed profile fact (U13), when those
+        tables exist in this database; empty when there is no profile yet."""
+        have = {r[0] for r in self.conn.execute("SELECT name FROM sqlite_master").fetchall()}
+        parts: list[str] = []
+        if "profile" in have:
+            row = self.conn.execute("SELECT summary FROM profile WHERE id=1").fetchone()
+            parts += [row["summary"]] if row and row["summary"] else []
+        if "profile_facts" in have:
+            rows = self.conn.execute(
+                "SELECT text FROM profile_facts WHERE confirmed=1 ORDER BY id"
+            ).fetchall()
+            parts += [r["text"] for r in rows]
+        return "\n".join(parts).strip()
+
+    # --- the daily digest (U15) ---
+
+    def claim_digest(self, run_id: int) -> bool:
+        """Only the first caller for a run may send; a failed send releases the claim."""
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO digests(run_id, status, at) VALUES (?, 'sending', ?)"
+                " ON CONFLICT(run_id) DO NOTHING",
+                (run_id, _now()),
+            )
+        return cur.rowcount > 0
+
+    def release_digest(self, run_id: int) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM digests WHERE run_id=? AND status='sending'", (run_id,))
+
+    def finish_digest(self, run_id: int, job_ids: Sequence[int]) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE digests SET status='sent', jobs=?, at=? WHERE run_id=?",
+                (len(job_ids), _now(), run_id),
+            )
+            self.conn.executemany(
+                "INSERT INTO digest_jobs(job_id, run_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                [(i, run_id) for i in job_ids],
+            )
+
+    def digest_jobs(self, limit: int) -> list[dict[str, Any]]:
+        """Best-scored found jobs no earlier digest has shown."""
+        rows = self.conn.execute(
+            "SELECT j.id, j.title, j.company, j.location, j.score, j.rank_reason,"
+            " (SELECT url FROM job_links l WHERE l.job_id=j.id ORDER BY rowid LIMIT 1) AS url"
+            " FROM jobs j WHERE j.status='found' AND j.score IS NOT NULL"
+            " AND j.id NOT IN (SELECT job_id FROM digest_jobs)"
+            " ORDER BY j.score DESC, j.id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_job(self, job_id: int) -> sqlite3.Row:
         row: sqlite3.Row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()

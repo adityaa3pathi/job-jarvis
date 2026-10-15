@@ -10,10 +10,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from jobagent.config import Settings
 from jobagent.db import Database, UpsertResult
 from jobagent.dedupe import normalize_url
+from jobagent.digest import Sender, send_digest
 from jobagent.discovery.base import DiscoveryResult, SweepContext, Validators
+from jobagent.index import Embedder
+from jobagent.llm import LLM
 from jobagent.models import Posting
+from jobagent.rank import JudgeStore, rank_jobs
 from jobagent.sqlconn import connect
 
 log = logging.getLogger(__name__)
@@ -135,6 +140,30 @@ def prune_after_run(db: Database, tally: RunTally) -> None:
     except Exception as exc:
         log.exception("pruning old dropped text failed")
         tally.notes.append(f"pruning failed: {type(exc).__name__}: {exc}")
+
+
+def rank_after_run(
+    db: Database, st: JudgeStore, tally: RunTally, *, embedder: Embedder | None,
+    llm: LLM | None, settings: Settings,
+) -> None:  # fmt: skip
+    """Score every found job once the saves are done (U14); a failure is only noted."""
+    try:
+        tally.notes.append(rank_jobs(db, st, embedder=embedder, llm=llm, settings=settings))
+    except Exception as exc:
+        log.exception("ranking failed")
+        tally.notes.append(f"ranking failed: {type(exc).__name__}: {exc}")
+
+
+def digest_after_run(
+    db: Database, run_id: int, sender: Sender | None, settings: Settings
+) -> dict[str, Any]:
+    """Send a finished run's digest (U15). A failure is logged, never raised: the run is
+    already saved, and the cron endpoint can send it later."""
+    try:
+        return send_digest(db, run_id, sender, limit=settings.ranking.digest_top_n)
+    except Exception as exc:
+        log.exception("digest failed")
+        return {"sent": 0, "error": type(exc).__name__}
 
 
 # --- the kill switch: a DB flag, so it survives restarts ---

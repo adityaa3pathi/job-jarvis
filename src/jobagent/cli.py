@@ -3,23 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any, TextIO
 
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir, load_settings
 from jobagent.db import Database
+from jobagent.digest import digest_last_run, sender_from_env
 from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher
-from jobagent.llm import run_scope
+from jobagent.index import load_embedder
+from jobagent.llm import LLM, run_scope
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.resume import cli_tailor
 from jobagent.runs import (
     RunTally,
+    digest_after_run,
     kill_switch_check,
     prune_after_run,
+    rank_after_run,
     save_portal,
     sweep_context,
 )
@@ -61,11 +66,17 @@ def discover(settings: Settings) -> int:
                 ctx=sweep_context(db, settings.detail_fetch_cap),
             )  # fmt: skip
             prune_after_run(db, tally)
+            rank_after_run(
+                db, st, tally, embedder=load_embedder(), llm=judge_llm(settings),
+                settings=settings,
+            )  # fmt: skip
         except Exception as exc:
             st.finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}", tally.as_dict())
             raise
         else:
             st.finish_run(run_id, "done", "", tally.as_dict())
+            sent = digest_after_run(db, run_id, sender_from_env(os.environ), settings)
+            out.write(f"DIGEST  {digest_line(sent)}\n")
         finally:
             db.close()
             st.close()
@@ -73,6 +84,35 @@ def discover(settings: Settings) -> int:
         lock.release()
     report(tally.as_dict(), out)
     return 0
+
+
+def judge_llm(settings: Settings) -> LLM | None:
+    """The ranking judge (U14) runs only when an AI key is set."""
+    if not os.environ.get("GEMINI_API_KEY"):
+        return None
+    from jobagent.llm import GeminiLLM
+
+    return GeminiLLM.from_settings(settings.llm, 0.0)
+
+
+def digest_line(result: dict[str, Any]) -> str:
+    if result.get("sent"):
+        return f"sent {result['sent']} jobs to Telegram"
+    return str(result.get("skipped") or f"not sent: {result.get('error', '?')}")
+
+
+def digest(settings: Settings) -> int:
+    """Send the last finished run's digest to Telegram, once (U15)."""
+    ensure_data_dir(settings)
+    db = Database(settings.db_path, settings.max_years_asked)
+    try:
+        result = digest_last_run(
+            db, sender_from_env(os.environ), limit=settings.ranking.digest_top_n
+        )
+    finally:
+        db.close()
+    sys.stdout.write(f"digest: {digest_line(result)}\n")
+    return 1 if "error" in result else 0
 
 
 def report(counts: dict[str, Any], out: TextIO) -> None:
@@ -182,7 +222,9 @@ def prune(settings: Settings) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="job-agent")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("status", "stop", "resume", "discover", "recheck", "prune", "hash-password"):
+    for name in (
+        "status", "stop", "resume", "discover", "recheck", "prune", "hash-password", "digest",
+    ):  # fmt: skip
         sub.add_parser(name)
     cli_tailor.add_arguments(sub.add_parser("tailor"))
     sub.add_parser("backup").add_argument("out", type=Path)
@@ -211,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
         return recheck(settings)
     if args.command == "prune":
         return prune(settings)
+    if args.command == "digest":
+        return digest(settings)
     return kill_switch(settings, args.command)
 
 

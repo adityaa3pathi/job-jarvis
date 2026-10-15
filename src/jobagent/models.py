@@ -65,7 +65,7 @@ class JobFilters(BaseModel):
     city: str | None = Field(default=None, max_length=60)
     company: str | None = Field(default=None, max_length=200)
     q: str | None = Field(default=None, max_length=60)
-    sort: Literal["newest", "fewest_years"] = "newest"
+    sort: Literal["newest", "fewest_years", "best"] = "newest"
 
     @field_validator("city")
     @classmethod

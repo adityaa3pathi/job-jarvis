@@ -36,6 +36,12 @@ class LLMSettings(BaseModel):
     daily_call_budget: int = Field(default=200, ge=0)  # 0 means no limit
 
 
+class RankingSettings(BaseModel):
+    judge_top_n: int = Field(default=30, ge=0)  # new found jobs the AI judge sees per IST day
+    digest_top_n: int = Field(default=10, ge=1, le=50)
+    owner_years: int | None = Field(default=None, ge=0)  # unset: no years term in the ceiling
+
+
 class Settings(BaseModel):
     daily_cap: int = 5
     per_portal_limit: int = 3
@@ -49,6 +55,7 @@ class Settings(BaseModel):
     max_years_asked: int = 5
     freetext_questions: Literal["pause_all", "owner_approved_drafts"] = "pause_all"
     llm: LLMSettings = LLMSettings()
+    ranking: RankingSettings = RankingSettings()
     repo_root: Path = REPO_ROOT
     config_dir: Path = Path.home() / ".config" / "jobagent"
     data_dir: Path = REPO_ROOT / "data"

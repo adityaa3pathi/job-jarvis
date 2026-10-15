@@ -43,6 +43,7 @@ export const DATE_LABELS: Record<string, string> = {
 
 export const SORT_LABELS: Record<string, string> = {
   newest: "Newest first",
+  best: "Best match",
   fewest_years: "Fewest years asked",
 };
 

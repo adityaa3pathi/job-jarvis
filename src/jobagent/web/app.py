@@ -33,11 +33,13 @@ from starlette.concurrency import run_in_threadpool
 from jobagent import __version__
 from jobagent import db as jobs_module
 from jobagent.config import REPO_ROOT, Settings, ensure_data_dir
-from jobagent.db import OWNER, Database
+from jobagent.db import Database
+from jobagent.digest import Sender, digest_last_run, sender_from_env
 from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
+from jobagent.index import Embedder, load_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
@@ -58,7 +60,14 @@ from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
-from jobagent.runs import RunTally, prune_after_run, save_portal, sweep_context
+from jobagent.runs import (
+    RunTally,
+    digest_after_run,
+    prune_after_run,
+    rank_after_run,
+    save_portal,
+    sweep_context,
+)
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.store import Store, profile_from_json, profile_to_json
 from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadError, doc_to_text
@@ -105,6 +114,8 @@ class WebConfig:
     ping_every_s: float = PING_EVERY_S
     task_deadline_s: float = TASK_DEADLINE_S
     shutdown_wait_s: float = SHUTDOWN_WAIT_S
+    embedder: Callable[[], Embedder | None] = load_embedder  # loaded once, on the first run
+    digest_sender: Callable[[], Sender | None] = field(default=lambda: sender_from_env(os.environ))
 
 
 def keep_awake(
@@ -477,8 +488,15 @@ def create_app(cfg: WebConfig) -> FastAPI:
     def mark(job_id: int, body: Mark, db: DB) -> dict[str, bool]:
         if db.get_job(job_id) is None:
             raise HTTPException(404, "no such job")
-        db.set_status(job_id, body.status, OWNER)
+        db.mark(job_id, body.status)  # also the ranking's training label (U14)
         return {"ok": True}
+
+    embedders: list[Embedder | None] = []
+
+    def embedder() -> Embedder | None:
+        if not embedders:  # a model load is slow: once per process, and runs never overlap
+            embedders.append(cfg.embedder())
+        return embedders[0]
 
     def _discover() -> None:
         lock, tally, stop_ping = RunLock(settings.lock_file), RunTally(), threading.Event()
@@ -505,7 +523,13 @@ def create_app(cfg: WebConfig) -> FastAPI:
                             ctx=sweep_context(db, settings.detail_fetch_cap),
                         )  # fmt: skip
                         prune_after_run(db, tally)
+                        rank_after_run(
+                            db, st, tally, embedder=embedder(), llm=cfg.thinker(),
+                            settings=settings,
+                        )  # fmt: skip
                     st.finish_run(run_id, "done", "", tally.as_dict())
+                    with jobs_db.borrow() as db:
+                        digest_after_run(db, run_id, cfg.digest_sender(), settings)
                 except Exception as exc:  # record every failure; saved portals stay saved
                     held_elsewhere = isinstance(exc, LockHeldError)
                     error = str(exc) if held_elsewhere else f"{type(exc).__name__}: {exc}"
@@ -558,6 +582,11 @@ def create_app(cfg: WebConfig) -> FastAPI:
     @app.post("/api/cron/discover", dependencies=[Depends(cron)])
     def cron_discover() -> dict[str, Any]:
         return start_discover()
+
+    @app.post("/api/cron/digest", dependencies=[Depends(cron)])
+    def cron_digest(db: DB) -> dict[str, Any]:
+        """Send the last finished run's digest; never twice for one run (U15)."""
+        return digest_last_run(db, cfg.digest_sender(), limit=settings.ranking.digest_top_n)
 
     @app.get("/api/cron/discover", dependencies=[Depends(cron)])
     def cron_discover_status(response: Response) -> dict[str, Any]:

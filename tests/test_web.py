@@ -217,8 +217,8 @@ def save_jobs(settings: Settings, postings: list[Posting]) -> list[int]:
 
 JOB_FIELDS = {
     "id", "company", "title", "location", "experience_text", "posted_date", "seen_date",
-    "source", "status", "drop_reason", "score", "url", "min_years", "max_years", "role",
-    "work_mode", "city",
+    "source", "status", "drop_reason", "score", "rank_reason", "url", "min_years", "max_years",
+    "role", "work_mode", "city",
 }  # fmt: skip
 
 
@@ -382,7 +382,8 @@ def test_last_run_is_kept_in_the_db_and_shown_after_a_restart(
     assert last["portals"]["hirist"] == {"read": 3, "new": 2, "saved": 3}
     assert last["drop_reasons"] == {"too_senior": 1}
     assert last["unreachable"] == ["Acme: http 403"]
-    assert last["notes"] == ["hirist: ai: truncated at 1 pages"]
+    assert last["notes"][0] == "hirist: ai: truncated at 1 pages"
+    assert last["notes"][1].startswith("ranked 3 found jobs") and len(last["notes"]) == 2
     assert last["started_at"] and last["finished_at"]
 
 
@@ -841,3 +842,74 @@ def test_startup_reports_and_restores_a_missing_job_links_index(
     db.close()
     assert "job_links_job" in names
     assert "job_links_job" in caplog.text
+
+
+# --- ranking and digest (U14, U15) ---
+
+
+def test_jobs_sort_by_best_match_and_show_the_reason(web: TestClient, settings: Settings) -> None:
+    from jobagent.db import Database
+
+    ids = save_jobs(settings, [
+        Posting(source="hirist", url=f"https://www.hirist.tech/j/s-{i}", company=f"Co{i}",
+                title="AI Engineer", location="Pune") for i in range(4)
+    ])  # fmt: skip
+    db = Database(settings.db_path)
+    db.conn.executemany(
+        "UPDATE jobs SET score=?, rank_reason=? WHERE id=?",
+        [(30, "a", ids[0]), (90, "b", ids[1]), (None, None, ids[2]), (60, "c", ids[3])],
+    )
+    db.conn.commit()
+    db.close()
+    items = web.get("/api/jobs?sort=best").json()["items"]
+    assert [j["id"] for j in items] == [ids[1], ids[3], ids[0], ids[2]]
+    assert items[0]["rank_reason"] == "b"
+
+
+def test_owner_marks_become_labels(web: TestClient, settings: Settings) -> None:
+    from jobagent.db import Database
+
+    [job_id] = save_jobs(settings, [Posting(source="hirist", url="https://www.hirist.tech/j/l",
+                                            company="Acme", title="AI Engineer")])  # fmt: skip
+    assert web.post(f"/api/jobs/{job_id}/mark", json={"status": "dropped"}).status_code == 200
+    db = Database(settings.db_path)
+    assert [(r["job_id"], r["label"]) for r in db.labels()] == [(job_id, 0)]
+    db.close()
+
+
+class FakeSender:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    def send(self, text: str) -> None:
+        self.texts.append(text)
+
+
+def test_daily_run_ranks_then_sends_one_digest(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sender = FakeSender()
+    c = client_for(settings, digest_sender=lambda: sender, embedder=lambda: None,
+                   cron_token="cron-123")  # fmt: skip
+    assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
+
+    def fake_discover_all(*_: Any, on_portal_done: Any, **__: Any) -> DiscoveryResult:
+        on_portal_done(portal("hirist", 3))
+        return DiscoveryResult()
+
+    monkeypatch.setattr("jobagent.web.app.discover_all", fake_discover_all)
+    assert c.post("/api/discover").json()["started"]
+    last = wait_discover(c)["last"]
+    assert last["status"] == "done" and any("ranked 3" in n for n in last["notes"])
+    assert all(j["score"] is not None for j in c.get("/api/jobs?sort=best").json()["items"])
+    assert len(sender.texts) == 1 and "AI Engineer" in sender.texts[0]
+    cron = {"Authorization": "Bearer cron-123"}
+    assert c.post("/api/cron/digest").status_code == 401
+    again = c.post("/api/cron/digest", headers=cron).json()
+    assert again["sent"] == 0 and "already sent" in again["skipped"] and len(sender.texts) == 1
+
+
+def test_cron_digest_skips_quietly_when_unconfigured(settings: Settings) -> None:
+    c = client_for(settings, digest_sender=lambda: None, cron_token="cron-123")
+    res = c.post("/api/cron/digest", headers={"Authorization": "Bearer cron-123"})
+    assert res.status_code == 200 and res.json()["sent"] == 0

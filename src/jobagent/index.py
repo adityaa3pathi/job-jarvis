@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import re
+from array import array
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from jobagent.facts import FactSheet
 
+log = logging.getLogger(__name__)
 # Pinned so a first-run download is the same file every time (KTD18).
 FASTEMBED_MODEL = "BAAI/bge-small-en-v1.5"
 _WORD = re.compile(r"[a-z0-9][a-z0-9.+#]*")
@@ -74,6 +78,7 @@ class HashingEmbedder:
     """Offline bag-of-words vectors. Needs no download, so tests and demos run anywhere."""
 
     name = "hashing-1024"
+    sim_range = (0.0, 0.6)  # cosine of unrelated and closely related text, for ranking
 
     def __init__(self, dim: int = 1024) -> None:
         self.dim = dim
@@ -95,6 +100,7 @@ class FastEmbedEmbedder:
     """ONNX model through fastembed. Optional extra, fetched by `job-agent setup`."""
 
     name = f"fastembed:{FASTEMBED_MODEL}"
+    sim_range = (0.55, 0.9)  # bge-small gives even unrelated English text about 0.5
 
     def __init__(self) -> None:
         from fastembed import TextEmbedding  # type: ignore[import-not-found,unused-ignore]
@@ -162,3 +168,58 @@ def ensure_index(sheet: FactSheet, embedder: Embedder, current: FactIndex | None
     return (
         current if current is not None and current.is_current(sheet) else FactIndex(sheet, embedder)
     )
+
+
+# --- posting and profile vectors for ranking (U14) ---
+
+
+class VectorStore(Protocol):
+    def vectors(self, keys: Sequence[str]) -> dict[str, bytes]: ...
+
+    def save_vectors(self, model: str, items: Mapping[str, bytes]) -> None: ...
+
+
+def load_embedder() -> Embedder | None:
+    """The fastembed model, or None (logged) when it is not installed or cannot load:
+    ranking then scores on rules and preferences only."""
+    try:
+        return FastEmbedEmbedder()
+    except Exception as exc:  # ImportError, a failed download, a broken model file
+        log.warning("embedding model unavailable, ranking without it: %s", type(exc).__name__)
+        return None
+
+
+def vector_key(embedder: Embedder, text: str) -> str:
+    return hashlib.sha256(f"{embedder.name}\x00{text}".encode()).hexdigest()
+
+
+def pack(vec: Sequence[float]) -> bytes:
+    return array("f", vec).tobytes()
+
+
+def unpack(blob: bytes) -> array[float]:
+    vec = array("f")
+    vec.frombytes(blob)
+    return vec  # 4 bytes a value: a run holds thousands of these
+
+
+def cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    """Both vectors are unit length already."""
+    return sum(x * y for x, y in zip(a, b, strict=True))
+
+
+def embed_cached(
+    embedder: Embedder, texts: Sequence[str], store: VectorStore, batch: int = 64
+) -> list[array[float]]:
+    """Vectors for `texts`; each distinct text is embedded once, ever, per model."""
+    keys = [vector_key(embedder, t) for t in texts]
+    stored = store.vectors(keys)
+    missing = list(dict.fromkeys(k for k in keys if k not in stored))
+    text_of = dict(zip(keys, texts, strict=True))
+    for start in range(0, len(missing), batch):
+        part = missing[start : start + batch]
+        fresh = {k: pack(v) for k, v in zip(part, embedder.embed([text_of[k] for k in part]),
+                                            strict=True)}  # fmt: skip
+        store.save_vectors(embedder.name, fresh)
+        stored |= fresh
+    return [unpack(stored[k]) for k in keys]
