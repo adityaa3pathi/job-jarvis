@@ -370,6 +370,8 @@ export type Report = {
   risks: string[];
   flagged_injection: boolean;
   degraded: boolean;
+  fit_reason?: string; // older saved reports lack these two
+  degraded_reason?: string;
 };
 
 export type Build = { id: number; session_id: number; at: string; title: string; company: string };

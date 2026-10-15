@@ -45,13 +45,15 @@ from jobagent.policy import Policy, clear_kill_switch
 from jobagent.redact import request_id
 from jobagent.resume.coach import (
     MAX_JD_CHARS,
+    ChatTools,
     CoachReport,
     Message,
     build_report,
     profile_digest,
     reply,
+    with_facts,
 )
-from jobagent.resume.evidence import cards_from_summary
+from jobagent.resume.evidence import cards_from_profile
 from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
@@ -790,13 +792,15 @@ def create_app(cfg: WebConfig) -> FastAPI:
             raise HTTPException(400, "add your career summary on the Profile page first")
         _ai_budget(st)
         jd_text, title, company = _jd_from(body)
+        facts = st.confirmed_facts()
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
+            # Each AI step here has a rules fallback (plain JD scan, raw summary, rules report).
             try:
                 thinker = cfg.thinker()
                 profile = analyze_jd(jd_text, thinker, cache=st)
-                cards, digest = cards_from_summary(summary), profile_digest(summary, thinker, st)
-                coverage = match_profile(profile, cards)
+                digest = with_facts(profile_digest(summary, thinker, st), facts)
+                coverage = match_profile(profile, cards_from_profile(summary, facts))
                 report = build_report(profile, coverage, digest, thinker, cache=st)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
@@ -827,13 +831,18 @@ def create_app(cfg: WebConfig) -> FastAPI:
         _ai_budget(st)
         history = [Message(m["role"], m["text"]) for m in st.messages(session_id)]
         report, summary = CoachReport.from_json(row["report_json"]), st.profile()["summary"]
-        job = profile_from_json(row["profile_json"])
+        job, facts = profile_from_json(row["profile_json"]), st.confirmed_facts()
+        tools = ChatTools(
+            facts=[*facts, *(ln.strip() for ln in summary.splitlines() if ln.strip())],
+            posting=row["jd_text"],
+            sessions=[s for s in st.sessions() if s["id"] != session_id],
+        )
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
                 llm = cfg.thinker()
-                digest = profile_digest(summary, llm, st)
-                turn = reply(report, digest, history, body.message, llm, job=job)
+                digest = with_facts(profile_digest(summary, llm, st), facts)
+                turn = reply(report, digest, history, body.message, llm, job=job, tools=tools)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
             _still_wanted(cancelled)
@@ -842,7 +851,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
             st.add_message(session_id, "coach", turn.reply)
             for fact in turn.new_facts[:5]:
                 _still_wanted(cancelled)
-                st.add_fact(session_id, fact.strip()[:500])
+                st.add_fact(session_id, fact.strip()[:500])  # pending until the owner confirms
             return {"session_id": session_id}
 
         return submit(work)
@@ -853,6 +862,18 @@ def create_app(cfg: WebConfig) -> FastAPI:
             raise HTTPException(404, "no such fact")
         return {"ok": True}
 
+    @app.get("/api/profile/facts", dependencies=[Owner])
+    def profile_facts(st: ST, request: Request, response: Response) -> Any:
+        if hit := _not_modified(request, response, st.data_version()):
+            return hit
+        return st.profile_facts()
+
+    @app.delete("/api/profile/facts/{fact_id}", dependencies=[Owner])
+    def delete_fact(fact_id: int, st: ST) -> dict[str, bool]:
+        if not st.delete_fact(fact_id):
+            raise HTTPException(404, "no such fact")
+        return {"ok": True}
+
     @app.post("/api/coach/{session_id}/resume", dependencies=[Owner])
     def build_resume(session_id: int, st: ST) -> dict[str, str]:
         row = _session(st, session_id)
@@ -860,8 +881,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         if not prof["base_tex"]:
             raise HTTPException(400, "upload your base resume .tex on the Profile page first")
         _ai_budget(st)
-        confirmed = [f["text"] for f in st.facts(session_id) if f["confirmed"]]
-        cards = cards_from_summary("\n".join([prof["summary"], *confirmed]))
+        cards = cards_from_profile(prof["summary"], st.confirmed_facts())
         jd_text, profile = row["jd_text"], profile_from_json(row["profile_json"])
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:

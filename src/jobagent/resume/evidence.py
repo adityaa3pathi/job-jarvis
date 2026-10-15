@@ -130,6 +130,11 @@ def cards_from_summary(text: str) -> list[EvidenceCard]:
     return merge_cards(cards)
 
 
+def cards_from_profile(summary: str, facts: list[str]) -> list[EvidenceCard]:
+    """The owner's whole profile: summary plus every confirmed fact, matched the same way."""
+    return cards_from_summary("\n".join([summary, *facts]))
+
+
 def merge_cards(cards: list[EvidenceCard]) -> list[EvidenceCard]:
     merged: dict[str, EvidenceCard] = {}
     for card in cards:

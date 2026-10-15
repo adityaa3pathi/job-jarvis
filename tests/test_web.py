@@ -159,11 +159,12 @@ def test_ai_failure_is_a_clear_error_not_a_crash(settings: Settings) -> None:
     c = client_for(settings, llm=FailingLLM())
     c.post("/api/login", json={"password": PASSWORD})
     c.put("/api/profile/summary", json={"summary": SUMMARY})
-    # The JD reader falls back to a plain scan; the advice step must fail cleanly.
-    state = done(c, c.post("/api/coach", json={"jd_text": JD}))
+    # The report falls back to rules (U17); the chat has no fallback and must fail cleanly.
+    sid = start_session(c)
+    state = done(c, c.post(f"/api/coach/{sid}/chat", json={"message": "hi"}))
     assert (state["status"], state["code"]) == ("failed", 502)
     assert "AI step failed" in state["error"]
-    assert c.get("/api/coach").json() == []
+    assert c.get(f"/api/coach/{sid}").json()["messages"] == []
 
 
 def test_link_on_unknown_site_asks_before_fetching(web: TestClient) -> None:

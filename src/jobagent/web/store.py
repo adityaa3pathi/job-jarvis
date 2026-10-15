@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS facts (
   id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES coach_sessions(id),
   text TEXT NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS profile_facts (
+  id INTEGER PRIMARY KEY, text TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'claim',
+  confirmed INTEGER NOT NULL DEFAULT 0, source_session_id INTEGER, created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS resume_builds (
   id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES coach_sessions(id),
   tex TEXT NOT NULL, report TEXT NOT NULL, at TEXT NOT NULL
@@ -80,6 +84,20 @@ class Store:
         self.conn = connect(path)
         if schema:
             self.conn.executescript(SCHEMA)
+            self._move_session_facts()
+
+    def _move_session_facts(self) -> None:
+        """U13 migration: per-session facts (the old `facts` table) move to the profile.
+        Insert and delete share one transaction, so a rerun never copies a row twice."""
+        if not self.conn.execute("SELECT 1 FROM facts LIMIT 1").fetchone():
+            return
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO profile_facts(text, type, confirmed, source_session_id, created_at)"
+                " SELECT text, 'claim', confirmed, session_id, at FROM facts ORDER BY id"
+            )
+            self.conn.execute("DELETE FROM facts")
+            bump_version(self.conn)
 
     def close(self) -> None:
         self.conn.close()
@@ -144,28 +162,51 @@ class Store:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def add_fact(self, session_id: int, text: str) -> None:
+    # --- owner profile facts (U13): one store for every session, always pending at first ---
+
+    def add_fact(self, session_id: int, text: str, kind: str = "claim") -> None:
         with self.conn:
             self.conn.execute(
-                "INSERT INTO facts(session_id, text, at) VALUES (?,?,?)",
-                (session_id, text, _now()),
+                "INSERT INTO profile_facts(text, type, source_session_id, created_at)"
+                " VALUES (?,?,?,?)",
+                (text, kind, session_id, _now()),
             )
             bump_version(self.conn)
 
     def facts(self, session_id: int) -> list[dict[str, Any]]:
+        """Facts first proposed in this session, in the shape the session page shows."""
         rows = self.conn.execute(
-            "SELECT id, text, confirmed FROM facts WHERE session_id=? ORDER BY id", (session_id,)
+            "SELECT id, text, confirmed FROM profile_facts WHERE source_session_id=? ORDER BY id",
+            (session_id,),
         ).fetchall()
         return [{**dict(r), "confirmed": bool(r["confirmed"])} for r in rows]
+
+    def profile_facts(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM profile_facts ORDER BY id").fetchall()
+        return [{**dict(r), "confirmed": bool(r["confirmed"])} for r in rows]
+
+    def confirmed_facts(self) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT text FROM profile_facts WHERE confirmed=1 ORDER BY id"
+        ).fetchall()
+        return [str(r["text"]) for r in rows]
 
     def set_fact(self, session_id: int, fact_id: int, confirmed: bool) -> bool:
         with self.conn:
             cur = self.conn.execute(
-                "UPDATE facts SET confirmed=? WHERE id=? AND session_id=?",
+                "UPDATE profile_facts SET confirmed=? WHERE id=? AND source_session_id=?",
                 (int(confirmed), fact_id, session_id),
             )
             bump_version(self.conn)
         return cur.rowcount == 1
+
+    def delete_fact(self, fact_id: int) -> bool:
+        with self.conn:
+            cur = self.conn.execute("DELETE FROM profile_facts WHERE id=?", (fact_id,))
+            if cur.rowcount != 1:
+                return False
+            bump_version(self.conn)
+        return True
 
     def add_build(self, session_id: int, tex: str, report: str) -> int:
         with self.conn:

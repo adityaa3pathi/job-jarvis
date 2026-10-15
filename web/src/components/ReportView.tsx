@@ -10,11 +10,13 @@ export function ReportView({ report }: { report: Report }) {
           <Medal>{report.fit}/5</Medal>
           <span className="text-ink-muted">fit for {report.role_title || "this role"}</span>
         </div>
+        {report.fit_reason && <p className="mt-1 text-sm text-ink-muted">Why: {report.fit_reason}</p>}
         <p className="mt-2">{report.summary}</p>
+        {report.degraded_reason && <p className="mt-2 text-sm text-warning">{report.degraded_reason}</p>}
         {report.flagged_injection && (
           <p className="mt-2 text-sm text-warning">This posting had text trying to steer the AI. It was ignored.</p>
         )}
-        {report.degraded && (
+        {report.degraded && !report.degraded_reason && (
           <p className="mt-2 text-sm text-warning">The AI could not read the posting fully; skills come from a plain scan.</p>
         )}
       </Card>
