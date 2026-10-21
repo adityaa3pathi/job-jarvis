@@ -667,8 +667,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
                     return {"started": False, **view, "running": True, "via": "github"}
                 dispatch_discover(cfg.github_token, cfg.github_repo, cfg.github_transport)
             except Exception as exc:
-                log.exception("starting the GitHub discovery run failed")
-                raise HTTPException(502, f"could not start the GitHub run: {exc}") from exc
+                log.warning("GitHub discovery dispatch failed, falling back to local run: %s", exc)
+                discover_state.running = True
+                threading.Thread(target=_discover, daemon=True).start()
+                return {"started": True, **discover_view(), "via": "local", "fallback": True}
             discover_state.dispatched_at = time.time()
         return {"started": True, **discover_view(), "via": "github"}
 
