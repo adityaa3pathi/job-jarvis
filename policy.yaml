@@ -34,3 +34,8 @@ portals:
   ashby: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low: public job list API"}
   workable: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 2, notes: "Weakest evidence; owner may set discover_only until two dry runs pass"}
   smartrecruiters: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Low; public postings API, India jobs only"}
+  cryptocurrencyjobs: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public RSS feed"}
+  nodesk: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public RSS feed"}
+  arc_dev: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Low; public role pages with Next.js state"}
+  dailyremote: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public role pages with JSON-LD ItemList"}
+
