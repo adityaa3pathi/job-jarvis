@@ -576,3 +576,22 @@ def test_dailyremote_reads_json_ld_item_list(policy: Policy) -> None:
     assert postings[0].url == "https://dailyremote.com/remote-job/developer-5828839"
     assert postings[0].location == "Remote"
 
+
+def test_coderound_reads_featured_api(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["coderound"].url_for(
+        BoardSearch(board="coderound", term="software engineer")
+    )
+    assert url == "https://candidate.coderound.tech/api/jobs/featured"
+    first, second = run("coderound", "software engineer", "coderound.json", policy)
+    assert (first.title, first.company, first.location) == (
+        "Staff Software Engineer",
+        "Rapid Claims",
+        "Bengaluru (Onsite)",
+    )
+    assert first.experience_text == "9-15 years"
+    assert first.url == "https://candidate.coderound.tech/jobs/8eedc0ac-e684-4964-8261-7c0052555ef9"
+    assert "Python" in first.stack_words
+    assert (second.title, second.company) == ("Senior Software Engineer", "Rapid Claims")
+    assert second.experience_text == "5-9 years"
+
+

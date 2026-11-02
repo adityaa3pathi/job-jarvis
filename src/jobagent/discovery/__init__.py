@@ -18,6 +18,7 @@ from jobagent.discovery.base import (
     Unreachable,
 )
 from jobagent.discovery.bebee import BebeeAdapter
+from jobagent.discovery.coderound import CoderoundAdapter
 from jobagent.discovery.cryptocurrencyjobs import CryptocurrencyjobsAdapter
 from jobagent.discovery.cutshort import CutshortAdapter
 from jobagent.discovery.dailyremote import DailyremoteAdapter
@@ -58,6 +59,7 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         HimalayasAdapter(), RemoteokAdapter(), JobicyAdapter(), RemotiveAdapter(),
         WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
         CryptocurrencyjobsAdapter(), NodeskAdapter(), ArcDevAdapter(), DailyremoteAdapter(),
+        CoderoundAdapter(),
     )
 }  # fmt: skip
 

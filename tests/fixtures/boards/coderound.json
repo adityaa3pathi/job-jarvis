@@ -1,0 +1,337 @@
+[
+  {
+    "title": "Staff Software Engineer",
+    "good_to_have_requirements": "Experience with message brokers such as Kafka, RabbitMQ, or similar systems.\r\nFamiliarity with microservices and event-driven architectures.\r\nExperience with asynchronous processing, queues, and streaming systems.\r\nExposure to Docker and Kubernetes.\r\nExperience with monitoring, logging, alerting, and production observability.\r\nUnderstanding of healthcare standards such as HL7, FHIR, or HIPAA.\r\nExperience integrating with EHR/EMR systems or healthcare APIs.\r\nExperience building high-scale, data-intensive, or AI-powered applications.",
+    "client_company_id": 140,
+    "language": null,
+    "id": 469,
+    "description": "We are hiring a Staff Software Engineer for an AI-driven healthcare technology company transforming medical coding and revenue cycle management. You will set technical direction for core backend platforms, own the architecture of distributed, data-intensive systems, and mentor engineers across the team.",
+    "should_not_have_requirements": null,
+    "job_type": null,
+    "framework": null,
+    "responsibilities": [
+      "Design, develop, and maintain scalable backend services and APIs.",
+      "Build high-performance systems with reliable integrations across internal and external services.",
+      "Design distributed systems focused on availability, fault tolerance, and graceful failure.",
+      "Implement asynchronous and event-driven workflows using queues and streams.",
+      "Work with SQL/NoSQL databases and optimize application and database performance.",
+      "Build and deploy cloud-based services using containerization technologies.",
+      "Implement monitoring, logging, and alerting to improve production observability.",
+      "Own services end-to-end, from development and code reviews to deployment and production reliability.",
+      "Set technical direction and architecture for core platform systems, and mentor engineers across the team."
+    ],
+    "role_type": "Core Technology",
+    "keyword": {
+      "main": "(\"staff software engineer\" OR \"staff engineer\" OR \"staff backend engineer\" OR \"principal software engineer\" OR \"principal engineer\") AND (Python OR Node.js OR Golang) AND (Kafka OR RabbitMQ OR microservices OR event-driven OR Kubernetes OR Docker OR AWS OR GCP OR PostgreSQL OR MongoDB OR \"system design\" OR healthcare OR HL7 OR FHIR OR EHR) AND (\"distributed systems\" OR \"high availability\" OR scalability)",
+      "under_50": "(\"staff software engineer\" OR \"staff engineer\" OR \"staff backend engineer\" OR \"principal software engineer\" OR \"principal engineer\") AND (Python OR Node.js OR Golang) AND (Kafka OR microservices OR event-driven OR Kubernetes OR Docker OR AWS OR GCP OR PostgreSQL OR \"system design\" OR healthcare OR HL7 OR FHIR)",
+      "over_500": "(\"staff software engineer\" OR \"staff engineer\" OR \"principal software engineer\" OR \"principal engineer\") AND (Python OR Node.js OR Golang) AND Kafka AND (RabbitMQ OR microservices OR event-driven OR Kubernetes OR Docker OR AWS OR GCP OR PostgreSQL OR MongoDB OR \"system design\" OR healthcare OR HL7 OR FHIR OR EHR) AND (\"distributed systems\" OR \"high availability\" OR scalability)"
+    },
+    "location": "Bengaluru",
+    "years_of_experience": 9,
+    "keyword_meta": {
+      "source": "agent",
+      "agent": {
+        "status": "done",
+        "attempts": 0,
+        "inputs_hash": "79ea3df7b68d0188c31e7db2",
+        "bar_hash": "8d4f9997b289fba27600906d04ac8f3f3216b6465c2c968ce15b1d1b3da4e92a",
+        "model": "opencode-go/glm-5.3-flash",
+        "generated_at": "2026-11-02T09:37:58+00:00",
+        "filters": {
+          "yoe_min": 8,
+          "yoe_max": 16,
+          "location": "Bengaluru"
+        },
+        "pieces": {
+          "titles": [
+            "staff software engineer",
+            "staff engineer",
+            "staff backend engineer",
+            "principal software engineer",
+            "principal engineer"
+          ],
+          "required": [
+            [
+              "Python",
+              "Node.js",
+              "Golang"
+            ]
+          ],
+          "secondary": [
+            "Kafka",
+            "RabbitMQ",
+            "microservices",
+            "event-driven",
+            "Kubernetes",
+            "Docker",
+            "AWS",
+            "GCP",
+            "PostgreSQL",
+            "MongoDB",
+            "system design",
+            "healthcare",
+            "HL7",
+            "FHIR",
+            "EHR"
+          ],
+          "scale": [
+            "distributed systems",
+            "high availability",
+            "scalability"
+          ],
+          "use_schools": false,
+          "over_500": {
+            "promote": "Kafka",
+            "titles": [
+              "staff software engineer",
+              "staff engineer",
+              "principal software engineer",
+              "principal engineer"
+            ]
+          },
+          "under_50": {
+            "drop_secondary": [
+              "MongoDB",
+              "RabbitMQ",
+              "EHR"
+            ]
+          },
+          "saved_search_name": "StaffSoftwareEngineer_Backend_Nov2026",
+          "assumptions": [
+            "Language requirement is any one of Python, Node.js or Go, so searched as a single OR group.",
+            "Staff-level titles only; senior/lead left out since this level sits above senior.",
+            "College pedigree treated as a plus for backend roles, not a hard filter.",
+            "Healthcare terms (HL7, FHIR, EHR) added as plus-domain keywords; not mandatory."
+          ]
+        }
+      }
+    },
+    "tags": [
+      "Staff Software Engineer",
+      "Backend Engineer",
+      "Backend Development",
+      "Python",
+      "Node.js",
+      "Go",
+      "REST APIs",
+      "System Design",
+      "Distributed Systems",
+      "Microservices",
+      "Event-Driven Architecture",
+      "Kafka",
+      "SQL",
+      "NoSQL",
+      "AWS",
+      "GCP",
+      "Azure",
+      "Docker",
+      "Kubernetes",
+      "Healthcare Technology"
+    ],
+    "max_years_of_experience": 15,
+    "incharge_name": null,
+    "job_id": "8eedc0ac-e684-4964-8261-7c0052555ef9",
+    "tags_required": [
+      "Staff Software Engineer",
+      "Backend Engineer",
+      "Backend Development",
+      "Python",
+      "Node.js",
+      "Go",
+      "REST APIs",
+      "System Design",
+      "Distributed Systems",
+      "Microservices",
+      "Event-Driven Architecture",
+      "Kafka",
+      "SQL",
+      "NoSQL",
+      "AWS",
+      "GCP",
+      "Azure",
+      "Docker",
+      "Kubernetes",
+      "Healthcare Technology"
+    ],
+    "salary_visible": "50-75",
+    "core_tech_type": "Backend Engineer",
+    "incharge_email": null,
+    "must_have_requirements": "9+ years of experience in backend or software development, with a track record of technical leadership.\r\nStrong proficiency in Python, Node.js, or Go.\r\nProven experience designing and owning large-scale, production-grade distributed systems.\r\nDeep understanding of system design, scalability, reliability, and data modelling.\r\nHands-on experience with SQL and NoSQL databases at scale.\r\nExperience mentoring engineers and raising engineering standards across a team.\r\nFamiliarity with cloud platforms such as AWS, GCP, or Azure.\r\nStrong ownership, judgment, and communication with product and clinical stakeholders.",
+    "aiml_type": null,
+    "status": "Open",
+    "work_mode": "Onsite",
+    "client_company": {
+      "name": "Rapid Claims",
+      "description": null,
+      "company_funding": "$11M",
+      "company_stage": "Series A"
+    }
+  },
+  {
+    "title": "Senior Software Engineer",
+    "good_to_have_requirements": "Experience with message brokers such as Kafka, RabbitMQ, or similar systems.\r\nFamiliarity with microservices and event-driven architectures.\r\nExperience with asynchronous processing, queues, and streaming systems.\r\nExposure to Docker and Kubernetes.\r\nExperience with monitoring, logging, alerting, and production observability.\r\nUnderstanding of healthcare standards such as HL7, FHIR, or HIPAA.\r\nExperience integrating with EHR/EMR systems or healthcare APIs.\r\nExperience building high-scale, data-intensive, or AI-powered applications.",
+    "client_company_id": 140,
+    "language": null,
+    "id": 468,
+    "description": "We are hiring a Senior Software Engineer for an AI-driven healthcare technology company transforming medical coding and revenue cycle management. You will own the design and development of scalable backend systems, build reliable APIs, and solve complex engineering challenges across distributed systems, cloud infrastructure, and data-intensive applications.",
+    "should_not_have_requirements": null,
+    "job_type": null,
+    "framework": null,
+    "responsibilities": [
+      "Design, develop, and maintain scalable backend services and APIs.",
+      "Build high-performance systems with reliable integrations across internal and external services.",
+      "Design distributed systems focused on availability, fault tolerance, and graceful failure.",
+      "Implement asynchronous and event-driven workflows using queues and streams.",
+      "Work with SQL/NoSQL databases and optimize application and database performance.",
+      "Build and deploy cloud-based services using containerization technologies.",
+      "Implement monitoring, logging, and alerting to improve production observability.",
+      "Own services end-to-end, from development and code reviews to deployment and production reliability."
+    ],
+    "role_type": "Core Technology",
+    "keyword": {
+      "main": "(\"senior software engineer\" OR \"senior backend engineer\" OR \"senior backend developer\" OR \"software engineer\" OR \"backend engineer\") AND (Python OR Node.js OR Golang) AND (Kafka OR RabbitMQ OR microservices OR Kubernetes OR Docker OR AWS OR GCP OR PostgreSQL OR MongoDB OR Redis OR healthcare OR HL7 OR FHIR OR HIPAA OR startup) AND (\"distributed systems\" OR \"high availability\" OR scalability)",
+      "under_50": "(\"senior software engineer\" OR \"senior backend engineer\" OR \"senior backend developer\" OR \"software engineer\" OR \"backend engineer\") AND (Python OR Node.js OR Golang) AND (Kafka OR microservices OR Kubernetes OR AWS OR GCP OR PostgreSQL OR MongoDB OR healthcare OR HL7 OR FHIR OR HIPAA OR startup)",
+      "over_500": "(\"senior software engineer\" OR \"senior backend engineer\" OR \"senior backend developer\" OR \"backend engineer\") AND (Python OR Node.js OR Golang) AND Kafka AND (RabbitMQ OR microservices OR Kubernetes OR Docker OR AWS OR GCP OR PostgreSQL OR MongoDB OR Redis OR healthcare OR HL7 OR FHIR OR HIPAA OR startup) AND (\"distributed systems\" OR \"high availability\" OR scalability)"
+    },
+    "location": "Bengaluru",
+    "years_of_experience": 5,
+    "keyword_meta": {
+      "source": "agent",
+      "agent": {
+        "status": "done",
+        "attempts": 0,
+        "inputs_hash": "a2410b38acd13a3391b1af2a",
+        "bar_hash": "0be650973086a1d72957cc6157deba13d0a288332551e388cc015cbd39480129",
+        "model": "opencode-go/glm-5.3-flash",
+        "generated_at": "2026-11-02T09:37:13+00:00",
+        "filters": {
+          "yoe_min": 4,
+          "yoe_max": 10,
+          "location": "Bengaluru"
+        },
+        "pieces": {
+          "titles": [
+            "senior software engineer",
+            "senior backend engineer",
+            "senior backend developer",
+            "software engineer",
+            "backend engineer"
+          ],
+          "required": [
+            [
+              "Python",
+              "Node.js",
+              "Golang"
+            ]
+          ],
+          "secondary": [
+            "Kafka",
+            "RabbitMQ",
+            "microservices",
+            "Kubernetes",
+            "Docker",
+            "AWS",
+            "GCP",
+            "PostgreSQL",
+            "MongoDB",
+            "Redis",
+            "healthcare",
+            "HL7",
+            "FHIR",
+            "HIPAA",
+            "startup"
+          ],
+          "scale": [
+            "distributed systems",
+            "high availability",
+            "scalability"
+          ],
+          "use_schools": false,
+          "over_500": {
+            "promote": "Kafka",
+            "titles": [
+              "senior software engineer",
+              "senior backend engineer",
+              "senior backend developer",
+              "backend engineer"
+            ]
+          },
+          "under_50": {
+            "drop_secondary": [
+              "RabbitMQ",
+              "Redis",
+              "Docker"
+            ]
+          },
+          "saved_search_name": "SeniorSoftwareEngineer_Backend_Nov2026",
+          "assumptions": [
+            "Any of Python, Node.js or Go qualifies as the core language, so they are ORed in one required group.",
+            "Healthcare terms kept light since domain exposure is a plus, not a requirement.",
+            "College pedigree left out: it is a tiebreak for backend roles here, not a filter.",
+            "Hands-on ownership and production reliability cannot be searched; screen for them."
+          ]
+        }
+      }
+    },
+    "tags": [
+      "Senior Software Engineer",
+      "Backend Engineer",
+      "Backend Development",
+      "Python",
+      "Node.js",
+      "Go",
+      "REST APIs",
+      "System Design",
+      "Distributed Systems",
+      "Microservices",
+      "Event-Driven Architecture",
+      "Kafka",
+      "SQL",
+      "NoSQL",
+      "AWS",
+      "GCP",
+      "Azure",
+      "Docker",
+      "Kubernetes",
+      "Healthcare Technology"
+    ],
+    "max_years_of_experience": 9,
+    "incharge_name": null,
+    "job_id": "e73ceeb7-5b4d-4ddd-8817-e9e548c035a8",
+    "tags_required": [
+      "Senior Software Engineer",
+      "Backend Engineer",
+      "Backend Development",
+      "Python",
+      "Node.js",
+      "Go",
+      "REST APIs",
+      "System Design",
+      "Distributed Systems",
+      "Microservices",
+      "Event-Driven Architecture",
+      "Kafka",
+      "SQL",
+      "NoSQL",
+      "AWS",
+      "GCP",
+      "Azure",
+      "Docker",
+      "Kubernetes",
+      "Healthcare Technology"
+    ],
+    "salary_visible": "40-75",
+    "core_tech_type": "Backend Engineer",
+    "incharge_email": null,
+    "must_have_requirements": "5+ years of experience in backend or software development.\r\nStrong proficiency in Python, Node.js, or Go.\r\nExperience building, deploying, and maintaining production-grade backend systems and APIs.\r\nStrong understanding of distributed systems, system design, and scalability fundamentals.\r\nHands-on experience with SQL and NoSQL databases.\r\nExperience designing high-performance, reliable, and maintainable services.\r\nFamiliarity with cloud platforms such as AWS, GCP, or Azure.\r\nStrong debugging, problem-solving, independent ownership, and communication skills.",
+    "aiml_type": null,
+    "status": "Open",
+    "work_mode": "Onsite",
+    "client_company": {
+      "name": "Rapid Claims",
+      "description": null,
+      "company_funding": "$11M",
+      "company_stage": "Series A"
+    }
+  }
+]

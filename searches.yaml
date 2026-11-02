@@ -106,4 +106,8 @@ searches:
   - {board: arc_dev, term: backend-developer}
   - {board: dailyremote, term: developer}
   - {board: dailyremote, term: software}
+  - {board: coderound, term: ai engineer}
+  - {board: coderound, term: software engineer}
+  - {board: coderound, term: backend}
+  - {board: coderound, term: full stack}
 
