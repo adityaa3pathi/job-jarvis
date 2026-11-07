@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import partial
 
+from jobagent.discovery.arc_dev import ArcDevAdapter
 from jobagent.discovery.ashby import AshbyAdapter
 from jobagent.discovery.base import (
     Adapter,
@@ -17,7 +18,10 @@ from jobagent.discovery.base import (
     Unreachable,
 )
 from jobagent.discovery.bebee import BebeeAdapter
+from jobagent.discovery.coderound import CoderoundAdapter
+from jobagent.discovery.cryptocurrencyjobs import CryptocurrencyjobsAdapter
 from jobagent.discovery.cutshort import CutshortAdapter
+from jobagent.discovery.dailyremote import DailyremoteAdapter
 from jobagent.discovery.greenhouse import GreenhouseAdapter
 from jobagent.discovery.himalayas import HimalayasAdapter
 from jobagent.discovery.hirist import HiristAdapter
@@ -28,6 +32,7 @@ from jobagent.discovery.jobicy import JobicyAdapter
 from jobagent.discovery.jobleads import JobleadsAdapter
 from jobagent.discovery.lever import LeverAdapter
 from jobagent.discovery.linkedin import LinkedinAdapter
+from jobagent.discovery.nodesk import NodeskAdapter
 from jobagent.discovery.remoteok import RemoteokAdapter
 from jobagent.discovery.remotive import RemotiveAdapter
 from jobagent.discovery.smartrecruiters import SmartrecruitersAdapter
@@ -53,6 +58,8 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         SwitchlyAdapter(), JobleadsAdapter(), WellfoundAdapter(), YcAdapter(), LinkedinAdapter(),
         HimalayasAdapter(), RemoteokAdapter(), JobicyAdapter(), RemotiveAdapter(),
         WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
+        CryptocurrencyjobsAdapter(), NodeskAdapter(), ArcDevAdapter(), DailyremoteAdapter(),
+        CoderoundAdapter(),
     )
 }  # fmt: skip
 

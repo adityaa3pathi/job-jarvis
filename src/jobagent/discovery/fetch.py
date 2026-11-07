@@ -26,7 +26,8 @@ KNOWN_BOARD_HOSTS = frozenset(
         "bebee.com", "www.switchly.in", "www.jobleads.com", "wellfound.com", "www.ycombinator.com",
         "www.linkedin.com", "in.linkedin.com", "himalayas.app", "remoteok.com", "jobicy.com",
         "remotive.com", "weworkremotely.com", "www.workingnomads.com", "hn.algolia.com",
-        "www.instahyre.com",
+        "www.instahyre.com", "cryptocurrencyjobs.co", "nodesk.co", "arc.dev", "dailyremote.com",
+        "candidate.coderound.tech",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3
@@ -43,14 +44,21 @@ def system_resolver(host: str, port: int) -> list[str]:
     return [str(info[4][0]) for info in socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)]
 
 
+NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _bad_address(raw: str) -> bool:
     ip = ipaddress.ip_address(raw.split("%")[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        elif ip in NAT64_PREFIX:
+            ip = ipaddress.IPv4Address(ip.packed[-4:])
     return (
         ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
         or ip.is_reserved or ip.is_unspecified
     )  # fmt: skip
+
 
 
 def check_scheme(url: str) -> str:

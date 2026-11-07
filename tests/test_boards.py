@@ -523,3 +523,75 @@ def test_instahyre_reads_logged_out_search_data(policy: Policy) -> None:
     )  # fmt: skip
     assert first.url.startswith("https://www.instahyre.com/job-439850-")
     assert second.location == "Bangalore,Hyderabad" and "Python" in first.stack_words
+
+
+def test_cryptocurrencyjobs_reads_rss(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["cryptocurrencyjobs"].url_for(
+        BoardSearch(board="cryptocurrencyjobs", term="engineering")
+    )
+    assert url == "https://cryptocurrencyjobs.co/index.xml"
+    first, second = run("cryptocurrencyjobs", "engineering", "cryptocurrencyjobs.xml", policy)
+    assert (first.title, first.company, first.location) == (
+        "Product Manager",
+        "Wynd Labs",
+        "Remote",
+    )
+    assert first.posted_date == date(2026, 10, 30)
+    assert first.url == "https://cryptocurrencyjobs.co/other/wynd-labs-product-manager/"
+    assert (second.title, second.company) == ("Legal Counsel", "Securitize")
+
+
+def test_nodesk_reads_rss(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["nodesk"].url_for(BoardSearch(board="nodesk", term="engineering"))
+    assert url == "https://nodesk.co/remote-jobs/engineering/index.xml"
+    first, second = run("nodesk", "engineering", "nodesk.xml", policy)
+    assert (first.title, first.company, first.location) == (
+        "Head of AI Native Operations",
+        "Supabase",
+        "Remote",
+    )
+    assert first.posted_date == date(2026, 10, 30)
+    assert first.url == "https://nodesk.co/remote-jobs/supabase-head-of-ai-native-operations/"
+    assert (second.title, second.company) == ("Analytics Engineer", "Metabase")
+
+
+def test_arc_dev_unpacks_next_data(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["arc_dev"].url_for(BoardSearch(board="arc_dev", term="software-engineer"))
+    assert url == "https://arc.dev/remote-jobs/software-engineer"
+    first, second, third = run("arc_dev", "software-engineer", "arc_dev.html", policy)
+    assert first.title == "Experienced Software Engineer - AI Coding Tasks"
+    assert first.location == "Remote (Worldwide)"
+    assert first.posted_date == date(2026, 10, 16)
+    assert first.url == "https://arc.dev/remote-jobs/experienced-software-engineer-ai-coding-tasks"
+    assert "Software Development" in first.stack_words
+    assert second.title == "Graphic Designer"
+
+
+def test_dailyremote_reads_json_ld_item_list(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["dailyremote"].url_for(BoardSearch(board="dailyremote", term="developer"))
+    assert url == "https://dailyremote.com/remote-developer-jobs"
+    postings = run("dailyremote", "developer", "dailyremote.html", policy)
+    assert len(postings) == 20
+    assert postings[0].title == "Developer"
+    assert postings[0].url == "https://dailyremote.com/remote-job/developer-5828839"
+    assert postings[0].location == "Remote"
+
+
+def test_coderound_reads_featured_api(policy: Policy) -> None:
+    url = BOARD_ADAPTERS["coderound"].url_for(
+        BoardSearch(board="coderound", term="software engineer")
+    )
+    assert url == "https://candidate.coderound.tech/api/jobs/featured"
+    first, second = run("coderound", "software engineer", "coderound.json", policy)
+    assert (first.title, first.company, first.location) == (
+        "Staff Software Engineer",
+        "Rapid Claims",
+        "Bengaluru (Onsite)",
+    )
+    assert first.experience_text == "9-15 years"
+    assert first.url == "https://candidate.coderound.tech/jobs/8eedc0ac-e684-4964-8261-7c0052555ef9"
+    assert "Python" in first.stack_words
+    assert (second.title, second.company) == ("Senior Software Engineer", "Rapid Claims")
+    assert second.experience_text == "5-9 years"
+
+
