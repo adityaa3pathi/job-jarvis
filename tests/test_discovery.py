@@ -27,7 +27,7 @@ from jobagent.discovery.manual import fetch_posting
 from jobagent.lock import RunLock
 from jobagent.models import Posting
 from jobagent.policy import Policy
-from jobagent.rules import check_hard_rules
+from jobagent.rules import check_hard_rules, years_asked
 from jobagent.sanitize import clean_posting_text, states_candidate_fact, strip_hidden_html
 from tests.conftest import FakeClock
 
@@ -93,7 +93,7 @@ def test_lever_reads_lists_and_additional(policy: Policy) -> None:
         "5+ years"
         not in json.loads((FIX / "api/lever_docsumo.json").read_text())[0]["descriptionPlain"]
     )
-    assert check_hard_rules(ae) == "too_senior"
+    assert years_asked(ae) == (5, None)
     assert "What we are looking for" in bdr.description
     assert check_hard_rules(bdr) != "too_senior"
 

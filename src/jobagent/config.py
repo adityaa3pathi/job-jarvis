@@ -53,7 +53,7 @@ class Settings(BaseModel):
     detail_fetch_cap: int = Field(default=200, ge=0)  # new jobs' text fetched one by one per run
     years_rounding: Literal["down", "nearest", "up"] = "down"
     fit_bar: int = Field(default=4, ge=1, le=5)
-    max_years_asked: int = 5
+    max_years_asked: int = 6
     freetext_questions: Literal["pause_all", "owner_approved_drafts"] = "pause_all"
     llm: LLMSettings = LLMSettings()
     ranking: RankingSettings = RankingSettings()

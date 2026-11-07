@@ -154,7 +154,7 @@ def rank_posting(
     llm: LLM | None,
     *,
     bar: int = 4,
-    max_years_asked: int = 5,
+    max_years_asked: int = 6,
     today: date | None = None,
     rounding: str = "down",
 ) -> RankResult:

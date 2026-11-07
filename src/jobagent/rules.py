@@ -38,14 +38,6 @@ UNPAID_PATTERNS = (
     r"(?<!leave )without (?:any )?(?:pay|stipend)",
     r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
-SENIOR_TITLE = re.compile(
-    r"\b(senior|sr\.?|principal|staff|head|architect|manager|director|vp)\b"
-    r"|\b(?:tech|team|technical|engineering|project|delivery|qa|test|module) lead\b"
-    r"|\blead (?!gen)(?:\w+ )?(?:engineer|developer|scientist|architect|analyst|consultant"
-    r"|designer|programmer)\b",
-    re.IGNORECASE,
-)
-_NEGATED = re.compile(r"\([^)]*\bnot?\b[^)]*\)", re.IGNORECASE)
 _CONTACT_VERBS = re.compile(
     r"\b(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)\b", re.I
 )
@@ -172,7 +164,6 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason |
     if outside_india(posting.location):
         return "outside_india"
     asked = years_asked(posting)
-    # Only drop if years asked is too high, not title (title filter removed)
     if asked and asked[0] >= max_years_asked:
         return "too_senior"
     return None

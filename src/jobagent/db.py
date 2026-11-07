@@ -374,7 +374,7 @@ def _may_need_text(row: Mapping[str, Any], posting: Posting) -> bool:
 
 
 class Database:
-    def __init__(self, path: Path | str, max_years_asked: int = 5, *, schema: bool = True) -> None:
+    def __init__(self, path: Path | str, max_years_asked: int = 6, *, schema: bool = True) -> None:
         self.conn = connect(path)
         if schema:
             self.conn.executescript(SCHEMA)

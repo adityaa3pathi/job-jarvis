@@ -91,9 +91,8 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
     [
         ({"location": "San Francisco, CA"}, "outside_india"),
         ({"location": "Remote - US"}, "outside_india"),
-        ({"experience_text": "5+ years"}, "too_senior"),
+        ({"experience_text": "6+ years"}, "too_senior"),
         ({"experience_text": "6-9 yrs"}, "too_senior"),
-        ({"title": "Senior AI Engineer", "experience_text": ""}, "too_senior"),
         ({"description": "Unpaid internship, no stipend."}, "unpaid"),
         ({"description": "This is a volunteer role for a student club."}, "unpaid"),
         ({"description": "Pay a registration fee to apply"}, "spam"),
@@ -105,8 +104,6 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
         ({"description": "Earn 2000 per day from home."}, "spam"),
         ({"experience_text": "6–9 years"}, "too_senior"),
         ({"experience_text": "", "description": "Need 7+ years experience; Python."}, "too_senior"),
-        ({"title": "Tech Lead - Backend", "experience_text": ""}, "too_senior"),
-        ({"title": "Lead Engineer", "experience_text": ""}, "too_senior"),
         ({"location": "Austin, TX"}, "outside_india"),
         ({"location": "Indianapolis, IN"}, "outside_india"),
         # Remote only inside another country is still out of reach.
@@ -126,6 +123,10 @@ def test_hard_rules(kw: dict[str, object], reason: str) -> None:
     "kw",
     [
         {"experience_text": "3-7 yrs overall, asks 1-3 yrs hands-on"},
+        # Titles are often inflated; only years asked can drop a job.
+        {"experience_text": "5+ years"},
+        {"title": "Senior AI Engineer", "experience_text": ""},
+        {"title": "Tech Lead - Backend", "experience_text": ""},
         {"location": "Remote (India)"},
         # Remote that India can take: open regions, plain "Remote", YC's "IN" code.
         {"location": "APAC (Full Remote)"},
@@ -180,7 +181,7 @@ def test_years_parse() -> None:
 
 
 def test_rules_version() -> None:
-    assert RULES_VERSION == 3
+    assert RULES_VERSION == 4
 
 
 def test_normalisers() -> None:
@@ -370,7 +371,7 @@ def test_recheck_reruns_rules_on_found_and_rule_dropped_rows(db: Database) -> No
     drop(db, unpaid.job_id, "unpaid")
     drop(db, closed.job_id, "closed")
     with db.conn:
-        db.conn.execute("UPDATE jobs SET title='Senior AI Engineer' WHERE id=?", (senior.job_id,))
+        db.conn.execute("UPDATE jobs SET experience_text='7+ years' WHERE id=?", (senior.job_id,))
     db.set_status(owner.job_id, "dropped", "owner")
     summary = db.recheck()
     assert (summary.undropped, summary.dropped, summary.merged) == (1, 1, 0)
