@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api, invalidate, post, runTask, TaskAborted, useCachedApi, type Candidate, type JobOutreach } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { ThreadCard } from "@/components/outreach/ThreadCard";
@@ -18,7 +18,7 @@ const SOURCE: Record<string, string> = {
   manual: "added by you",
 };
 
-export default function JobOutreachPage() {
+function JobOutreach() {
   const { jobId } = useParams<{ jobId: string }>();
   const path = `/jobs/${jobId}/outreach`;
   const read = useCachedApi<JobOutreach>(path);
@@ -251,5 +251,13 @@ export default function JobOutreachPage() {
         </Panel>
       )}
     </div>
+  );
+}
+
+export default function JobOutreachPage() {
+  return (
+    <Suspense fallback={<StateNote>Loading…</StateNote>}>
+      <JobOutreach />
+    </Suspense>
   );
 }
