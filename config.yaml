@@ -2,7 +2,6 @@
 daily_cap: 5
 per_portal_limit: 3
 min_pause_s: 20
-follow_up_days: 7
 retention_days: 90
 years_rounding: down
 fit_bar: 4
@@ -13,3 +12,9 @@ llm:
   model: gemini-3.5-flash-lite
   timeout_s: 30
   send_contact_details: false
+outreach:
+  jobs_per_day: 10
+  first_emails_per_day: 20
+  linkedin_invites_per_day: 20
+  people_per_company: 2
+  follow_up_days: [4, 10]

@@ -69,7 +69,7 @@ def discover(settings: Settings) -> int:
             )  # fmt: skip
             note_policy(policy, tally)
             rules_swept(db, tally)
-            prune_after_run(db, tally)
+            prune_after_run(db, tally, settings.retention_days)
             rank_after_run(
                 db, st, tally, embedder=shared_embedder(), llm=judge_llm(settings),
                 settings=settings,
@@ -224,11 +224,39 @@ def prune(settings: Settings) -> int:
     return 0
 
 
+def gmail_auth() -> int:
+    """One-time Gmail sign-in on the owner's computer; prints the refresh token to store as
+    the GMAIL_REFRESH_TOKEN secret on the server. Nothing is saved here."""
+    import webbrowser
+    from getpass import getpass
+
+    from jobagent.outreach.gmail import GmailError, authorize
+
+    client_id = os.environ.get("GMAIL_CLIENT_ID") or input("Google OAuth client ID: ").strip()
+    secret = os.environ.get("GMAIL_CLIENT_SECRET") or getpass("Google OAuth client secret: ")
+
+    def show(url: str) -> None:
+        sys.stdout.write(f"Open this link if no browser opened:\n{url}\n")
+        webbrowser.open(url)
+
+    try:
+        token = authorize(client_id.strip(), secret.strip(), open_url=show)
+    except GmailError as exc:
+        sys.stdout.write(f"not signed in: {exc}\n")
+        return 1
+    sys.stdout.write(
+        "Signed in. Store this as GMAIL_REFRESH_TOKEN on the server, with GMAIL_CLIENT_ID and"
+        f" GMAIL_CLIENT_SECRET:\n{token}\n"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="job-agent")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in (
         "status", "stop", "resume", "discover", "recheck", "prune", "hash-password", "digest",
+        "gmail-auth",
     ):  # fmt: skip
         sub.add_parser(name)
     cli_tailor.add_arguments(sub.add_parser("tailor"))
@@ -242,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
             return cli_tailor.run(args)
     if args.command == "restore":
         return restore(args.dump, args.target)
+    if args.command == "gmail-auth":
+        return gmail_auth()
     if args.command == "hash-password":
         from getpass import getpass
 

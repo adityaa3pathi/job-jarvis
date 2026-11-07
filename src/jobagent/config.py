@@ -21,7 +21,7 @@ class ConfigError(Exception):
 
 MAX_OUTPUT_TOKENS = {
     "jd_extract": 1200, "jd_repair": 1200, "coach_report": 800, "coach_chat": 400,
-    "rewrite_bullets": 3000, "profile_digest": 1200,
+    "rewrite_bullets": 3000, "profile_digest": 1200, "outreach_facts": 600,
 }  # fmt: skip
 
 
@@ -43,11 +43,18 @@ class RankingSettings(BaseModel):
     embed_new_per_run: int = Field(default=300, ge=0)  # model vectors per run; rest wait a run
 
 
+class OutreachSettings(BaseModel):
+    jobs_per_day: int = Field(default=10, ge=1)  # jobs that get a first message per IST day
+    first_emails_per_day: int = Field(default=20, ge=1)
+    linkedin_invites_per_day: int = Field(default=20, ge=1)
+    people_per_company: int = Field(default=2, ge=1, le=5)
+    follow_up_days: list[int] = Field(default_factory=lambda: [4, 10])  # after the first email
+
+
 class Settings(BaseModel):
     daily_cap: int = 5
     per_portal_limit: int = 3
     min_pause_s: float = 20.0
-    follow_up_days: int = 7
     retention_days: int = 90
     close_after_clean_runs: int = Field(default=3, ge=1)  # misses before a found job is closed
     detail_fetch_cap: int = Field(default=200, ge=0)  # new jobs' text fetched one by one per run
@@ -57,6 +64,7 @@ class Settings(BaseModel):
     freetext_questions: Literal["pause_all", "owner_approved_drafts"] = "pause_all"
     llm: LLMSettings = LLMSettings()
     ranking: RankingSettings = RankingSettings()
+    outreach: OutreachSettings = OutreachSettings()
     repo_root: Path = REPO_ROOT
     config_dir: Path = Path.home() / ".config" / "jobagent"
     data_dir: Path = REPO_ROOT / "data"

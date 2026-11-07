@@ -276,9 +276,41 @@ def _m4_judge_key_and_digest_progress(conn: Any) -> None:
         )
 
 
+OUTREACH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS contacts (
+  id INTEGER PRIMARY KEY, norm_company TEXT NOT NULL, company TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '',
+  email_source TEXT NOT NULL DEFAULT '', linkedin_url TEXT NOT NULL DEFAULT '',
+  found_at TEXT NOT NULL, cleared_at TEXT
+);
+CREATE INDEX IF NOT EXISTS contacts_company ON contacts(norm_company);
+CREATE TABLE IF NOT EXISTS outreach (
+  id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, contact_id INTEGER NOT NULL,
+  channel TEXT NOT NULL, facts_json TEXT NOT NULL DEFAULT '[]', subject TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '', draft_hash TEXT NOT NULL DEFAULT '',
+  step INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'draft',
+  thread_id TEXT NOT NULL DEFAULT '', header_id TEXT NOT NULL DEFAULT '',
+  first_sent_at TEXT, last_sent_at TEXT, next_due TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(contact_id, channel)
+);
+CREATE INDEX IF NOT EXISTS outreach_due ON outreach(state, next_due);
+CREATE TABLE IF NOT EXISTS outreach_sends (
+  id INTEGER PRIMARY KEY, outreach_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
+  channel TEXT NOT NULL, step INTEGER NOT NULL, day TEXT NOT NULL, at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS outreach_sends_day ON outreach_sends(day);
+"""
+
+
+def _m5_outreach(conn: Any) -> None:
+    for statement in filter(str.strip, OUTREACH_SCHEMA.split(";")):
+        conn.execute(statement)
+    conn.commit()
+
+
 # Run once each, in order; a step must be safe to re-run (two handles may open at once).
 MIGRATIONS: tuple[Callable[[Any], None], ...] = (
-    _m1_columns, _m2_lean_text, _m3_ranking, _m4_judge_key_and_digest_progress,
+    _m1_columns, _m2_lean_text, _m3_ranking, _m4_judge_key_and_digest_progress, _m5_outreach,
 )  # fmt: skip
 
 

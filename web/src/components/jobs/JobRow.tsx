@@ -183,6 +183,10 @@ export function JobDetail({ job: j, status, onMark }: { job: Job; status: string
           <Icon name="chat" />
           Coach me
         </Link>
+        <Link href={`/outreach/${j.id}`} className={buttonClass("ghost")}>
+          <Icon name="send" />
+          Reach out
+        </Link>
         {moves(status).map((m) => (
           <button key={m.next} type="button" className={buttonClass("ghost")} onClick={() => onMark(j, m.next)}>
             <Icon name={m.icon} className={m.next === "applied" ? "text-up" : m.next === "dropped" ? "text-down" : ""} />

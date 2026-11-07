@@ -13,11 +13,12 @@ from typing import Any, Protocol
 from jobagent.config import Settings
 from jobagent.db import Database, UpsertResult
 from jobagent.dedupe import normalize_url
-from jobagent.digest import Sender, send_digest
+from jobagent.digest import Sender, send_digest, send_followups
 from jobagent.discovery.base import DiscoveryResult, SweepContext, Validators
 from jobagent.index import Embedder
 from jobagent.llm import LLM
 from jobagent.models import Posting
+from jobagent.outreach.store import OutreachStore
 from jobagent.policy import Policy
 from jobagent.rank import JudgeStore, rank_jobs
 from jobagent.sqlconn import connect
@@ -153,11 +154,14 @@ def rules_swept(db: Database, tally: RunTally) -> None:
         tally.notes.append(f"recording the rules version failed: {type(exc).__name__}: {exc}")
 
 
-def prune_after_run(db: Database, tally: RunTally) -> None:
-    """Trim old dropped text once a run's saves are done; a failure is only noted (U4)."""
+def prune_after_run(db: Database, tally: RunTally, retention_days: int = 90) -> None:
+    """Trim old dropped text and blank outreach contacts past retention once a run's saves
+    are done; a failure is only noted (U4)."""
     try:
         if pruned := db.prune():
             tally.notes.append(f"pruned text of {pruned} old dropped jobs")
+        if cleared := OutreachStore(db.conn).clear_old(retention_days):
+            tally.notes.append(f"cleared {cleared} outreach contacts past {retention_days} days")
     except Exception as exc:
         log.exception("pruning old dropped text failed")
         tally.notes.append(f"pruning failed: {type(exc).__name__}: {exc}")
@@ -181,10 +185,16 @@ def digest_after_run(
     """Send a finished run's digest (U15). A failure is logged, never raised: the run is
     already saved, and the cron endpoint can send it later."""
     try:
-        return send_digest(db, run_id, sender, limit=settings.ranking.digest_top_n)
+        out = send_digest(db, run_id, sender, limit=settings.ranking.digest_top_n)
     except Exception as exc:
         log.exception("digest failed")
-        return {"sent": 0, "error": type(exc).__name__}
+        out = {"sent": 0, "error": type(exc).__name__}
+    try:
+        out["followups"] = send_followups(db, sender)
+    except Exception as exc:
+        log.exception("follow-up reminder failed")
+        out["followups"] = {"sent": 0, "error": type(exc).__name__}
+    return out
 
 
 # --- the kill switch: a DB flag, so it survives restarts ---

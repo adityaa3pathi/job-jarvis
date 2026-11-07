@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 const LINKS = [
   { href: "/", label: "Jobs" },
   { href: "/coach", label: "Coach" },
+  { href: "/outreach", label: "Outreach" },
   { href: "/resumes", label: "Resumes" },
   { href: "/profile", label: "Profile" },
 ];

@@ -418,3 +418,73 @@ export function istDate(value: string | null): string {
   const d = new Date(value.length === 10 ? `${value}T00:00:00+05:30` : value);
   return Number.isNaN(d.getTime()) ? value : IST.format(d).replaceAll("/", "-");
 }
+
+/** One outreach conversation with one person on one channel. */
+export type Thread = {
+  id: number;
+  job_id: number;
+  job_title: string;
+  job_url: string;
+  job_status: string;
+  company: string;
+  name: string;
+  title: string;
+  email: string;
+  email_source: string;
+  linkedin_url: string;
+  contact_id: number;
+  channel: "email" | "linkedin";
+  step: number;
+  max_steps: number;
+  state: "draft" | "waiting" | "accepted" | "replied" | "bounced" | "no_reply" | "stopped";
+  subject: string;
+  body: string;
+  edited: boolean;
+  can_send: boolean;
+  next_due: string | null;
+  first_sent_at: string | null;
+  last_sent_at: string | null;
+  facts: { fact: string; quote: string; from: "job" | "company" }[];
+  todo: string;
+  linkedin_search: string;
+};
+
+export type SenderProfile = { name: string; pitch: string; links: string[] };
+
+export type Ready = { gmail: boolean; hunter: boolean };
+
+export type OutreachOverview = {
+  items: Thread[];
+  stats: { days: number; sent: number; replied: number; interviews: number };
+  today: { emails: number; invites: number; jobs: number };
+  limits: {
+    jobs_per_day: number;
+    first_emails_per_day: number;
+    linkedin_invites_per_day: number;
+    people_per_company: number;
+    follow_up_days: number[];
+  };
+  ready: Ready;
+  profile: SenderProfile;
+};
+
+export type Contact = {
+  id: number;
+  name: string;
+  title: string;
+  email: string;
+  email_source: string;
+  linkedin_url: string;
+};
+
+export type Candidate = Omit<Contact, "id"> & { other_emails: string[]; note: string; source: string };
+
+export type JobOutreach = {
+  job: { id: number; title: string; company: string; urls: string[] };
+  domain_hint: string;
+  contacts: Contact[];
+  threads: Thread[];
+  limit: number;
+  linkedin_search: string;
+  ready: Ready;
+};
