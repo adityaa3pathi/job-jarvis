@@ -5,36 +5,32 @@ import { fileURLToPath } from "node:url";
 
 const CSS = readFileSync(fileURLToPath(new URL("../src/app/globals.css", import.meta.url)), "utf8");
 const BLOCKS = {
-  plain: /(?:^|\n):root,\s*\[data-theme="plain"\]\s*\{([^}]*)\}/,
-  parchment: /(?:^|\n)\[data-theme="parchment"\]\s*\{([^}]*)\}/,
+  light: /(?:^|\n):root\s*\{([^}]*)\}/,
+  dark: /prefers-color-scheme:\s*dark\)\s*\{\s*:root\s*\{([^}]*)\}/,
 };
 
-// [text, background, minimum ratio]; "name@0.75" blends text over the background at that alpha.
+// [text, background, minimum ratio] for the watchlist palette, in both light and dark.
 const PAIRS = [
-  ["ink", "surface", 4.5],
-  ["ink", "surface-raised", 4.5],
-  ["ink", "surface-muted", 4.5],
-  ["ink-muted", "surface", 4.5],
-  ["ink-muted", "surface-raised", 4.5],
-  ["ink-muted", "surface-muted", 4.5],
-  ["ink-faint", "surface", 4.5],
-  ["ink-faint", "surface-raised", 4.5],
-  ["accent-ink", "accent", 4.5],
-  ["accent-ink", "accent-hover", 4.5],
-  ["accent-ink@0.75", "accent", 4.5],
-  ["success", "success-surface", 4.5],
-  ["success", "surface", 4.5],
-  ["warning", "warning-surface", 4.5],
-  ["warning", "surface", 4.5],
-  ["warning", "surface-raised", 4.5],
-  ["danger", "danger-surface", 4.5],
-  ["danger", "surface", 4.5],
-  ["danger", "surface-raised", 4.5],
-  ["focus", "surface", 3],
-  ["focus", "surface-raised", 3],
+  ["ink", "bg", 4.5],
+  ["ink", "panel", 4.5],
+  ["ink", "sunk", 4.5],
+  ["ink-2", "bg", 4.5],
+  ["ink-2", "panel", 4.5],
+  ["ink-2", "sunk", 4.5],
+  ["ink-3", "bg", 4.5],
+  ["ink-3", "panel", 4.5],
+  ["ink-3", "sunk", 4.5],
+  ["brand", "panel", 4.5],
+  ["brand", "brand-soft", 4.5],
+  ["brand-ink", "brand", 4.5],
+  ["brand-ink", "brand-hover", 4.5],
+  ["up", "up-soft", 4.5],
+  ["up", "panel", 4.5],
+  ["down", "down-soft", 4.5],
+  ["down", "panel", 4.5],
+  ["warn", "warn-soft", 4.5],
+  ["warn", "panel", 4.5],
 ];
-// Parchment-only pairs: ribbon tab counts and the wax-seal fit score.
-const EXTRA = { parchment: [["ink-faint", "surface-muted", 4.5], ["accent-ink", "danger", 4.5]] };
 
 function tokens(name) {
   const m = CSS.match(BLOCKS[name]);
@@ -51,7 +47,7 @@ let failed = 0;
 for (const theme of Object.keys(BLOCKS)) {
   const t = tokens(theme);
   console.log(`\n${theme}`);
-  for (const [fgName, bgName, min] of [...PAIRS, ...(EXTRA[theme] ?? [])]) {
+  for (const [fgName, bgName, min] of PAIRS) {
     const [name, alpha] = fgName.split("@");
     if (!t[name] || !t[bgName]) throw new Error(`${theme}: missing --${name} or --${bgName}`);
     const bg = rgb(t[bgName]);
