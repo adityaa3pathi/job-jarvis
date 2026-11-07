@@ -93,7 +93,16 @@ export function ThreadCard({ thread: t, onChange, showJob = false }: { thread: T
               <li key={f.quote}>
                 <span className="font-semibold">{f.fact}</span>
                 <span className="block text-xs text-ink-3">
-                  From the {f.from === "job" ? "job post" : "company site"}: “{f.quote}”
+                  {f.page ? (
+                    <a href={f.page} target="_blank" rel="noreferrer" className="hover:underline">
+                      {f.page.replace(/^https:\/\//, "")}
+                    </a>
+                  ) : f.from === "job" ? (
+                    "job post"
+                  ) : (
+                    "company site"
+                  )}
+                  : “{f.quote}”
                 </span>
               </li>
             ))}

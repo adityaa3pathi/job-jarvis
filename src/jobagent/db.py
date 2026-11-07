@@ -308,9 +308,26 @@ def _m5_outreach(conn: Any) -> None:
     conn.commit()
 
 
+NETWORK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS connections (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, company TEXT NOT NULL, norm_company TEXT NOT NULL,
+  position TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL, added_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS connections_company ON connections(norm_company);
+"""
+
+
+def _m6_network(conn: Any) -> None:
+    for statement in filter(str.strip, NETWORK_SCHEMA.split(";")):
+        conn.execute(statement)
+    conn.commit()
+
+
 # Run once each, in order; a step must be safe to re-run (two handles may open at once).
 MIGRATIONS: tuple[Callable[[Any], None], ...] = (
     _m1_columns, _m2_lean_text, _m3_ranking, _m4_judge_key_and_digest_progress, _m5_outreach,
+    _m6_network,
 )  # fmt: skip
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Literal
 from urllib.parse import quote_plus
 
@@ -15,12 +16,19 @@ LINKEDIN_NOTE_MAX = 300  # LinkedIn's limit for a connection note
 EMAIL_STEPS = 3  # first email and two follow-ups: past three, replies drop
 LINKEDIN_STEPS = 2  # connection note, then one message after they accept
 FILL = "[write one line about you]"
+FILL_PROOF = "[link to something you built + how you measured it]"
+FILL_WHY = "[say why this company, in one line]"
+URL = re.compile(r"https?://\S+|\b[\w-]+\.(?:in|com|dev|io|ai|app|co|org)\b", re.I)
+PROOF_WITHIN = 400  # characters: the proof link must sit in the first lines, not the signature
 
 
 class SenderProfile(BaseModel):
     """The owner's own details for every note; saved once on the Outreach page."""
 
     name: str = Field(default="", max_length=100)
+    # One line, link first: what you built and how you measured it (the 2026 signal hirers say
+    # they never get). Example: "docnow.in: live booking platform; its AI agent scores 92-96%."
+    proof: str = Field(default="", max_length=300)
     pitch: str = Field(default="", max_length=400)
     links: list[str] = Field(default_factory=list, max_length=4)
 
@@ -41,9 +49,14 @@ def first_name(name: str) -> str:
 
 def _hook(title: str, facts: list[Fact]) -> str:
     if not facts:
-        return f"I'm reaching out about the {title} role. [say why this company, in one line]"
+        return f"I'm reaching out about the {title} role. {FILL_WHY}"
     points = "; ".join(f.fact.rstrip(".") for f in facts)
     return f"I'm reaching out about the {title} role. What stood out to me: {points}."
+
+
+def has_early_proof(body: str) -> bool:
+    """A link to real work near the top; links in the signature do not count."""
+    return bool(URL.search(body[:PROOF_WITHIN]))
 
 
 def _sign(me: SenderProfile) -> str:
@@ -58,7 +71,9 @@ def email_draft(
     if step == 1:
         ask = (f"Would you be open to a short call, or could you point me to the right person "
                f"for the {title} role?")  # fmt: skip
-        body = "\n\n".join([hi, _hook(title, facts), me.pitch or FILL, ask, _sign(me)])
+        extra = [me.pitch] if me.pitch else []
+        proof = me.proof or FILL_PROOF
+        body = "\n\n".join([hi, proof, _hook(title, facts), *extra, ask, _sign(me)])
         return Draft(subject=f"{title} role at {company}"[:78], body=body)
     if step == 2:
         nudge = (f"Bringing this back to the top of your inbox. I'd still love to talk about "
@@ -75,16 +90,14 @@ def linkedin_draft(
     """Step 1 is the connection note (300 characters at most); step 2 the message after."""
     hi = f"Hi {first_name(name)},"
     if step == 1:
-        parts = [hi, f"I'm applying for the {title} role at {company}."]
-        if facts:
-            parts.append(facts[0].fact.rstrip(".") + " caught my eye.")
-        parts.append("Would love to connect.")
-        note = " ".join(parts)
-        if len(note) > LINKEDIN_NOTE_MAX:
-            note = " ".join([parts[0], parts[1], parts[-1]])
+        head = [hi, f"I'm applying for the {title} role at {company}.", me.proof or FILL_PROOF]
+        fact = [facts[0].fact.rstrip(".") + " caught my eye."] if facts else []
+        note = " ".join([*head, *fact, "Would love to connect."])
+        if len(note) > LINKEDIN_NOTE_MAX:  # the proof outranks the fact
+            note = " ".join([*head, "Would love to connect."])
         return Draft(body=note[:LINKEDIN_NOTE_MAX])
     body = "\n\n".join([
-        f"{hi} thanks for connecting.", _hook(title, facts), me.pitch or FILL,
+        f"{hi} thanks for connecting.", me.proof or FILL_PROOF, _hook(title, facts),
         "Would you be open to a short chat, or could you point me to the right person?",
     ])  # fmt: skip
     return Draft(body=body)

@@ -21,13 +21,21 @@ from jobagent.discovery.base import FetchResult
 from jobagent.llm import FailingLLM, StubLLM
 from jobagent.models import Posting
 from jobagent.outreach.apollo import Apollo
-from jobagent.outreach.draft import FILL, SenderProfile, draft_for, linkedin_draft
+from jobagent.outreach.draft import (
+    FILL_PROOF,
+    FILL_WHY,
+    SenderProfile,
+    draft_for,
+    has_early_proof,
+    linkedin_draft,
+)
 from jobagent.outreach.emails import emails_in, guesses, is_role_inbox
-from jobagent.outreach.facts import Fact, grounded, pick_facts
+from jobagent.outreach.facts import Fact, Page, company_pages, grounded, pick_facts
 from jobagent.outreach.finder import find_contacts, guess_domain, yc_slug
 from jobagent.outreach.gmail import Gmail, GmailConfig, GmailError, Sent, build_message
 from jobagent.outreach.hunter import Hunter
 from jobagent.outreach.lookup import LookupError
+from jobagent.outreach.network import Network, NetworkFileError, parse_connections
 from jobagent.outreach.store import OutreachLimit, OutreachStore
 from jobagent.web.store import Store
 from tests.test_discovery import FakeFetcher
@@ -38,7 +46,18 @@ DESC = (
     "You will build FastAPI services and RAG agents. Questions? Write to priya@acme.in or "
     "jobs@acme.in. See https://acme.in/careers."
 )
-ME = SenderProfile(name="Aditya", pitch="I built docnow.in alone.", links=["https://docnow.in"])
+ME = SenderProfile(
+    name="Aditya",
+    proof="I built https://docnow.in alone; its AI agent scores 92-96%.",
+    links=["https://github.com/aditya"],
+)
+SITE = (
+    "<h1>Acme</h1><p>Acme Pay now settles clinic payments in under two seconds across 400 Indian"
+    " hospitals. Our engineering team rebuilt refunds on an idempotent ledger this quarter, and"
+    " we publish weekly changelog notes about the payment rails and the clinic dashboard.</p>"
+)
+PAGE = Page("https://acme.in", "Acme Pay now settles clinic payments in under two seconds")
+MINE = "Hi Neha,\n\nI built https://docnow.in alone, in my own words here.\n\nAditya"
 
 
 def job_id(db: Database, company: str = "Acme", url: str = "https://jobs.lever.co/acme/1") -> int:
@@ -208,40 +227,91 @@ def test_finder_merges_apollo_people_with_free_sources() -> None:
 # --- facts and drafts ---
 
 
-def test_grounding_drops_facts_whose_quote_is_not_in_the_source() -> None:
-    real = Fact(fact="Launched Acme Pay", quote="We just launched Acme Pay for", source="job")
-    made_up = Fact(fact="Raised $50M", quote="Acme raised fifty million dollars last", source="job")
-    wrong_block = Fact(fact="x", quote="We just launched Acme Pay for", source="company")
-    assert grounded([made_up, real, wrong_block], DESC, "") == [real]
+def test_grounding_keeps_only_quotes_from_company_pages_not_the_job_post() -> None:
+    real = Fact(fact="Fast settlement", quote="settles clinic payments in under two",
+                page="https://acme.in")  # fmt: skip
+    made_up = Fact(fact="Raised $50M", quote="Acme raised fifty million dollars last",
+                   page="https://acme.in")  # fmt: skip
+    from_job = Fact(fact="Launched Acme Pay", quote="We just launched Acme Pay for",
+                    page="https://acme.in")  # fmt: skip
+    page = Page("https://acme.in", PAGE.text + " We just launched Acme Pay for Indian hospitals.")
+    assert grounded([made_up, from_job, real], DESC, [page]) == [real]
 
 
-def test_pick_facts_survives_a_failing_model() -> None:
-    assert pick_facts(DESC, "", FailingLLM()) == []
+def test_company_pages_reads_the_companys_own_pages_and_skips_missing_ones() -> None:
+    pages = company_pages(sites({"https://acme.in": SITE, "https://acme.in/changelog": SITE,
+                                 "https://blog.acme.in": SITE + " Blog."}), "acme.in")  # fmt: skip
+    assert [p.url for p in pages] == [
+        "https://acme.in",
+        "https://blog.acme.in",
+    ]  # duplicate dropped
+    assert "Acme Pay now settles" in pages[0].text and "<p>" not in pages[0].text
+
+
+def test_pick_facts_needs_company_pages_and_survives_a_failing_model() -> None:
+    assert pick_facts(DESC, [], StubLLM(lambda s, u: {})) == []
+    assert pick_facts(DESC, [PAGE], FailingLLM()) == []
 
 
 def test_pick_facts_caches_the_checked_result(settings: Settings) -> None:
     llm = StubLLM(lambda s, u: {"facts": [
-        {"fact": "Launched Acme Pay", "quote": "just launched Acme Pay for Indian hospitals",
-         "from": "job"}]})  # fmt: skip
+        {"fact": "Fast settlement", "quote": "settles clinic payments in under two seconds",
+         "page": "https://acme.in"}]})  # fmt: skip
     st = Store(settings.data_dir / "x.sqlite3")
-    first = pick_facts(DESC, "", llm, cache=st)
-    second = pick_facts(DESC, "", llm, cache=st)
-    assert [f.fact for f in first] == [f.fact for f in second] == ["Launched Acme Pay"]
+    first = pick_facts(DESC, [PAGE], llm, cache=st)
+    second = pick_facts(DESC, [PAGE], llm, cache=st)
+    assert [f.fact for f in first] == [f.fact for f in second] == ["Fast settlement"]
     assert len(llm.calls) == 1
     assert "priya@acme.in" not in llm.calls[0][1]  # emails never reach the AI
 
 
-def test_linkedin_note_stays_under_300_characters() -> None:
-    long_fact = Fact(fact="x" * 280, quote="q q q q", source="job")
+def test_drafts_open_with_the_proof_line() -> None:
+    d = draft_for("email", 1, name="Neha", title="Backend Engineer", company="Acme", facts=[],
+                  me=ME)  # fmt: skip
+    assert d.body.split("\n\n")[1] == ME.proof and has_early_proof(d.body)
+    bare = draft_for("email", 1, name="Neha", title="Backend Engineer", company="Acme",
+                     facts=[], me=SenderProfile())  # fmt: skip
+    assert FILL_PROOF in bare.body and FILL_WHY in bare.body
+    assert bare.subject == "Backend Engineer role at Acme"
+    assert not has_early_proof("Hi,\n\n" + "words " * 100 + "\nhttps://docnow.in")
+
+
+def test_linkedin_note_stays_under_300_characters_and_keeps_the_proof() -> None:
+    long_fact = Fact(fact="x" * 280, quote="q q q q")
     note = linkedin_draft(1, name="Neha Rao", title="Backend Engineer", company="Acme",
                           facts=[long_fact], me=ME)  # fmt: skip
     assert len(note.body) <= 300 and note.body.startswith("Hi Neha,")
+    assert "docnow.in" in note.body and "xxxx" not in note.body
 
 
-def test_a_missing_pitch_leaves_a_gap_the_owner_must_fill() -> None:
-    d = draft_for("email", 1, name="Neha", title="Backend Engineer", company="Acme", facts=[],
-                  me=SenderProfile())  # fmt: skip
-    assert FILL in d.body and d.subject == "Backend Engineer role at Acme"
+# --- warm paths ---
+
+EXPORT = (
+    b'Notes:\n"When exporting your connection data, you may notice..."\n\n'
+    b"First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+    b"Ravi,Kumar,https://www.linkedin.com/in/ravi,,Acme Inc,Staff Engineer,01 Oct 2026\n"
+    b"Meera,Shah,https://www.linkedin.com/in/meera,meera@x.com,Other,EM,02 Oct 2026\n"
+    b"No,Company,https://www.linkedin.com/in/no,,,,03 Oct 2026\n"
+)
+
+
+def test_linkedin_export_is_parsed_past_its_notes_header() -> None:
+    rows = parse_connections(EXPORT)
+    assert [(r["name"], r["company"]) for r in rows] == [("Ravi Kumar", "Acme Inc"),
+                                                         ("Meera Shah", "Other")]  # fmt: skip
+    with pytest.raises(NetworkFileError):
+        parse_connections(b"name,company\nx,y\n")
+
+
+def test_known_people_match_job_companies(settings: Settings) -> None:
+    db = Database(settings.db_path)
+    jid = job_id(db)
+    net = Network(db.conn)
+    assert net.replace(parse_connections(EXPORT)) == 2
+    assert [p["name"] for p in net.at("ACME")] == ["Ravi Kumar"]
+    match = net.matches()[0]
+    assert match["company"] == "Acme" and match["jobs"][0]["id"] == jid
+    assert net.replace([]) == 0 and net.summary()["people"] == 0  # a new export replaces the old
 
 
 # --- the store ---
@@ -357,8 +427,8 @@ class FakeGmail:
 
 def facts_llm(system: str, user: str) -> Any:
     if "personal note" in system:
-        return {"facts": [{"fact": "Launched Acme Pay", "from": "job",
-                           "quote": "just launched Acme Pay for Indian hospitals"}]}  # fmt: skip
+        return {"facts": [{"fact": "Fast settlement", "page": "https://acme.in",
+                           "quote": "settles clinic payments in under two seconds"}]}  # fmt: skip
     return {}
 
 
@@ -366,8 +436,9 @@ def facts_llm(system: str, user: str) -> Any:
 def flow(settings: Settings) -> tuple[TestClient, FakeGmail, int]:
     settings.outreach.first_emails_per_day = 1
     gmail = FakeGmail()
-    c = client_for(settings, llm=StubLLM(facts_llm), gmail=lambda: gmail,
-                   site_fetcher=sites({}), has_mx=lambda d: True)  # fmt: skip
+    site = sites({"https://acme.in": SITE})
+    c = client_for(settings, llm=StubLLM(facts_llm), gmail=lambda: gmail, site_fetcher=site,
+                   has_mx=lambda d: True)  # fmt: skip
     assert c.post("/api/login", json={"password": PASSWORD}).status_code == 200
     db = Database(settings.db_path)
     return c, gmail, job_id(db)
@@ -418,9 +489,10 @@ def test_email_flow_needs_an_edit_then_sends_and_schedules_follow_ups(flow: Any)
     c, gmail, jid = flow
     oid = start_thread(c, jid, "email")
     view = c.get(f"/api/jobs/{jid}/outreach").json()["threads"][0]
-    assert "Launched Acme Pay" in view["body"] and not view["edited"]
+    assert "Fast settlement" in view["body"] and not view["edited"]
+    assert view["facts"][0]["page"] == "https://acme.in"
     assert c.post(f"/api/outreach/{oid}/send").status_code == 409  # not edited yet
-    edit(c, oid, "Hi Neha,\n\nI build payment APIs too.\n\nAditya")
+    edit(c, oid, MINE)
     res = c.post(f"/api/outreach/{oid}/send")
     assert res.status_code == 200, res.text
     message, thread = gmail.sent[0]
@@ -440,7 +512,7 @@ def test_email_flow_needs_an_edit_then_sends_and_schedules_follow_ups(flow: Any)
 def test_a_follow_up_is_refused_once_they_replied(flow: Any) -> None:
     c, gmail, jid = flow
     oid = start_thread(c, jid, "email")
-    edit(c, oid, "Hi Neha, my own words. Aditya")
+    edit(c, oid, MINE)
     assert c.post(f"/api/outreach/{oid}/send").status_code == 200
     gmail.state = "replied"
     edit(c, oid, "Hi Neha, nudge in my words. Aditya")
@@ -453,10 +525,10 @@ def test_a_follow_up_is_refused_once_they_replied(flow: Any) -> None:
 def test_the_daily_cap_on_first_emails(flow: Any, settings: Settings) -> None:
     c, gmail, jid = flow
     first = start_thread(c, jid, "email")
-    edit(c, first, "Hi Neha, my own words. Aditya")
+    edit(c, first, MINE)
     assert c.post(f"/api/outreach/{first}/send").status_code == 200
     second = start_thread(c, jid, "email", email="arjun@acme.in", name="Arjun Das")
-    edit(c, second, "Hi Arjun, my own words. Aditya")
+    edit(c, second, MINE.replace("Neha", "Arjun"))
     res = c.post(f"/api/outreach/{second}/send")
     assert res.status_code == 429 and len(gmail.sent) == 1
 
@@ -464,16 +536,19 @@ def test_the_daily_cap_on_first_emails(flow: Any, settings: Settings) -> None:
 def test_unfilled_template_gaps_block_sending(flow: Any) -> None:
     c, _, jid = flow
     oid = start_thread(c, jid, "email")
-    edit(c, oid, f"Hi Neha,\n\n{FILL}\n\nAditya")
+    edit(c, oid, f"Hi Neha,\n\n{FILL_PROOF}\n\nAditya")
     res = c.post(f"/api/outreach/{oid}/send")
     assert res.status_code == 409 and "fill in" in res.text
+    edit(c, oid, "Hi Neha,\n\nMy own words, no link to my work.\n\nAditya")
+    res = c.post(f"/api/outreach/{oid}/send")
+    assert res.status_code == 409 and "link to something you built" in res.text
 
 
 def test_linkedin_flow_is_marked_by_hand_and_waits_for_acceptance(flow: Any) -> None:
     c, gmail, jid = flow
     oid = start_thread(c, jid, "linkedin")
     assert c.put(f"/api/outreach/{oid}", json={"body": "x" * 301}).status_code == 400
-    edit(c, oid, "Hi Neha, applying for the backend role. Would love to connect.", subject="")
+    edit(c, oid, "Hi Neha, applying for the backend role. I built docnow.in alone.", subject="")
     assert c.post(f"/api/outreach/{oid}/send").status_code == 200
     edit(c, oid, "Hi Neha, thanks for connecting. My own message.", subject="")
     assert c.post(f"/api/outreach/{oid}/send").status_code == 409  # not accepted yet
@@ -487,7 +562,7 @@ def test_linkedin_flow_is_marked_by_hand_and_waits_for_acceptance(flow: Any) -> 
 def test_check_replies_marks_replied_threads(flow: Any) -> None:
     c, gmail, jid = flow
     oid = start_thread(c, jid, "email")
-    edit(c, oid, "Hi Neha, my own words. Aditya")
+    edit(c, oid, MINE)
     c.post(f"/api/outreach/{oid}/send")
     gmail.state = "replied"
     state = done(c, c.post("/api/outreach/check-replies"))
@@ -495,12 +570,12 @@ def test_check_replies_marks_replied_threads(flow: Any) -> None:
 
 
 def test_no_gmail_means_no_email_sending(settings: Settings) -> None:
-    c = client_for(settings, llm=StubLLM(facts_llm), site_fetcher=sites({}),
+    c = client_for(settings, llm=StubLLM(facts_llm), site_fetcher=sites({"https://acme.in": SITE}),
                    has_mx=lambda d: True)  # fmt: skip
     c.post("/api/login", json={"password": PASSWORD})
     jid = job_id(Database(settings.db_path))
     oid = start_thread(c, jid, "email")
-    edit(c, oid, "Hi Neha, my own words. Aditya")
+    edit(c, oid, MINE)
     res = c.post(f"/api/outreach/{oid}/send")
     assert res.status_code == 400 and "Gmail is not connected" in res.text
     assert c.get("/api/outreach").json()["ready"] == {
@@ -508,6 +583,19 @@ def test_no_gmail_means_no_email_sending(settings: Settings) -> None:
         "hunter": False,
         "apollo": False,
     }
+
+
+def test_network_import_shows_known_people_on_the_job(flow: Any) -> None:
+    c, _, jid = flow
+    bad = c.post("/api/network/import", files={"file": ("x.csv", b"a,b\n1,2\n", "text/csv")})
+    assert bad.status_code == 400
+    res = c.post("/api/network/import", files={"file": ("Connections.csv", EXPORT, "text/csv")})
+    assert res.json() == {"imported": 2}
+    known = c.get(f"/api/jobs/{jid}/outreach").json()["known"]
+    assert [k["name"] for k in known] == ["Ravi Kumar"]
+    net = c.get("/api/network").json()
+    assert (net["people"], net["matches"][0]["company"]) == (2, "Acme")
+    assert c.delete("/api/network").json() == {"removed": 2}
 
 
 # --- Telegram reminder ---

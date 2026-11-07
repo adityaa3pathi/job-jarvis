@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, invalidate, runTask, TaskAborted, useCachedApi, type OutreachOverview, type SenderProfile } from "@/lib/api";
 import { Icon } from "@/components/Icon";
+import { NetworkPanel } from "@/components/outreach/NetworkPanel";
 import { ThreadCard } from "@/components/outreach/ThreadCard";
 import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing, StateNote } from "@/components/ui";
 
@@ -38,10 +39,10 @@ function Setup({ ready }: { ready: OutreachOverview["ready"] }) {
 }
 
 function ProfileForm({ profile, onSaved }: { profile: SenderProfile; onSaved: () => void }) {
-  const [me, setMe] = useState({ ...profile, links: profile.links.join("\n") });
+  const [me, setMe] = useState({ ...profile, proof: profile.proof ?? "", links: profile.links.join("\n") });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const empty = !profile.name || !profile.pitch;
+  const empty = !profile.name || !profile.proof;
   return (
     <details open={empty} className="rounded-lg border border-line bg-panel">
       <summary className="cursor-pointer px-4 py-3 text-sm font-bold">Your details for every message</summary>
@@ -64,8 +65,18 @@ function ProfileForm({ profile, onSaved }: { profile: SenderProfile; onSaved: ()
       >
         <input aria-label="Your name" placeholder="Your name" className={FIELD} value={me.name} onChange={(e) => setMe({ ...me, name: e.target.value })} />
         <textarea
-          aria-label="One line about you"
-          placeholder="One or two lines about you, e.g. I built docnow.in alone: 176 APIs, payments, and an AI support agent that scores 92–96% on accuracy tests."
+          aria-label="Proof line"
+          placeholder="Proof line, link first: e.g. https://docnow.in — I built this live booking platform alone; its AI support agent scores 92–96% on 50 real support questions, graded by hand."
+          className={`${FIELD} h-20 py-2`}
+          value={me.proof}
+          onChange={(e) => setMe({ ...me, proof: e.target.value })}
+        />
+        <p className="text-xs text-ink-3">
+          Every first message opens with this line. Say how you measured the result: hirers say it is the one thing they never get.
+        </p>
+        <textarea
+          aria-label="One more line about you (optional)"
+          placeholder="Optional extra line, e.g. 2.5 years building backend and AI systems in TypeScript and Python."
           className={`${FIELD} h-20 py-2`}
           value={me.pitch}
           onChange={(e) => setMe({ ...me, pitch: e.target.value })}
@@ -161,6 +172,7 @@ export default function OutreachPage() {
             ))}
           </dl>
           <ProfileForm key={JSON.stringify(data.profile)} profile={data.profile} onSaved={refresh} />
+          <NetworkPanel />
           {data.items.length === 0 ? (
             <StateNote>No outreach yet. Open a job on the Jobs page and press “Reach out”.</StateNote>
           ) : (

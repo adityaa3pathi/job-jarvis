@@ -444,12 +444,21 @@ export type Thread = {
   next_due: string | null;
   first_sent_at: string | null;
   last_sent_at: string | null;
-  facts: { fact: string; quote: string; from: "job" | "company" }[];
+  facts: { fact: string; quote: string; page?: string; from: "job" | "company" }[];
   todo: string;
   linkedin_search: string;
 };
 
-export type SenderProfile = { name: string; pitch: string; links: string[] };
+export type SenderProfile = { name: string; proof: string; pitch: string; links: string[] };
+
+export type KnownPerson = { id?: number; name: string; position: string; url: string; email?: string; source?: string };
+
+export type NetworkView = {
+  people: number;
+  companies: number;
+  updated: string | null;
+  matches: { company: string; people: KnownPerson[]; jobs: { id: number; title: string; status: string }[] }[];
+};
 
 export type Ready = { gmail: boolean; hunter: boolean; apollo: boolean };
 
@@ -487,4 +496,5 @@ export type JobOutreach = {
   limit: number;
   linkedin_search: string;
   ready: Ready;
+  known: KnownPerson[];
 };
