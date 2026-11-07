@@ -593,5 +593,3 @@ def test_coderound_reads_featured_api(policy: Policy) -> None:
     assert "Python" in first.stack_words
     assert (second.title, second.company) == ("Senior Software Engineer", "Rapid Claims")
     assert second.experience_text == "5-9 years"
-
-
