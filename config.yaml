@@ -12,6 +12,8 @@ llm:
   model: gemini-3.5-flash-lite
   timeout_s: 30
   send_contact_details: false
+ranking:
+  owner_years: 2  # DocNow since 06-2024; jobs asking 4+ years rank lower, 6+ are dropped
 outreach:
   jobs_per_day: 10
   first_emails_per_day: 20

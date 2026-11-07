@@ -310,6 +310,20 @@ class RankSummary:
     changed: int = 0
     embedded: bool = False
     left_to_embed: int = 0  # found jobs still waiting for a vector (filled on later runs)
+    spread: tuple[int, int, int] | None = None  # lowest, median and highest score this run
+    has_profile: bool = True
+
+    def describe(self) -> str:
+        """Run-note text that shows when scores cannot tell jobs apart."""
+        if self.spread is None:
+            return ""
+        low, mid, high = self.spread
+        text = f"; scores {low}-{high}, median {mid}"
+        if not self.has_profile:
+            text += "; no career summary on the Profile page, so every score is capped at 60"
+        elif high - low < 10:
+            text += "; scores barely differ: mark jobs Applied or Skip to teach the ranking"
+        return text
 
 
 def score_found(
@@ -350,6 +364,7 @@ def score_found(
             sims = [None] * len(rows)
     mine = frozenset(stack_terms(profile)) if profile else ""
     changed: list[tuple[int | None, str, int]] = []
+    final: list[int] = []
     for row, sim in zip(rows, sims, strict=True):
         text = f"{row['title']}\n{row['head']}\n{' '.join(json.loads(row['stack_words']))}"
         ceiling, why = profile_ceiling(mine, text, row["min_years"], owner_years)
@@ -366,8 +381,14 @@ def score_found(
         )  # fmt: skip
         if (score, reason) != (row["score"], row["rank_reason"]):
             changed.append((score, reason, row["id"]))
+        if score is not None:
+            final.append(score)
     db.save_ranks(changed)
-    return RankSummary(len(rows), len(changed), any(s is not None for s in sims), left)
+    final.sort()
+    spread = (final[0], final[len(final) // 2], final[-1]) if final else None
+    return RankSummary(
+        len(rows), len(changed), any(s is not None for s in sims), left, spread, bool(profile)
+    )
 
 
 class JudgeStore(LLMCache, Protocol):
@@ -444,6 +465,7 @@ def rank_jobs(
         max_new_embeddings=settings.ranking.embed_new_per_run,
     )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
+    note += cheap.describe()
     if cheap.left_to_embed:
         note += f"; {cheap.left_to_embed} wait for the match model on later runs"
     log.info("%s", note)

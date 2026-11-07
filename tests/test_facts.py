@@ -24,11 +24,11 @@ MARKED_NUMBERS = [
 
 @pytest.fixture(scope="module")
 def sheet() -> FactSheet:
-    return load_facts(REPO_ROOT / "facts.yaml")
+    return load_facts(REPO_ROOT / "facts.example.yaml")
 
 
 def raw() -> dict[str, object]:
-    loaded: dict[str, object] = yaml.safe_load((REPO_ROOT / "facts.yaml").read_text())
+    loaded: dict[str, object] = yaml.safe_load((REPO_ROOT / "facts.example.yaml").read_text())
     return loaded
 
 
