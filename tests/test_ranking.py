@@ -315,3 +315,11 @@ def test_fastembed_model_runs_on_one_thread(monkeypatch: pytest.MonkeyPatch) -> 
 
     FastEmbedEmbedder()
     assert seen.get("threads") == 1
+
+
+def test_run_note_shows_the_score_spread_and_why_scores_are_flat(settings: Settings) -> None:
+    summary = score_found(db_with(settings, [job(1, GOOD), job(2, BAD)]), None)
+    assert summary.spread is not None and summary.spread[0] < summary.spread[2]
+    assert summary.describe().startswith("; scores ")
+    flat = score_found(db_with(settings, [job(3, GOOD), job(4, BAD)], profile=""), None)
+    assert "no career summary" in flat.describe()
