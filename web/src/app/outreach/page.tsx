@@ -80,6 +80,12 @@ function ProfileForm({ profile, onSaved }: { profile: SenderProfile; onSaved: ()
   );
 }
 
+/** Runs only once data is loaded in the browser: the date must never be read while prerendering. */
+function dueToday(items: OutreachOverview["items"]) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  return items.filter((t) => t.next_due && t.next_due <= today && ["waiting", "accepted"].includes(t.state));
+}
+
 export default function OutreachPage() {
   const { data, error, refreshing } = useCachedApi<OutreachOverview>(PATH);
   const [busy, setBusy] = useState(false);
@@ -113,8 +119,7 @@ export default function OutreachPage() {
     }
   }
 
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-  const due = data?.items.filter((t) => t.next_due && t.next_due <= today && ["waiting", "accepted"].includes(t.state)) ?? [];
+  const due = data ? dueToday(data.items) : [];
   const drafts = data?.items.filter((t) => t.step === 0 && t.state === "draft") ?? [];
   const rest = data?.items.filter((t) => !due.includes(t) && !drafts.includes(t)) ?? [];
 
