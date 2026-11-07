@@ -25,6 +25,7 @@ class Outcome:
     keywords_after: float
     jd_calls: int = 0
     jd_errors: list[str] = field(default_factory=list)
+    instructions: str = ""  # the owner's wishes for this build, echoed in the report
 
 
 class _CountingLLM:
@@ -84,6 +85,8 @@ def build_report(out: Outcome, years_have: float | None) -> str:
             f"- WARNING: {len(out.jd_errors)} of {out.jd_calls} job-analysis model calls failed "
             f"({_causes(out.jd_errors)}). The skill list may be less complete."
         ]
+    if out.instructions:
+        lines += [f"- Your instructions: {' '.join(out.instructions.split())}"]
     notes = fit_check(out.profile, years_have) if years_have is not None else []
     lines += [f"- Fit: {n}" for n in notes]
     added = out.tailored.added_gap_skills
@@ -134,13 +137,16 @@ def run_tailor(
     years_have: float | None = None,
     profile: JDProfile | None = None,
     cache: LLMCache | None = None,
+    instructions: str = "",
 ) -> Outcome:
     """Pass `profile` when the JD was already analysed, to skip a second model round."""
     resume = parse(latex_text)
     counted = _CountingLLM(llm)
     profile = profile or analyze_jd(jd_text, counted, cache)
     coverage = match_profile(profile, cards)
-    tailored = tailor_resume(resume, cards, profile, coverage, writer_llm or llm, add_gaps)
+    tailored = tailor_resume(
+        resume, cards, profile, coverage, writer_llm or llm, add_gaps, instructions
+    )
     explicit = profile.skills
     out = Outcome(
         profile=profile,
@@ -151,6 +157,7 @@ def run_tailor(
         keywords_after=keyword_coverage(tailored.latex, explicit),
         jd_calls=counted.calls,
         jd_errors=counted.errors,
+        instructions=instructions.strip(),
     )
     out.report = build_report(out, years_have)
     return out

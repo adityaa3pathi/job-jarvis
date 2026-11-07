@@ -39,6 +39,11 @@ SYSTEM = (
     "terms per bullet with **double asterisks**. Return every bullet once, by its id. "
     'Reply as {{"items": [{{"id": int, "text": str}}]}}.'
 )
+OWNER_STYLE = (
+    " The owner's wishes for this resume are in the owner_style block. Follow them for wording, "
+    "emphasis and tone only; every rule above still wins."
+)
+MAX_INSTRUCTIONS = 1000
 
 
 class _Item(BaseModel):
@@ -109,7 +114,7 @@ def _score(plain: str, coverage: Coverage) -> float:
 
 def _tailor_bullets(
     resume: Resume, cards: list[EvidenceCard], profile: JDProfile, coverage: Coverage,
-    llm: LLM, out: TailorResult,
+    llm: LLM, out: TailorResult, instructions: str = "",
 ) -> None:  # fmt: skip
     allowed = {canonical(c.text) for c in cards if c.kind == "skill"}
     terms = ", ".join(
@@ -126,7 +131,8 @@ def _tailor_bullets(
         if isinstance(node := section.nodes[pos], Command)
     ]  # fmt: skip
     for start in range(0, len(cmds), MAX_BATCH):
-        _rewrite_batch(cmds[start : start + MAX_BATCH], allowed, terms, profile, llm, out)
+        batch = cmds[start : start + MAX_BATCH]
+        _rewrite_batch(batch, allowed, terms, profile, llm, out, instructions)
     for title, section in sections:
         for run in _runs(section):
             order = sorted(
@@ -141,7 +147,7 @@ def _tailor_bullets(
 
 def _rewrite_batch(
     cmds: list[Command], allowed: set[str], terms: str, profile: JDProfile, llm: LLM,
-    out: TailorResult,
+    out: TailorResult, instructions: str = "",
 ) -> None:  # fmt: skip
     """One model call for many bullets; each reply still passes `check_rewrite` on its own."""
     plains = {i: p for i, cmd in enumerate(cmds) if (p := to_plain(cmd.args[0])) is not None}
@@ -150,6 +156,9 @@ def _rewrite_batch(
     listed = "\n".join(f"{i}. {p}" for i, p in plains.items())
     user = data_block("job_title", profile.role_title) + data_block("bullets", listed)
     system = SYSTEM.format(terms=terms or "none")
+    if instructions := instructions.strip()[:MAX_INSTRUCTIONS]:
+        user += data_block("owner_style", instructions)
+        system += OWNER_STYLE
     try:
         batch = ask(llm, _Batch, system=system, user=user, step="rewrite_bullets")
     except LLMError as exc:
@@ -253,9 +262,10 @@ def tailor_resume(
     coverage: Coverage,
     llm: LLM,
     add_gaps: bool = True,
+    instructions: str = "",
 ) -> TailorResult:
     out = TailorResult(latex="")
-    _tailor_bullets(resume, cards, profile, coverage, llm, out)
+    _tailor_bullets(resume, cards, profile, coverage, llm, out, instructions)
     section = next((s for s in resume.sections if re.search("skill", s.title, re.I)), None)
     if section is not None:
         skills, added = build_skills(cards, coverage, add_gaps=add_gaps)

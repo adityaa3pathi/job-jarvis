@@ -146,3 +146,21 @@ def test_report_says_when_job_analysis_calls_failed() -> None:
     out = run_tailor(JD, SAMPLE, CARDS, StubLLM(flaky))
     assert "1 of" in out.report and "job-analysis model calls failed" in out.report
     assert "TimeoutError" in out.report
+
+
+def test_owner_instructions_reach_the_rewriter_and_the_report() -> None:
+    llm = StubLLM(fake)
+    out = run_tailor(JD, SAMPLE, CARDS, llm, instructions="Lead with my AI work.")
+    rewrites = [(s, u) for s, u in llm.calls if "Rewrite each resume bullet" in s]
+    assert rewrites and all(
+        'name="owner_style"' in u and "Lead with my AI work." in u for _, u in rewrites
+    )
+    assert all("every rule above still wins" in s for s, _ in rewrites)
+    assert "- Your instructions: Lead with my AI work." in out.report
+
+
+def test_no_instructions_leaves_the_prompt_unchanged() -> None:
+    llm = StubLLM(fake)
+    out = run_tailor(JD, SAMPLE, CARDS, llm, instructions="   ")
+    assert not any("owner_style" in u for _, u in llm.calls)
+    assert "Your instructions" not in out.report
