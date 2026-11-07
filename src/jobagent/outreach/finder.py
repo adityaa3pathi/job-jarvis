@@ -1,5 +1,5 @@
 """Who to contact at a company: people named in the post, on the company site, YC founders,
-and Hunter when the owner asks. Nothing here sends anything or touches LinkedIn."""
+and Hunter or Apollo when the owner asks. Nothing here sends anything or touches LinkedIn."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import html
 import json
 import logging
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -24,11 +24,11 @@ from jobagent.outreach.emails import (
     guesses,
     is_role_inbox,
 )
-from jobagent.outreach.hunter import Hunter, HunterError
+from jobagent.outreach.lookup import LookupError, PeopleLookup
 
 log = logging.getLogger(__name__)
-Source = Literal["post", "site", "yc", "hunter", "manual"]
-EmailSource = Literal["post", "site", "hunter", "guess", "manual", ""]
+Source = Literal["post", "site", "yc", "hunter", "apollo", "manual"]
+EmailSource = Literal["post", "site", "hunter", "apollo", "guess", "manual", ""]
 SITE_PATHS = ("", "/contact", "/about", "/team")
 _YC_JOB = re.compile(r"^/companies/([a-z0-9-]{1,100})(?:/|$)")
 _PAGE_DATA = re.compile(r'data-page="([^"]+)"')
@@ -131,9 +131,9 @@ def _post_people(description: str, domain: str) -> list[Candidate]:
 def find_contacts(
     *, company: str, description: str, urls: list[str], domain: str = "",
     board_fetcher: Fetcher, site_fetcher: Callable[[str], Fetcher],
-    has_mx: Callable[[str], bool], hunter: Hunter | None = None,
+    has_mx: Callable[[str], bool], lookups: Sequence[PeopleLookup] = (),
 ) -> FindResult:  # fmt: skip
-    """Every free source, plus Hunter when given. Each source failing alone is only noted."""
+    """Every free source, plus each paid lookup given. A source failing alone is only noted."""
     notes: list[str] = []
     found: list[Candidate] = []
     yc: dict[str, Any] = {}
@@ -167,18 +167,18 @@ def find_contacts(
             note="best guess (first@ is right about 80% of the time)" if options else "no email",
             linkedin_url=str(f.get("linkedin_url") or ""), source="yc",
         ))  # fmt: skip
-    if hunter is not None:
+    for lookup in lookups:
         try:
-            got = hunter.domain_search(domain=domain, company=company)
-            domain = domain or got.domain
-            for p in got.people:
-                sure = "Hunter verified" if p.verified else f"Hunter {p.confidence}% sure"
-                found.append(Candidate(
-                    name=p.name, title=p.title, email=p.email, email_source="hunter", note=sure,
-                    linkedin_url=p.linkedin_url, source="hunter",
-                ))  # fmt: skip
-        except HunterError as exc:
+            got = lookup.people_at(domain=domain, company=company)
+        except LookupError as exc:
             notes.append(str(exc))
+            continue
+        domain = domain or got.domain
+        found += [
+            Candidate(name=p.name, title=p.title, email=p.email, email_source=lookup.key,
+                      note=p.note, linkedin_url=p.linkedin_url, source=lookup.key)
+            for p in got.people
+        ]  # fmt: skip
     if not domain:
         notes.append("company website unknown; type it in to search the site and guess emails")
     return FindResult(domain=domain, candidates=sorted(_dedupe(found), key=_rank), notes=notes)
@@ -186,7 +186,7 @@ def find_contacts(
 
 def _dedupe(found: list[Candidate]) -> list[Candidate]:
     """One row per email (or per name without one); the better-sourced copy wins."""
-    order = {"hunter": 0, "post": 1, "yc": 2, "site": 3, "manual": 4}
+    order = {"hunter": 0, "apollo": 0, "post": 1, "yc": 2, "site": 3, "manual": 4}
     best: dict[str, Candidate] = {}
     for c in sorted(found, key=lambda c: order[c.source]):
         key = c.email or c.name.lower()

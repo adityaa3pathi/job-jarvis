@@ -30,3 +30,5 @@ services:
         sync: false
       - key: HUNTER_API_KEY
         sync: false
+      - key: APOLLO_API_KEY
+        sync: false

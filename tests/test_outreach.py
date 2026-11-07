@@ -20,12 +20,14 @@ from jobagent.digest import send_followups
 from jobagent.discovery.base import FetchResult
 from jobagent.llm import FailingLLM, StubLLM
 from jobagent.models import Posting
+from jobagent.outreach.apollo import Apollo
 from jobagent.outreach.draft import FILL, SenderProfile, draft_for, linkedin_draft
 from jobagent.outreach.emails import emails_in, guesses, is_role_inbox
 from jobagent.outreach.facts import Fact, grounded, pick_facts
 from jobagent.outreach.finder import find_contacts, guess_domain, yc_slug
 from jobagent.outreach.gmail import Gmail, GmailConfig, GmailError, Sent, build_message
-from jobagent.outreach.hunter import Hunter, HunterError
+from jobagent.outreach.hunter import Hunter
+from jobagent.outreach.lookup import LookupError
 from jobagent.outreach.store import OutreachLimit, OutreachStore
 from jobagent.web.store import Store
 from tests.test_discovery import FakeFetcher
@@ -122,9 +124,9 @@ def hunter_transport(status: int = 200, seen: list[httpx.Request] | None = None)
 def test_hunter_parses_people_and_keeps_the_key_out_of_the_url() -> None:
     seen: list[httpx.Request] = []
     hunter = Hunter("secret-key", transport=hunter_transport(seen=seen))
-    got = hunter.domain_search(domain="acme.in")
-    assert [(p.name, p.email, p.verified) for p in got.people] == [
-        ("Neha Rao", "neha@acme.in", True)
+    got = hunter.people_at(domain="acme.in")
+    assert [(p.name, p.email, p.note) for p in got.people] == [
+        ("Neha Rao", "neha@acme.in", "Hunter verified")
     ]
     assert "secret-key" not in str(seen[0].url)
     assert seen[0].headers["X-API-KEY"] == "secret-key"
@@ -132,17 +134,75 @@ def test_hunter_parses_people_and_keeps_the_key_out_of_the_url() -> None:
 
 @pytest.mark.parametrize(("status", "words"), [(401, "rejected"), (429, "limit"), (500, "500")])
 def test_hunter_errors_are_plain(status: int, words: str) -> None:
-    with pytest.raises(HunterError, match=words):
-        Hunter("k", transport=hunter_transport(status)).domain_search(company="Acme")
+    with pytest.raises(LookupError, match=words):
+        Hunter("k", transport=hunter_transport(status)).people_at(domain="", company="Acme")
 
 
 def test_a_hunter_failure_is_only_a_note() -> None:
     got = find_contacts(
         company="Acme", description=DESC, urls=[], board_fetcher=FakeFetcher({}),
         site_fetcher=sites({}), has_mx=lambda d: True,
-        hunter=Hunter("k", transport=hunter_transport(429)),
+        lookups=[Hunter("k", transport=hunter_transport(429))],
     )  # fmt: skip
     assert got.candidates and any("Hunter limit" in n for n in got.notes)
+
+
+class ApolloFake:
+    def __init__(self, status: int = 200) -> None:
+        self.status = status
+        self.requests: list[httpx.Request] = []
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        if self.status != 200:
+            return httpx.Response(self.status, json={"error": "x"})
+        body = json.loads(request.content)
+        if request.url.path.endswith("/mixed_people/api_search"):
+            return httpx.Response(200, json={"people": [
+                {"id": "p1", "first_name": "Sam", "title": "VP Sales", "has_email": True},
+                {"id": "p2", "first_name": "Neha", "title": "Head of Engineering",
+                 "has_email": True},
+                {"id": "p3", "first_name": "Raj", "title": "CTO", "has_email": False},
+            ]})  # fmt: skip
+        people = {
+            "p1": {"name": "Sam Lee", "title": "VP Sales", "email": "sam@acme.in",
+                   "email_status": "verified"},
+            "p2": {"name": "Neha Rao", "title": "Head of Engineering", "email": "Neha@acme.in",
+                   "email_status": "verified", "linkedin_url": "https://linkedin.com/in/neha"},
+        }  # fmt: skip
+        return httpx.Response(200, json={"person": people[body["id"]]})
+
+    def client(self, reveal: int = 3) -> Apollo:
+        return Apollo("apollo-key", transport=httpx.MockTransport(self.handle), reveal=reveal)
+
+
+def test_apollo_reveals_engineering_deciders_first_and_skips_people_without_email() -> None:
+    fake = ApolloFake()
+    got = fake.client(reveal=1).people_at(domain="acme.in")
+    assert [(p.name, p.email, p.note) for p in got.people] == [
+        ("Neha Rao", "neha@acme.in", "Apollo verified")
+    ]
+    revealed = [json.loads(r.content)["id"] for r in fake.requests if "match" in r.url.path]
+    assert revealed == ["p2"]  # one credit, spent on the engineering head
+    assert all(r.headers["x-api-key"] == "apollo-key" for r in fake.requests)
+    assert "apollo-key" not in str(fake.requests[0].url)
+
+
+def test_apollo_needs_a_domain_and_explains_plan_errors() -> None:
+    with pytest.raises(LookupError, match="company website"):
+        ApolloFake().client().people_at(domain="")
+    with pytest.raises(LookupError, match="work email"):
+        ApolloFake(403).client().people_at(domain="acme.in")
+
+
+def test_finder_merges_apollo_people_with_free_sources() -> None:
+    got = find_contacts(
+        company="Acme", description=DESC, urls=[], board_fetcher=FakeFetcher({}),
+        site_fetcher=sites({}), has_mx=lambda d: True, lookups=[ApolloFake().client()],
+    )  # fmt: skip
+    by_email = {c.email: c for c in got.candidates}
+    assert by_email["neha@acme.in"].source == "apollo"
+    assert by_email["neha@acme.in"].linkedin_url == "https://linkedin.com/in/neha"
 
 
 # --- facts and drafts ---
@@ -345,10 +405,13 @@ def test_find_returns_people_without_saving_them(flow: Any) -> None:
     assert c.get(f"/api/jobs/{jid}/outreach").json()["contacts"] == []
 
 
-def test_hunter_needs_a_key(flow: Any) -> None:
+@pytest.mark.parametrize(
+    ("flag", "env"), [("use_hunter", "HUNTER_API_KEY"), ("use_apollo", "APOLLO_API_KEY")]
+)
+def test_paid_lookups_need_a_key(flow: Any, flag: str, env: str) -> None:
     c, _, jid = flow
-    res = c.post(f"/api/jobs/{jid}/contacts/find", json={"use_hunter": True})
-    assert res.status_code == 400 and "HUNTER_API_KEY" in res.text
+    res = c.post(f"/api/jobs/{jid}/contacts/find", json={flag: True})
+    assert res.status_code == 400 and env in res.text
 
 
 def test_email_flow_needs_an_edit_then_sends_and_schedules_follow_ups(flow: Any) -> None:
@@ -440,7 +503,11 @@ def test_no_gmail_means_no_email_sending(settings: Settings) -> None:
     edit(c, oid, "Hi Neha, my own words. Aditya")
     res = c.post(f"/api/outreach/{oid}/send")
     assert res.status_code == 400 and "Gmail is not connected" in res.text
-    assert c.get("/api/outreach").json()["ready"] == {"gmail": False, "hunter": False}
+    assert c.get("/api/outreach").json()["ready"] == {
+        "gmail": False,
+        "hunter": False,
+        "apollo": False,
+    }
 
 
 # --- Telegram reminder ---

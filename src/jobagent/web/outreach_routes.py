@@ -29,7 +29,7 @@ from jobagent.outreach.emails import domain_of, has_mail_server, valid_email
 from jobagent.outreach.facts import Fact, pick_facts
 from jobagent.outreach.finder import find_contacts, guess_domain
 from jobagent.outreach.gmail import Gmail, GmailError, build_message
-from jobagent.outreach.hunter import Hunter
+from jobagent.outreach.lookup import PeopleLookup
 from jobagent.outreach.store import (
     FINAL,
     LINKEDIN_CHECK_DAYS,
@@ -53,20 +53,22 @@ class OutreachDeps:
     board_fetcher: Fetcher
     site_fetcher: Callable[[str], Fetcher]
     gmail: Callable[[], Gmail | None]
-    hunter: Callable[[], Hunter | None]
+    hunter: Callable[[], PeopleLookup | None]
+    apollo: Callable[[], PeopleLookup | None]
     has_mx: Callable[[str], bool] = has_mail_server
 
 
 class FindIn(BaseModel):
     domain: str = Field(default="", max_length=200)
     use_hunter: bool = False
+    use_apollo: bool = False
 
 
 class ContactIn(BaseModel):
     name: str = Field(default="", max_length=120)
     title: str = Field(default="", max_length=160)
     email: str = Field(default="", max_length=200)
-    email_source: Literal["post", "site", "hunter", "guess", "manual", ""] = "manual"
+    email_source: Literal["post", "site", "hunter", "apollo", "guess", "manual", ""] = "manual"
     linkedin_url: str = Field(default="", max_length=300)
 
 
@@ -119,6 +121,10 @@ def add_outreach_routes(
     def borrow_db() -> Any:
         return app.state.jobs_db.borrow()
 
+    def ready() -> dict[str, bool]:
+        return {"gmail": deps.gmail() is not None, "hunter": deps.hunter() is not None,
+                "apollo": deps.apollo() is not None}  # fmt: skip
+
     @app.get("/api/outreach", dependencies=[owner])
     def outreach_list(db: DB, response: Response) -> dict[str, Any]:
         response.headers["Cache-Control"] = "no-store"
@@ -129,7 +135,7 @@ def add_outreach_routes(
             "today": {"emails": out.sent_today("email"), "invites": out.sent_today("linkedin"),
                       "jobs": len(out.jobs_started_today())},
             "limits": limits.model_dump(),
-            "ready": {"gmail": deps.gmail() is not None, "hunter": deps.hunter() is not None},
+            "ready": ready(),
             "profile": out.profile().model_dump(),
         }  # fmt: skip
 
@@ -149,21 +155,26 @@ def add_outreach_routes(
             "threads": [_view(r) for r in out.for_job(job_id)],
             "limit": limits.people_per_company,
             "linkedin_search": linkedin_search_url(job["company"]),
-            "ready": {"gmail": deps.gmail() is not None, "hunter": deps.hunter() is not None},
+            "ready": ready(),
         }  # fmt: skip
 
     @app.post("/api/jobs/{job_id}/contacts/find", dependencies=[owner])
     def find(job_id: int, body: FindIn, db: DB) -> dict[str, str]:
         job = _job(db, job_id)
-        hunter = deps.hunter() if body.use_hunter else None
-        if body.use_hunter and hunter is None:
-            raise HTTPException(400, "Hunter is not set up: add HUNTER_API_KEY to the server")
+        lookups: list[PeopleLookup] = []
+        for wanted, make, env in ((body.use_hunter, deps.hunter, "HUNTER_API_KEY"),
+                                  (body.use_apollo, deps.apollo, "APOLLO_API_KEY")):  # fmt: skip
+            if not wanted:
+                continue
+            if (lookup := make()) is None:
+                raise HTTPException(400, f"not set up: add {env} to the server")
+            lookups.append(lookup)
 
         def work(_: Store, cancelled: threading.Event) -> dict[str, Any]:
             got = find_contacts(
                 company=job["company"], description=job["description"], urls=job["urls"],
                 domain=body.domain, board_fetcher=deps.board_fetcher,
-                site_fetcher=deps.site_fetcher, has_mx=deps.has_mx, hunter=hunter,
+                site_fetcher=deps.site_fetcher, has_mx=deps.has_mx, lookups=lookups,
             )  # fmt: skip
             return got.model_dump()
 

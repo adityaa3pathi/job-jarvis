@@ -44,9 +44,11 @@ from jobagent.index import Embedder, shared_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
+from jobagent.outreach.apollo import Apollo
 from jobagent.outreach.emails import has_mail_server
 from jobagent.outreach.gmail import Gmail, GmailConfig
 from jobagent.outreach.hunter import Hunter
+from jobagent.outreach.lookup import PeopleLookup
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.redact import request_id
 from jobagent.resume.coach import (
@@ -136,9 +138,10 @@ class WebConfig:
     github_token: str = ""
     github_repo: str = ""
     github_transport: httpx.BaseTransport | None = None
-    # Outreach: unset Gmail or Hunter keeps those buttons off; the site reader is per domain.
+    # Outreach: an unset Gmail, Hunter or Apollo keeps its button off; site reader is per domain.
     gmail: Callable[[], Gmail | None] = lambda: None
-    hunter: Callable[[], Hunter | None] = lambda: None
+    hunter: Callable[[], PeopleLookup | None] = lambda: None
+    apollo: Callable[[], PeopleLookup | None] = lambda: None
     site_fetcher: Callable[[str], Fetcher] | None = None
     has_mx: Callable[[str], bool] = has_mail_server
 
@@ -1090,6 +1093,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         OutreachDeps(
             settings=settings, thinker=cfg.thinker, board_fetcher=cfg.fetcher,
             site_fetcher=cfg.site_fetcher or site_fetcher, gmail=cfg.gmail, hunter=cfg.hunter,
+            apollo=cfg.apollo,
             has_mx=cfg.has_mx,
         ),
         owner=Owner, ai_budget=_ai_budget, submit=submit,
@@ -1153,6 +1157,7 @@ def app_from_env() -> FastAPI:
             github_repo=os.environ.get("GITHUB_REPO", ""),
             gmail=lambda: gmail_from_env(os.environ),
             hunter=lambda: hunter_from_env(os.environ),
+            apollo=lambda: apollo_from_env(os.environ),
         )
     )
 
@@ -1170,3 +1175,8 @@ def _gmail_client(cfg: GmailConfig) -> Gmail:
 def hunter_from_env(env: Mapping[str, str]) -> Hunter | None:
     key = env.get("HUNTER_API_KEY", "").strip()
     return Hunter(key) if key else None
+
+
+def apollo_from_env(env: Mapping[str, str]) -> Apollo | None:
+    key = env.get("APOLLO_API_KEY", "").strip()
+    return Apollo(key) if key else None
