@@ -9,7 +9,7 @@ import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing, StateNote } from
 const PATH = "/outreach";
 
 function Setup({ ready }: { ready: OutreachOverview["ready"] }) {
-  if (ready.gmail && ready.hunter) return null;
+  if (ready.gmail && ready.hunter && ready.apollo) return null;
   return (
     <Panel title="Finish setup">
       <ul className="flex flex-col gap-2 text-sm text-ink-2">
@@ -18,6 +18,12 @@ function Setup({ ready }: { ready: OutreachOverview["ready"] }) {
             <span className="font-semibold text-ink">Gmail is not connected.</span> Emails can be written but not sent. Run{" "}
             <code className="rounded bg-sunk px-1">job-agent gmail-auth</code> once on your computer, then add GMAIL_CLIENT_ID,
             GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN to the server.
+          </li>
+        )}
+        {!ready.apollo && (
+          <li>
+            <span className="font-semibold text-ink">Apollo is not set up.</span> Add APOLLO_API_KEY to the server to find
+            managers and founders by company website. Sign up with a work email: free accounts on Gmail cannot use the API.
           </li>
         )}
         {!ready.hunter && (

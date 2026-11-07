@@ -6,7 +6,8 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
+
+from jobagent.outreach.lookup import FoundPerson, LookupError, LookupResult
 
 API = "https://api.hunter.io/v2/domain-search"
 # Free plans cap limit+offset at 10; one page is all we read.
@@ -14,39 +15,22 @@ MAX_RESULTS = 10
 DEPARTMENTS = "it,executive,management,hr"
 
 
-class HunterError(Exception):
-    """Hunter refused or could not be reached. The message never holds the API key."""
-
-
-class HunterPerson(BaseModel):
-    name: str
-    title: str = ""
-    email: str
-    confidence: int = 0
-    verified: bool = False
-    linkedin_url: str = ""
-    department: str = ""
-
-
-class HunterResult(BaseModel):
-    domain: str
-    people: list[HunterPerson]
-
-
-def _person(raw: dict[str, Any]) -> HunterPerson | None:
+def _person(raw: dict[str, Any]) -> FoundPerson | None:
     email = str(raw.get("value") or "")
     name = " ".join(str(raw.get(k) or "") for k in ("first_name", "last_name")).strip()
     if not email or not name:
         return None
-    check = raw.get("verification") or {}
-    return HunterPerson(
-        name=name, title=str(raw.get("position") or ""), email=email.lower(),
-        confidence=int(raw.get("confidence") or 0), verified=check.get("status") == "valid",
-        linkedin_url=str(raw.get("linkedin") or ""), department=str(raw.get("department") or ""),
+    verified = (raw.get("verification") or {}).get("status") == "valid"
+    sure = "Hunter verified" if verified else f"Hunter {int(raw.get('confidence') or 0)}% sure"
+    return FoundPerson(
+        name=name, title=str(raw.get("position") or ""), email=email.lower(), note=sure,
+        linkedin_url=str(raw.get("linkedin") or ""),
     )  # fmt: skip
 
 
 class Hunter:
+    key = "hunter"
+
     def __init__(
         self, api_key: str, *, transport: httpx.BaseTransport | None = None,
         timeout_s: float = 15.0,
@@ -54,7 +38,7 @@ class Hunter:
         self._key = api_key
         self._client = httpx.Client(timeout=timeout_s, transport=transport)
 
-    def domain_search(self, *, domain: str = "", company: str = "") -> HunterResult:
+    def people_at(self, *, domain: str = "", company: str = "") -> LookupResult:
         """By domain when known, else by company name (Hunter then picks the domain)."""
         params: dict[str, str | int] = {"limit": MAX_RESULTS, "type": "personal",
                                         "department": DEPARTMENTS}  # fmt: skip
@@ -63,13 +47,13 @@ class Hunter:
             # The key goes in a header, so it never sits in a logged URL.
             res = self._client.get(API, params=params, headers={"X-API-KEY": self._key})
         except httpx.HTTPError as exc:
-            raise HunterError(f"Hunter unreachable: {type(exc).__name__}") from None
+            raise LookupError(f"Hunter unreachable: {type(exc).__name__}") from None
         if res.status_code == 401:
-            raise HunterError("Hunter rejected the API key")
+            raise LookupError("Hunter rejected the API key")
         if res.status_code == 429:
-            raise HunterError("Hunter limit reached (monthly credits or rate limit)")
+            raise LookupError("Hunter limit reached (monthly credits or rate limit)")
         if res.status_code >= 400:
-            raise HunterError(f"Hunter HTTP {res.status_code}")
+            raise LookupError(f"Hunter HTTP {res.status_code}")
         data = (res.json() or {}).get("data") or {}
         people = [p for raw in data.get("emails") or [] if (p := _person(raw))]
-        return HunterResult(domain=str(data.get("domain") or domain), people=people)
+        return LookupResult(domain=str(data.get("domain") or domain), people=people)

@@ -451,7 +451,7 @@ export type Thread = {
 
 export type SenderProfile = { name: string; pitch: string; links: string[] };
 
-export type Ready = { gmail: boolean; hunter: boolean };
+export type Ready = { gmail: boolean; hunter: boolean; apollo: boolean };
 
 export type OutreachOverview = {
   items: Thread[];

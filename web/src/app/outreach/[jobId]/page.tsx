@@ -15,6 +15,7 @@ const SOURCE: Record<string, string> = {
   site: "company website",
   yc: "YC founder",
   hunter: "Hunter",
+  apollo: "Apollo",
   manual: "added by you",
 };
 
@@ -25,6 +26,7 @@ function JobOutreach() {
   const data = read.key === path ? read.data : null;
   const [domain, setDomain] = useState<string | null>(null);
   const [useHunter, setUseHunter] = useState(false);
+  const [useApollo, setUseApollo] = useState(false);
   const [found, setFound] = useState<Found | null>(null);
   const [manual, setManual] = useState({ name: "", title: "", email: "", linkedin_url: "" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,7 +56,7 @@ function JobOutreach() {
 
   const find = () =>
     run("find", async () => {
-      const got = await runTask<Found>(`/jobs/${jobId}/contacts/find`, { domain: site, use_hunter: useHunter }, alive.current?.signal);
+      const got = await runTask<Found>(`/jobs/${jobId}/contacts/find`, { domain: site, use_hunter: useHunter, use_apollo: useApollo }, alive.current?.signal);
       setFound(got);
       if (!domain && got.domain) setDomain(got.domain);
     });
@@ -173,7 +175,11 @@ function JobOutreach() {
               />
               <label className={`flex items-center gap-2 text-sm ${data.ready.hunter ? "" : "text-ink-3"}`}>
                 <input type="checkbox" disabled={!data.ready.hunter} checked={useHunter} onChange={(e) => setUseHunter(e.target.checked)} />
-                Also ask Hunter (uses 1 credit)
+                Also ask Hunter (1 credit)
+              </label>
+              <label className={`flex items-center gap-2 text-sm ${data.ready.apollo ? "" : "text-ink-3"}`}>
+                <input type="checkbox" disabled={!data.ready.apollo} checked={useApollo} onChange={(e) => setUseApollo(e.target.checked)} />
+                Also ask Apollo (up to 3 credits)
               </label>
               <Button disabled={busy !== null} onClick={find}>
                 <Icon name="search" />
@@ -193,7 +199,7 @@ function JobOutreach() {
                   <p key={n} className="text-sm text-warn">{n}</p>
                 ))}
                 {found.candidates.length === 0 ? (
-                  <p className="text-sm text-ink-2">Nobody found. Try the company website, Hunter, or add someone by hand.</p>
+                  <p className="text-sm text-ink-2">Nobody found. Try the company website, Hunter or Apollo, or add someone by hand.</p>
                 ) : (
                   <ul className="divide-y divide-line rounded-ctl border border-line">
                     {found.candidates.map((c) => {
