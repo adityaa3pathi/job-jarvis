@@ -60,7 +60,6 @@ def _bad_address(raw: str) -> bool:
     )  # fmt: skip
 
 
-
 def check_scheme(url: str) -> str:
     """Refuse anything but https on port 443. Returns the lowercase host."""
     parts = urlsplit(url)

@@ -12,6 +12,7 @@ from typing import Any, Protocol
 import httpx
 
 from jobagent.db import IST, Database
+from jobagent.outreach.store import OutreachStore, due_label, ist_today
 
 log = logging.getLogger(__name__)
 MAX_MESSAGE = 4096  # Telegram's limit for one message
@@ -137,3 +138,37 @@ def digest_last_run(db: Database, sender: Sender | None, *, limit: int) -> dict[
     if run_id is None:
         return {"sent": 0, "skipped": "no finished run yet"}
     return {"run_id": run_id, **send_digest(db, run_id, sender, limit=limit)}
+
+
+FOLLOWUP_FLAG = "followups_sent_day"
+
+
+def followup_text(rows: Sequence[Mapping[str, Any]], day: str) -> str:
+    lines = [f"<b>Outreach due today</b> · {day}"]
+    for n, r in enumerate(rows[:20], 1):
+        who = html.escape(str(r.get("name") or "someone")[:60], quote=False)
+        company = html.escape(str(r.get("company") or "")[:60], quote=False)
+        lines.append(f"{n}. {who} · {company}: {due_label(dict(r))}")
+    if len(rows) > 20:
+        lines.append(f"…and {len(rows) - 20} more on the Outreach page")
+    return "\n".join(lines)
+
+
+def send_followups(db: Database, sender: Sender | None) -> dict[str, Any]:
+    """Once per IST day: the outreach steps due. Each still needs the owner's click."""
+    if sender is None:
+        return {"sent": 0, "skipped": "Telegram not configured"}
+    today = ist_today()
+    flag = db.conn.execute("SELECT value FROM flags WHERE name=?", (FOLLOWUP_FLAG,)).fetchone()
+    if flag and flag["value"] == today.isoformat():
+        return {"sent": 0, "skipped": "already sent today"}
+    rows = OutreachStore(db.conn).due(today)
+    if rows:
+        sender.send(followup_text(rows, today.strftime("%d-%m-%Y")))
+    with db.conn:
+        db.conn.execute(
+            "INSERT INTO flags(name, value) VALUES (?, ?) ON CONFLICT(name)"
+            " DO UPDATE SET value=excluded.value",
+            (FOLLOWUP_FLAG, today.isoformat()),
+        )
+    return {"sent": len(rows)}

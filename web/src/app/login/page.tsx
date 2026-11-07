@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { clearCache, post } from "@/lib/api";
-import { Button, ErrorNote } from "@/components/ui";
-import { Ornament } from "@/components/Ornament";
+import { Mark } from "@/components/Nav";
+import { Button, ErrorNote, FIELD } from "@/components/ui";
 
 export default function LoginPage() {
   const [password, setPassword] = useState("");
@@ -26,23 +26,30 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={submit} className="mx-auto mt-24 flex max-w-sm flex-col gap-3">
-      <h1 className="font-display text-xl font-semibold">Job Agent</h1>
-      <Ornament />
-      <label className="text-sm" htmlFor="pw">
-        Password
-      </label>
-      <input
-        id="pw"
-        type="password"
-        autoComplete="current-password"
-        className="rounded border border-border-strong px-3 py-2"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
-      <ErrorNote message={error} />
-      <Button disabled={busy || !password}>{busy ? "Checking…" : "Log in"}</Button>
-    </form>
+    <div className="flex min-h-[70dvh] items-center justify-center">
+      <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-line bg-panel p-6 shadow-sheet">
+        <Mark />
+        <div>
+          <h1 className="text-xl font-extrabold tracking-tight">Log in</h1>
+          <p className="mt-1 text-sm text-ink-2">Your jobs, coach and resumes in one place.</p>
+        </div>
+        <label className="flex flex-col gap-1.5 text-sm font-semibold" htmlFor="pw">
+          Password
+          <input
+            id="pw"
+            type="password"
+            autoComplete="current-password"
+            className={`${FIELD} h-11 font-normal`}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </label>
+        <ErrorNote message={error} />
+        <Button className="h-11" disabled={busy || !password}>
+          {busy ? "Checking…" : "Log in"}
+        </Button>
+      </form>
+    </div>
   );
 }

@@ -21,3 +21,12 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
+      # Outreach (optional): without them the Send and Hunter buttons stay off.
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN  # from `job-agent gmail-auth` on your own computer
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false

@@ -1,11 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api, invalidate, istDate, useCachedApi } from "@/lib/api";
-import { Button, Card, ErrorNote, Refreshing } from "@/components/ui";
-import { Ornament } from "@/components/Ornament";
+import { Icon } from "@/components/Icon";
+import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing } from "@/components/ui";
 
 type Profile = { summary: string; has_tex: boolean; updated_at: string };
+
+/** A real file input styled as a button, so keyboard and screen readers get the native control. */
+function FilePick({ label, accept, onPick }: { label: string; accept: string; onPick: (file: File | undefined) => void }) {
+  const id = useId();
+  return (
+    <span>
+      <input
+        id={id}
+        type="file"
+        accept={accept}
+        className="peer sr-only"
+        onChange={(e) => {
+          onPick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <label
+        htmlFor={id}
+        className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-ctl border border-line-strong bg-panel px-2.5 text-sm font-semibold hover:border-ink-3 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand"
+      >
+        <Icon name="upload" />
+        {label}
+      </label>
+    </span>
+  );
+}
 
 export default function ProfilePage() {
   const { data: profile, error: loadError, refreshing } = useCachedApi<Profile>("/profile");
@@ -36,56 +62,66 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <h1 className="font-display text-xl font-semibold">Profile</h1>
+    <div className="mx-auto flex max-w-3xl flex-col gap-5">
+      <PageHead title="Profile">
         <Refreshing on={refreshing && profile !== null} />
-      </div>
-      <Ornament />
+      </PageHead>
       <ErrorNote message={error ?? loadError} />
-      {note && <p className="text-sm text-success">{note}</p>}
-      <Card title="Career summary">
-        <p className="mb-2 text-sm text-ink-muted">
+      {note && (
+        <p role="status" className="flex items-center gap-2 rounded-ctl bg-up-soft px-3 py-2 text-sm font-medium text-up">
+          <Icon name="check" />
+          {note}
+        </p>
+      )}
+      <Panel
+        title="Career summary"
+        aside={<FilePick label="Upload file" accept=".pdf,.docx,.md,.txt" onPick={(f) => upload("/profile/summary-file", f, "Summary uploaded.")} />}
+      >
+        <p className="mb-3 text-sm text-ink-2">
           Upload a PDF, DOCX, MD or TXT, or edit the text. Every line here counts as true about you, so keep it honest.
         </p>
-        <input
-          type="file"
-          accept=".pdf,.docx,.md,.txt"
-          aria-label="Upload career summary"
-          className="mb-2 block text-sm"
-          onChange={(e) => upload("/profile/summary-file", e.target.files?.[0], "Summary uploaded.")}
-        />
         <textarea
           aria-label="Career summary text"
-          className="h-72 w-full rounded border border-border-strong p-2 font-mono text-sm"
+          className={`${FIELD} h-80 w-full py-3 font-mono text-[13px] leading-relaxed`}
           value={summary}
           onChange={(e) => setEdited(e.target.value)}
         />
-        <div className="mt-2 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
+            disabled={edited === null}
             onClick={() =>
               run(() => api("/profile/summary", { method: "PUT", body: JSON.stringify({ summary }) }), "Summary saved.")
             }
           >
             Save summary
           </Button>
+          {edited !== null && <span className="text-xs font-semibold text-warn">Unsaved changes</span>}
           {profile?.updated_at && (
-            <span className="text-xs text-ink-faint">Last saved {istDate(profile.updated_at)}</span>
+            <span className="figure ml-auto text-xs text-ink-3">Last saved {istDate(profile.updated_at)}</span>
           )}
         </div>
-      </Card>
-      <Card title="Base resume (.tex)">
-        <p className="mb-2 text-sm text-ink-muted">
-          {profile?.has_tex ? "A base resume is saved. Upload again to replace it." : "No base resume yet. Upload your LaTeX resume."}
+      </Panel>
+      <Panel
+        title="Base resume (.tex)"
+        aside={
+          <FilePick
+            label={profile?.has_tex ? "Replace" : "Upload"}
+            accept=".tex"
+            onPick={(f) => upload("/profile/tex", f, "Base resume saved.", true)}
+          />
+        }
+      >
+        <p className="flex items-center gap-2 text-sm">
+          {profile?.has_tex ? (
+            <>
+              <Icon name="check" className="text-up" />
+              A base resume is saved. Upload again to replace it.
+            </>
+          ) : (
+            <span className="text-ink-2">No base resume yet. Upload your LaTeX resume.</span>
+          )}
         </p>
-        <input
-          type="file"
-          accept=".tex"
-          aria-label="Upload base resume"
-          className="block text-sm"
-          onChange={(e) => upload("/profile/tex", e.target.files?.[0], "Base resume saved.", true)}
-        />
-      </Card>
+      </Panel>
     </div>
   );
 }

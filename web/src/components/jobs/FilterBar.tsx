@@ -2,19 +2,10 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import type { Facet, JobFacets } from "@/lib/api";
-import { Button } from "@/components/ui";
-import {
-  DATE_LABELS,
-  MAX_SEARCH,
-  ROLE_LABELS,
-  SORT_LABELS,
-  STATUSES,
-  WORK_MODE_LABELS,
-  YEARS,
-  type Filters,
-} from "./filters";
+import { Icon } from "@/components/Icon";
+import { Button, FIELD } from "@/components/ui";
+import { DATE_LABELS, MAX_SEARCH, ROLE_LABELS, WORK_MODE_LABELS, YEARS, type Filters } from "./filters";
 
-const FIELD = "rounded border border-border-strong bg-surface-raised px-2 py-1.5 text-sm text-ink";
 const SEARCH_DELAY_MS = 300;
 
 type Props = {
@@ -24,69 +15,94 @@ type Props = {
   onClear: (() => void) | null;
 };
 
+export function activeFilterCount(f: Filters): number {
+  return [f.role, f.work_mode, f.max_years, f.posted_within_days, f.city, f.company].filter(Boolean).length;
+}
+
+/** Filters tucked behind one button, so the list starts right under the search box. */
 export function FilterBar({ filters, facets, onChange, onClear }: Props) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const count = activeFilterCount(filters);
   const anyYears = filters.max_years === "";
   const setQ = useCallback((q: string) => onChange({ q }), [onChange]);
   return (
-    <div className="card flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface-raised p-3">
-      <SearchBox value={filters.q} onChange={setQ} />
-      <Select
-        label="Status"
-        value={filters.status}
-        options={STATUSES.map((s) => [s, s])}
-        onChange={(status) => onChange({ status })}
-      />
-      <Select
-        label="Years asked at most"
-        value={filters.max_years}
-        options={[["", "Any"], ...YEARS.map((y) => [y, y] as [string, string])]}
-        onChange={(max_years) => onChange({ max_years })}
-      />
-      <label className={`flex items-center gap-1.5 py-1.5 text-sm ${anyYears ? "text-ink-faint" : "text-ink-muted"}`}>
-        <input
-          type="checkbox"
-          checked={filters.include_unstated}
-          disabled={anyYears}
-          onChange={(e) => onChange({ include_unstated: e.target.checked })}
-        />
-        Include jobs that don&apos;t say
-      </label>
-      <Select
-        label="Role"
-        value={filters.role}
-        options={[["", "Any"], ...Object.entries(ROLE_LABELS)]}
-        onChange={(role) => onChange({ role })}
-      />
-      <Select
-        label="Date posted"
-        value={filters.posted_within_days}
-        options={[["", "Any time"], ...Object.entries(DATE_LABELS)]}
-        onChange={(posted_within_days) => onChange({ posted_within_days })}
-      />
-      <Select
-        label="Work mode"
-        value={filters.work_mode}
-        options={[["", "Any"], ...Object.entries(WORK_MODE_LABELS)]}
-        onChange={(work_mode) => onChange({ work_mode })}
-      />
-      <Picker label="City" value={filters.city} options={facets?.cities ?? []} onChange={(city) => onChange({ city })} />
-      <Picker
-        label="Company"
-        value={filters.company}
-        options={facets?.companies ?? []}
-        onChange={(company) => onChange({ company })}
-      />
-      <Select
-        label="Sort"
-        value={filters.sort}
-        options={Object.entries(SORT_LABELS)}
-        onChange={(sort) => onChange({ sort })}
-      />
-      {onClear && (
-        <Button variant="ghost" onClick={onClear}>
-          Clear filters
-        </Button>
-      )}
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <SearchBox value={filters.q} onChange={setQ} />
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
+          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-ctl border px-3 text-sm font-semibold transition-colors ${
+            open || count ? "border-brand bg-brand-soft text-brand" : "border-line-strong bg-panel text-ink-2 hover:border-ink-3"
+          }`}
+        >
+          <Icon name="filter" />
+          Filters
+          {count > 0 && (
+            <span className="figure grid size-5 place-items-center rounded-full bg-brand text-[11px] text-brand-ink">{count}</span>
+          )}
+        </button>
+      </div>
+      <div id={panelId} hidden={!open} className="rounded-lg border border-line bg-panel p-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          <Select
+            label="Role"
+            value={filters.role}
+            options={[["", "Any"], ...Object.entries(ROLE_LABELS)]}
+            onChange={(role) => onChange({ role })}
+          />
+          <Select
+            label="Work mode"
+            value={filters.work_mode}
+            options={[["", "Any"], ...Object.entries(WORK_MODE_LABELS)]}
+            onChange={(work_mode) => onChange({ work_mode })}
+          />
+          <Select
+            label="Date posted"
+            value={filters.posted_within_days}
+            options={[["", "Any time"], ...Object.entries(DATE_LABELS)]}
+            onChange={(posted_within_days) => onChange({ posted_within_days })}
+          />
+          <Picker label="City" value={filters.city} options={facets?.cities ?? []} onChange={(city) => onChange({ city })} />
+          <Picker
+            label="Company"
+            value={filters.company}
+            options={facets?.companies ?? []}
+            onChange={(company) => onChange({ company })}
+          />
+          <div className="flex flex-col gap-1.5">
+            <Select
+              label="Years asked, at most"
+              value={filters.max_years}
+              options={[["", "Any"], ...YEARS.map((y) => [y, `${y} years`] as [string, string])]}
+              onChange={(max_years) => onChange({ max_years })}
+            />
+            <label className={`flex items-center gap-2 text-xs ${anyYears ? "text-ink-3" : "text-ink-2"}`}>
+              <input
+                type="checkbox"
+                className="size-3.5"
+                checked={filters.include_unstated}
+                disabled={anyYears}
+                onChange={(e) => onChange({ include_unstated: e.target.checked })}
+              />
+              Include jobs that don&apos;t say
+            </label>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2 border-t border-line pt-3">
+          {onClear && (
+            <Button variant="quiet" size="sm" onClick={onClear}>
+              Clear all
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+            Done
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -96,16 +112,18 @@ export function Select({
   value,
   options,
   onChange,
+  inline = false,
 }: {
   label: string;
   value: string;
   options: [string, string][];
   onChange: (value: string) => void;
+  inline?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
+    <label className={`flex text-xs font-semibold text-ink-3 ${inline ? "items-center gap-2" : "flex-col gap-1"}`}>
       {label}
-      <select className={FIELD} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className={`${FIELD} pr-8 font-medium`} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(([v, text]) => (
           <option key={v} value={v}>
             {text}
@@ -143,14 +161,15 @@ function SearchBox({ value, onChange }: { value: string; onChange: (q: string) =
   }, [draft, value, pending, onChange]);
 
   return (
-    <label className="flex min-w-48 grow flex-col gap-0.5 text-xs text-ink-muted">
-      Search title, company or text
+    <label className="relative flex min-w-0 grow items-center">
+      <span className="sr-only">Search title, company or text</span>
+      <Icon name="search" className="pointer-events-none absolute left-3 text-ink-3" />
       <input
         type="search"
-        className={FIELD}
+        className={`${FIELD} w-full pl-9`}
         value={draft}
         maxLength={MAX_SEARCH}
-        placeholder="e.g. python"
+        placeholder="Search title, company or text"
         onChange={(e) => setDraft(e.target.value.slice(0, MAX_SEARCH))}
       />
     </label>
@@ -182,10 +201,10 @@ function Picker({
   };
 
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-ink-muted">
+    <label className="flex flex-col gap-1 text-xs font-semibold text-ink-3">
       {label}
       <input
-        className={`${FIELD} w-40`}
+        className={`${FIELD} w-full font-medium`}
         list={id}
         value={draft}
         placeholder="Any"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import hmac
 import json
@@ -15,7 +16,7 @@ import tempfile
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import AsyncIterator, Callable, Hashable, Iterator
+from collections.abc import AsyncIterator, Callable, Hashable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import asdict, dataclass, field
@@ -43,6 +44,9 @@ from jobagent.index import Embedder, shared_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
+from jobagent.outreach.emails import has_mail_server
+from jobagent.outreach.gmail import Gmail, GmailConfig
+from jobagent.outreach.hunter import Hunter
 from jobagent.policy import Policy, clear_kill_switch
 from jobagent.redact import request_id
 from jobagent.resume.coach import (
@@ -71,6 +75,8 @@ from jobagent.runs import (
     sweep_context,
 )
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
+from jobagent.web.deps import DB, ST
+from jobagent.web.outreach_routes import OutreachDeps, add_outreach_routes
 from jobagent.web.store import Store, profile_from_json, profile_to_json
 from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadError, doc_to_text
 
@@ -130,6 +136,11 @@ class WebConfig:
     github_token: str = ""
     github_repo: str = ""
     github_transport: httpx.BaseTransport | None = None
+    # Outreach: unset Gmail or Hunter keeps those buttons off; the site reader is per domain.
+    gmail: Callable[[], Gmail | None] = lambda: None
+    hunter: Callable[[], Hunter | None] = lambda: None
+    site_fetcher: Callable[[str], Fetcher] | None = None
+    has_mx: Callable[[str], bool] = has_mail_server
 
 
 def _github_headers(token: str) -> dict[str, str]:
@@ -377,23 +388,6 @@ class _DbProbe:
         return bool(up)
 
 
-def _jobs_db(request: Request) -> Iterator[Database]:
-    handles: _Handles[Database] = request.app.state.jobs_db
-    with handles.borrow() as db:
-        yield db
-
-
-def _store(request: Request) -> Iterator[Store]:
-    handles: _Handles[Store] = request.app.state.stores
-    with handles.borrow() as st:
-        yield st
-
-
-# Module level: with postponed annotations FastAPI resolves these names from module globals.
-DB = Annotated[Database, Depends(_jobs_db)]
-ST = Annotated[Store, Depends(_store)]
-
-
 def create_app(cfg: WebConfig) -> FastAPI:
     if not cfg.owner_hash or not cfg.session_secret:
         raise RuntimeError("JOBAGENT_OWNER_HASH and JOBAGENT_SESSION_SECRET must be set")
@@ -602,7 +596,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                         )  # fmt: skip
                         note_policy(policy, tally)
                         rules_swept(db, tally)
-                        prune_after_run(db, tally)
+                        prune_after_run(db, tally, settings.retention_days)
                         rank_after_run(
                             db, st, tally, embedder=cfg.embedder(), llm=cfg.thinker(),
                             settings=settings,
@@ -1088,6 +1082,18 @@ def create_app(cfg: WebConfig) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="resume-{build_id}.pdf"'},
         )  # fmt: skip
 
+    def site_fetcher(domain: str) -> Fetcher:
+        return HttpFetcher({domain, f"www.{domain}"}, resolver=cfg.resolver, deadline_s=20.0)
+
+    add_outreach_routes(
+        app,
+        OutreachDeps(
+            settings=settings, thinker=cfg.thinker, board_fetcher=cfg.fetcher,
+            site_fetcher=cfg.site_fetcher or site_fetcher, gmail=cfg.gmail, hunter=cfg.hunter,
+            has_mx=cfg.has_mx,
+        ),
+        owner=Owner, ai_budget=_ai_budget, submit=submit,
+    )  # fmt: skip
     return app
 
 
@@ -1145,5 +1151,22 @@ def app_from_env() -> FastAPI:
             task_deadline_s=float(os.environ.get("JOBAGENT_TASK_DEADLINE_S", TASK_DEADLINE_S)),
             github_token=os.environ.get("GITHUB_DISPATCH_TOKEN", ""),
             github_repo=os.environ.get("GITHUB_REPO", ""),
+            gmail=lambda: gmail_from_env(os.environ),
+            hunter=lambda: hunter_from_env(os.environ),
         )
     )
+
+
+def gmail_from_env(env: Mapping[str, str]) -> Gmail | None:
+    cfg = GmailConfig.from_env(env)
+    return _gmail_client(cfg) if cfg else None
+
+
+@functools.cache
+def _gmail_client(cfg: GmailConfig) -> Gmail:
+    return Gmail(cfg)  # one client per process, so its access token is reused
+
+
+def hunter_from_env(env: Mapping[str, str]) -> Hunter | None:
+    key = env.get("HUNTER_API_KEY", "").strip()
+    return Hunter(key) if key else None

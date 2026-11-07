@@ -25,3 +25,9 @@ output/
 # local skill scratch space
 .context/
 .claude/
+
+# design tooling docs stay local
+PRODUCT.md
+DESIGN.md
+.impeccable/
+FILTERING_ANALYSIS.md

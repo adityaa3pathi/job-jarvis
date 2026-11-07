@@ -6,7 +6,7 @@ import re
 
 from jobagent.models import DropReason, Posting
 
-RULES_VERSION = 3  # bump when a rule change could undrop or drop stored rows
+RULES_VERSION = 4  # bump when a rule change could undrop or drop stored rows
 
 INDIA_MARKERS = (
     "india", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "delhi",
@@ -38,14 +38,6 @@ UNPAID_PATTERNS = (
     r"(?<!leave )without (?:any )?(?:pay|stipend)",
     r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
-SENIOR_TITLE = re.compile(
-    r"\b(senior|sr\.?|principal|staff|head|architect|manager|director|vp)\b"
-    r"|\b(?:tech|team|technical|engineering|project|delivery|qa|test|module) lead\b"
-    r"|\blead (?!gen)(?:\w+ )?(?:engineer|developer|scientist|architect|analyst|consultant"
-    r"|designer|programmer)\b",
-    re.IGNORECASE,
-)
-_NEGATED = re.compile(r"\([^)]*\bnot?\b[^)]*\)", re.IGNORECASE)
 _CONTACT_VERBS = re.compile(
     r"\b(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)\b", re.I
 )
@@ -159,7 +151,7 @@ def outside_india(location: str) -> bool:
     return foreign and not _has_marker(location, INDIA_MARKERS) and not _open_to_india(location)
 
 
-def check_hard_rules(posting: Posting, max_years_asked: int = 5) -> DropReason | None:
+def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason | None:
     text = f"{posting.title}\n{posting.description}"
     if posting.closed:
         return "closed"
@@ -172,8 +164,6 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 5) -> DropReason |
     if outside_india(posting.location):
         return "outside_india"
     asked = years_asked(posting)
-    if (asked and asked[0] >= max_years_asked) or SENIOR_TITLE.search(
-        _NEGATED.sub("", posting.title)
-    ):
+    if asked and asked[0] >= max_years_asked:
         return "too_senior"
     return None

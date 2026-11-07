@@ -38,9 +38,7 @@ class ArcDevAdapter(Adapter[BoardSearch]):
             if not title:
                 return None
             company = (
-                job.get("companyName")
-                or (job.get("company") or {}).get("name")
-                or ""
+                job.get("companyName") or (job.get("company") or {}).get("name") or ""
             ).strip()
             url_str = (job.get("urlString") or "").strip()
             if url_str.startswith("http"):

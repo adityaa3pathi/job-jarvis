@@ -34,11 +34,11 @@ export function PdfLink({ buildId }: { buildId: number }) {
 
   return (
     <span className="inline-flex flex-col">
-      <button type="button" className="text-left underline disabled:text-ink-faint" onClick={build} disabled={busy}>
+      <button type="button" className="text-left font-semibold text-brand hover:underline disabled:text-ink-3" onClick={build} disabled={busy}>
         {busy ? "Building PDF…" : "PDF"}
       </button>
       {error && (
-        <span role="alert" className="text-xs text-danger">
+        <span role="alert" className="text-xs text-down">
           {error}
         </span>
       )}
