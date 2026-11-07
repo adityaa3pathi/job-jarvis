@@ -46,6 +46,7 @@ from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
 from jobagent.outreach.apollo import Apollo
 from jobagent.outreach.emails import has_mail_server
+from jobagent.outreach.facts import SUBDOMAINS
 from jobagent.outreach.gmail import Gmail, GmailConfig
 from jobagent.outreach.hunter import Hunter
 from jobagent.outreach.lookup import PeopleLookup
@@ -101,7 +102,7 @@ PDF_TIMEOUT_S = 120
 MAX_TASKS = 50
 TASK_DEADLINE_S = 600.0  # free-tier retries can stall an AI step for tens of minutes
 MAX_PDFS = 8
-UPLOAD_PATHS = ("/api/profile/summary-file", "/api/profile/tex")
+UPLOAD_PATHS = ("/api/profile/summary-file", "/api/profile/tex", "/api/network/import")
 MULTIPART_SLACK = 64_000
 PING_EVERY_S = 300  # Render spins a free service down after 15 idle minutes
 REVALIDATE = "private, no-cache"  # owner data: never in a shared cache, always re-checked
@@ -1086,7 +1087,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
         )  # fmt: skip
 
     def site_fetcher(domain: str) -> Fetcher:
-        return HttpFetcher({domain, f"www.{domain}"}, resolver=cfg.resolver, deadline_s=20.0)
+        hosts = {domain, f"www.{domain}", *(f"{s}.{domain}" for s in SUBDOMAINS)}
+        return HttpFetcher(hosts, resolver=cfg.resolver, deadline_s=20.0)
 
     add_outreach_routes(
         app,

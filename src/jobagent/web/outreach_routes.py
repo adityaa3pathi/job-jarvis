@@ -8,9 +8,9 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from jobagent.config import Settings
@@ -19,17 +19,21 @@ from jobagent.discovery.base import Fetcher
 from jobagent.llm import LLM, short_cause
 from jobagent.outreach.draft import (
     FILL,
+    FILL_PROOF,
+    FILL_WHY,
     Channel,
     SenderProfile,
     draft_for,
+    has_early_proof,
     linkedin_search_url,
     text_hash,
 )
 from jobagent.outreach.emails import domain_of, has_mail_server, valid_email
-from jobagent.outreach.facts import Fact, pick_facts
+from jobagent.outreach.facts import Fact, company_pages, pick_facts
 from jobagent.outreach.finder import find_contacts, guess_domain
 from jobagent.outreach.gmail import Gmail, GmailError, build_message
 from jobagent.outreach.lookup import PeopleLookup
+from jobagent.outreach.network import Network, NetworkFileError, parse_connections
 from jobagent.outreach.store import (
     FINAL,
     LINKEDIN_CHECK_DAYS,
@@ -41,9 +45,10 @@ from jobagent.outreach.store import (
 )
 from jobagent.web.deps import DB
 from jobagent.web.store import Store
+from jobagent.web.uploads import MAX_UPLOAD_BYTES
 
 MAX_TEXT = 5_000
-UNFILLED = ("[your name]", "[say why", FILL)  # template gaps the owner must fill
+UNFILLED = ("[your name]", FILL_WHY, FILL_PROOF, FILL)  # template gaps the owner must fill
 
 
 @dataclass
@@ -81,6 +86,13 @@ class StartIn(BaseModel):
 class TextIn(BaseModel):
     subject: str = Field(default="", max_length=200)
     body: str = Field(min_length=1, max_length=MAX_TEXT)
+
+
+class KnownIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    company: str = Field(min_length=1, max_length=200)
+    position: str = Field(default="", max_length=200)
+    url: str = Field(default="", max_length=300)
 
 
 class StateIn(BaseModel):
@@ -156,6 +168,7 @@ def add_outreach_routes(
             "limit": limits.people_per_company,
             "linkedin_search": linkedin_search_url(job["company"]),
             "ready": ready(),
+            "known": Network(db.conn).at(job["company"]),
         }  # fmt: skip
 
     @app.post("/api/jobs/{job_id}/contacts/find", dependencies=[owner])
@@ -220,14 +233,8 @@ def add_outreach_routes(
         domain = domain_of(body.domain) if body.domain else domain_of(contact["email"] or "")
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
-            site = ""
-            if domain:
-                try:
-                    got = deps.site_fetcher(domain).get(f"https://{domain}")
-                    site = got.text if got.status == 200 else ""
-                except Exception:  # the facts then come from the job post alone
-                    site = ""
-            facts = pick_facts(job["description"], site, deps.thinker(), cache=st)
+            pages = company_pages(deps.site_fetcher, domain) if domain else []
+            facts = pick_facts(job["description"], pages, deps.thinker(), cache=st)
             draft = draft_for(
                 body.channel, 1, name=contact["name"], title=job["title"],
                 company=job["company"], facts=facts, me=me,
@@ -239,7 +246,7 @@ def add_outreach_routes(
                     body.job_id, contact_id, body.channel,
                     [f.model_dump(by_alias=True) for f in facts], draft,
                 )  # fmt: skip
-            return {"outreach_id": oid, "facts": len(facts)}
+            return {"outreach_id": oid, "facts": len(facts), "pages": len(pages)}
 
         return submit(work)
 
@@ -265,6 +272,10 @@ def add_outreach_routes(
             raise HTTPException(409, "edit the message in your own words before sending")
         if gaps := [g for g in UNFILLED if g in row["body"]]:
             raise HTTPException(409, f"fill in the {gaps[0]} part first")
+        if row["step"] == 0 and not has_early_proof(row["body"]):
+            raise HTTPException(
+                409, "put a link to something you built in the first few lines, above the ask"
+            )
         if row["step"] > 0 and row["state"] == "waiting" and row["channel"] == "linkedin":
             raise HTTPException(409, "mark the invite as accepted before sending the message")
 
@@ -336,6 +347,35 @@ def add_outreach_routes(
         else:
             out.set_state(outreach_id, body.state)
         return {"ok": True}
+
+    # --- warm paths: people the owner already knows (never sent to the AI) ---
+
+    @app.get("/api/network", dependencies=[owner])
+    def network(db: DB, response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        net = Network(db.conn)
+        return {**net.summary(), "matches": net.matches()}
+
+    @app.post("/api/network/import", dependencies=[owner])
+    def import_network(db: DB, file: Annotated[UploadFile, File()]) -> dict[str, int]:
+        raw = file.file.read(MAX_UPLOAD_BYTES + 1)
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "file is larger than 5 MB")
+        try:
+            rows = parse_connections(raw)
+        except NetworkFileError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"imported": Network(db.conn).replace(rows)}
+
+    @app.post("/api/network", dependencies=[owner])
+    def add_known(body: KnownIn, db: DB) -> dict[str, bool]:
+        Network(db.conn).add(name=body.name.strip(), company=body.company.strip(),
+                             position=body.position.strip(), url=body.url.strip())  # fmt: skip
+        return {"ok": True}
+
+    @app.delete("/api/network", dependencies=[owner])
+    def clear_network(db: DB) -> dict[str, int]:
+        return {"removed": Network(db.conn).clear()}
 
     @app.post("/api/outreach/check-replies", dependencies=[owner])
     def check_replies() -> dict[str, str]:

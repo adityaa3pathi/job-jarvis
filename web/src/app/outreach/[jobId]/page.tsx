@@ -109,6 +109,47 @@ function JobOutreach() {
       </div>
       <ErrorNote message={error} />
 
+      {data.known.length > 0 && (
+        <Panel title={`You already know ${data.known.length} ${data.known.length === 1 ? "person" : "people"} at ${data.job.company}`}>
+          <p className="mb-2 text-sm text-ink-2">
+            A referral or a word from them beats any cold email. Message them yourself; save them below if you want to track it.
+          </p>
+          <ul className="divide-y divide-line">
+            {data.known.map((k, i) => {
+              const done = saved.has(k.email ?? "") || saved.has(k.name.toLowerCase());
+              return (
+                <li key={`${k.name}-${i}`} className="flex flex-wrap items-center gap-2 py-2">
+                  <span className="min-w-0 flex-1 basis-56">
+                    <span className="block font-semibold">{k.name}</span>
+                    {k.position && <span className="block truncate text-sm text-ink-2">{k.position}</span>}
+                  </span>
+                  {k.url && (
+                    <a href={k.url} target="_blank" rel="noreferrer" className={buttonClass("quiet", "sm")}>
+                      Profile
+                      <Icon name="external" />
+                    </a>
+                  )}
+                  {done ? (
+                    <Tag tone="up">Saved</Tag>
+                  ) : (
+                    !full && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy !== null}
+                        onClick={() => save({ name: k.name, title: k.position, email: k.email ?? "", email_source: "manual", linkedin_url: k.url })}
+                      >
+                        Save as contact
+                      </Button>
+                    )
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      )}
+
       <Panel title={`People at ${data.job.company}`} aside={<span className="text-xs text-ink-3">{data.contacts.length} of {data.limit} saved</span>}>
         {data.contacts.length === 0 ? (
           <p className="text-sm text-ink-2">No one saved yet. Find people below and save one manager, plus one engineer or recruiter.</p>
