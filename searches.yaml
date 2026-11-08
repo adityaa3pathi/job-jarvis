@@ -111,4 +111,16 @@ searches:
   - {board: coderound, term: software engineer}
   - {board: coderound, term: backend}
   - {board: coderound, term: full stack}
-
+# Social sources (08-11-2026). telegram: "<channel> <keyword>"; bluesky: search text;
+# mastodon: server host; reddit: subreddit (its RSS ends 13-11-2026).
+  - {board: telegram, term: foundthejob developer}
+  - {board: telegram, term: jobs_and_internships_updates}
+  - {board: telegram, term: offcampusjobs4u developer}
+  - {board: telegram, term: remotejobss developer}
+  - {board: bluesky, term: hiring backend engineer}
+  - {board: bluesky, term: hiring python developer}
+  - {board: bluesky, term: hiring AI engineer}
+  - {board: mastodon, term: mastodon.social}
+  - {board: mastodon, term: fosstodon.org}
+  - {board: mastodon, term: hachyderm.io}
+  - {board: reddit, term: forhire}

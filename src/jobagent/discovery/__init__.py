@@ -18,6 +18,7 @@ from jobagent.discovery.base import (
     Unreachable,
 )
 from jobagent.discovery.bebee import BebeeAdapter
+from jobagent.discovery.bluesky import BlueskyAdapter
 from jobagent.discovery.coderound import CoderoundAdapter
 from jobagent.discovery.cryptocurrencyjobs import CryptocurrencyjobsAdapter
 from jobagent.discovery.cutshort import CutshortAdapter
@@ -32,11 +33,14 @@ from jobagent.discovery.jobicy import JobicyAdapter
 from jobagent.discovery.jobleads import JobleadsAdapter
 from jobagent.discovery.lever import LeverAdapter
 from jobagent.discovery.linkedin import LinkedinAdapter
+from jobagent.discovery.mastodon import MastodonAdapter
 from jobagent.discovery.nodesk import NodeskAdapter
+from jobagent.discovery.reddit import RedditAdapter
 from jobagent.discovery.remoteok import RemoteokAdapter
 from jobagent.discovery.remotive import RemotiveAdapter
 from jobagent.discovery.smartrecruiters import SmartrecruitersAdapter
 from jobagent.discovery.switchly import SwitchlyAdapter
+from jobagent.discovery.telegram import TelegramAdapter
 from jobagent.discovery.wellfound import WellfoundAdapter
 from jobagent.discovery.weworkremotely import WeworkremotelyAdapter
 from jobagent.discovery.workable import WorkableAdapter
@@ -59,7 +63,8 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         HimalayasAdapter(), RemoteokAdapter(), JobicyAdapter(), RemotiveAdapter(),
         WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
         CryptocurrencyjobsAdapter(), NodeskAdapter(), ArcDevAdapter(), DailyremoteAdapter(),
-        CoderoundAdapter(),
+        CoderoundAdapter(), TelegramAdapter(), BlueskyAdapter(), MastodonAdapter(),
+        RedditAdapter(),
     )
 }  # fmt: skip
 

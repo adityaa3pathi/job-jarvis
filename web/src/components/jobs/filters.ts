@@ -4,6 +4,10 @@ export const STATUSES = ["found", "applied", "interview", "rejected", "dropped",
 
 export const SOURCE_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
+  telegram: "Telegram",
+  bluesky: "Bluesky",
+  mastodon: "Mastodon",
+  reddit: "Reddit",
   wellfound: "Wellfound",
   yc: "YC",
   cutshort: "Cutshort",
