@@ -19,7 +19,7 @@ const STATE: Record<Thread["state"], { label: string; tone: Tone }> = {
 };
 
 function stepName(t: Thread): string {
-  if (t.channel === "linkedin") return t.step === 0 ? "Connection note" : "Message after they accept";
+  if (t.channel === "linkedin") return ["Connection note", "Message after they accept", "LinkedIn follow-up"][t.step] ?? "LinkedIn message";
   return t.step === 0 ? "First email" : `Follow-up ${t.step} of ${t.max_steps - 1}`;
 }
 
@@ -163,7 +163,7 @@ export function ThreadCard({ thread: t, onChange, showJob = false }: { thread: T
                   }
                 >
                   <Icon name="check" />
-                  {t.step === 0 ? "I sent the invite" : "I sent the message"}
+                  {t.step === 0 ? "I sent the invite" : t.step === 1 ? "I sent the message" : "I sent the follow-up"}
                 </Button>
               </>
             )}

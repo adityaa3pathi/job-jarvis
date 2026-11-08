@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, invalidate, runTask, TaskAborted, useCachedApi, type OutreachOverview, type SenderProfile } from "@/lib/api";
 import { Icon } from "@/components/Icon";
+import { LinkedInHelper } from "@/components/outreach/LinkedInHelper";
 import { NetworkPanel } from "@/components/outreach/NetworkPanel";
 import { ThreadCard } from "@/components/outreach/ThreadCard";
 import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing, StateNote } from "@/components/ui";
@@ -173,6 +174,7 @@ export default function OutreachPage() {
           </dl>
           <ProfileForm key={JSON.stringify(data.profile)} profile={data.profile} onSaved={refresh} />
           <NetworkPanel />
+          <LinkedInHelper />
           {data.items.length === 0 ? (
             <StateNote>No outreach yet. Open a job on the Jobs page and press “Reach out”.</StateNote>
           ) : (

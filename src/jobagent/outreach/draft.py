@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from typing import Literal
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, unquote
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ from jobagent.outreach.facts import Fact
 Channel = Literal["email", "linkedin"]
 LINKEDIN_NOTE_MAX = 300  # LinkedIn's limit for a connection note
 EMAIL_STEPS = 3  # first email and two follow-ups: past three, replies drop
-LINKEDIN_STEPS = 2  # connection note, then one message after they accept
+LINKEDIN_STEPS = 3  # connection note, a message once they accept, then one follow-up
 FILL = "[write one line about you]"
 FILL_PROOF = "[link to something you built + how you measured it]"
 FILL_WHY = "[say why this company, in one line]"
@@ -96,11 +96,21 @@ def linkedin_draft(
         if len(note) > LINKEDIN_NOTE_MAX:  # the proof outranks the fact
             note = " ".join([*head, "Would love to connect."])
         return Draft(body=note[:LINKEDIN_NOTE_MAX])
+    if step == 3:
+        nudge = (f"{hi} following up on my note about the {title} role. Happy to share more, "
+                 f"or to be pointed to the right person at {company}.")  # fmt: skip
+        return Draft(body=nudge)
     body = "\n\n".join([
         f"{hi} thanks for connecting.", me.proof or FILL_PROOF, _hook(title, facts),
         "Would you be open to a short chat, or could you point me to the right person?",
     ])  # fmt: skip
     return Draft(body=body)
+
+
+def linkedin_slug(url: str) -> str:
+    """The /in/<slug> part of a profile link, so differently written links still match."""
+    found = re.search(r"linkedin\.com/in/([^/?#]+)", url or "", re.I)
+    return unquote(found.group(1)).strip().lower() if found else ""
 
 
 def draft_for(

@@ -1,0 +1,13 @@
+body { font: 13px/1.45 system-ui, sans-serif; width: 340px; margin: 0; color: #12161c; }
+header { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #e2e6ec; }
+main { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.card { border: 1px solid #e2e6ec; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.muted { color: #485060; }
+.note { color: #8f5500; }
+.error { color: #c2352b; }
+pre { white-space: pre-wrap; margin: 0; background: #eef1f5; padding: 6px; border-radius: 6px; max-height: 140px; overflow: auto; }
+button { font: inherit; font-weight: 600; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a5fd6; background: #2a5fd6; color: #fff; cursor: pointer; }
+button.ghost { background: #fff; color: #2a5fd6; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+select, input { font: inherit; padding: 5px; border: 1px solid #c9cfd8; border-radius: 6px; width: 100%; box-sizing: border-box; }
+label { display: flex; flex-direction: column; gap: 3px; }

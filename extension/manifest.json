@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "job-jarvis LinkedIn helper",
+  "version": "0.1.0",
+  "description": "Fills your own job-jarvis notes into LinkedIn's Connect and Message boxes. You press Send.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": { "default_popup": "popup.html", "default_title": "job-jarvis" },
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html"
+}
