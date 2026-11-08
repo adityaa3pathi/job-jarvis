@@ -28,6 +28,10 @@ portals:
   skillmeet: {mode: "off", live: false, discover: false, notes: "Not a job board: local services directory"}
   jobaaj: {mode: "off", live: false, discover: false, notes: "robots.txt disallows all generic bots"}
   nxthiring: {mode: discover_only, live: false, discover: false, notes: "Medium, unverified"}
+  telegram: {mode: discover_only, live: false, discover: true, discover_pause_s: 4, notes: "Medium; public channel web preview t.me/s, no account; owner chose 08-11-2026; scam filter on every post"}
+  bluesky: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public post search api.bsky.app, no account"}
+  mastodon: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; per-server #hiring tag RSS"}
+  reddit: {mode: discover_only, live: false, discover: true, discover_pause_s: 50, notes: "Medium; search RSS, about 1 request per 45 s per IP; Reddit ends RSS 13-11-2026, then turn off"}
   manual: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Owner-pasted links"}
   greenhouse: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: public form, job list API"}
   lever: {mode: discover_only, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: visible hCaptcha likely; apply-automatically only after two clean dry runs"}

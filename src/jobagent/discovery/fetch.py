@@ -28,6 +28,8 @@ KNOWN_BOARD_HOSTS = frozenset(
         "remotive.com", "weworkremotely.com", "www.workingnomads.com", "hn.algolia.com",
         "www.instahyre.com", "cryptocurrencyjobs.co", "nodesk.co", "arc.dev", "dailyremote.com",
         "candidate.coderound.tech",
+        "t.me", "api.bsky.app", "www.reddit.com", "mastodon.social", "fosstodon.org",
+        "hachyderm.io",
     }
 )  # fmt: skip
 MAX_REDIRECTS = 3
