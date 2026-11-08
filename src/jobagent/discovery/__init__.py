@@ -37,6 +37,7 @@ from jobagent.discovery.linkedin import LinkedinAdapter
 from jobagent.discovery.mastodon import MastodonAdapter
 from jobagent.discovery.nodesk import NodeskAdapter
 from jobagent.discovery.reddit import RedditAdapter
+from jobagent.discovery.remoteio import RemoteioAdapter
 from jobagent.discovery.remoteok import RemoteokAdapter
 from jobagent.discovery.remotive import RemotiveAdapter
 from jobagent.discovery.smartrecruiters import SmartrecruitersAdapter
@@ -65,7 +66,7 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
         CryptocurrencyjobsAdapter(), NodeskAdapter(), ArcDevAdapter(), DailyremoteAdapter(),
         CoderoundAdapter(), TelegramAdapter(), BlueskyAdapter(), MastodonAdapter(),
-        RedditAdapter(), A16zAdapter(),
+        RedditAdapter(), A16zAdapter(), RemoteioAdapter(),
     )
 }  # fmt: skip
 

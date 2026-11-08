@@ -130,3 +130,6 @@ searches:
   - {board: a16z, term: python}
   - {board: a16z, term: ai engineer}
   - {board: a16z, term: full stack}
+# remote.io software jobs: "IN" (open to India) or "worldwide".
+  - {board: remoteio, term: IN}
+  - {board: remoteio, term: worldwide}

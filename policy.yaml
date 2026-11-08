@@ -33,6 +33,7 @@ portals:
   mastodon: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; per-server #hiring tag RSS"}
   reddit: {mode: discover_only, live: false, discover: true, discover_pause_s: 50, notes: "Medium; search RSS, about 1 request per 45 s per IP; Reddit ends RSS 13-11-2026, then turn off"}
   a16z: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Low; a16z portfolio job board, robots.txt allows all; 25 matches per search"}
+  remoteio: {mode: discover_only, live: false, discover: true, discover_pause_s: 5, notes: "Medium; robots.txt disallows /api/ list calls; owner chose 08-11-2026 to read it, up to 6 requests a day"}
   manual: {mode: discover_only, live: false, discover: true, discover_pause_s: 1, notes: "Owner-pasted links"}
   greenhouse: {mode: apply_automatically, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: public form, job list API"}
   lever: {mode: discover_only, live: false, discover: true, per_run_limit: 3, min_pause_s: 20, discover_pause_s: 1, notes: "Low to Medium: visible hCaptcha likely; apply-automatically only after two clean dry runs"}

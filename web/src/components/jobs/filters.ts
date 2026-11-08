@@ -9,6 +9,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   mastodon: "Mastodon",
   reddit: "Reddit",
   a16z: "a16z",
+  remoteio: "Remote.io",
   wellfound: "Wellfound",
   yc: "YC",
   cutshort: "Cutshort",
