@@ -119,3 +119,28 @@ def test_reddit_reads_hiring_posts_from_search_rss(policy: Policy) -> None:
     (job,) = run("reddit", "forhire", atom, policy)
     assert job.title == "Python developer for a FastAPI backend"
     assert job.company == "r/forhire: /u/demo"
+
+
+def test_a16z_reads_the_jobs_embedded_in_its_page(policy: Policy) -> None:
+    def record(n: int, title: str, where: str, remote: bool) -> str:
+        return (
+            f'{{\\"id\\":\\"ats:{n}\\",\\"title\\":\\"{title}\\",\\"apply_url\\":'
+            f'\\"https://boards.greenhouse.io/acme/jobs/{n}\\",\\"location\\":\\"{where}\\",'
+            f'\\"remote\\":{"true" if remote else "false"},\\"posted_at\\":\\"{TODAY}T10:00:00Z\\",'
+            f'\\"job_types\\":[{{\\"label\\":\\"Software Engineer\\",\\"value\\":\\"se\\"}}],'
+            f'\\"company_name\\":\\"Acme\\"}}'
+        )
+
+    page = (
+        '<script>self.__next_f.push([1,"['
+        + record(1, "Backend Engineer", "India", True)
+        + ","
+        + record(2, "Data Engineer", "Bengaluru, India", False)
+        + ']"])</script>jobs.a16z.com'
+    )
+    first, second = run("a16z", "backend", page, policy)
+    assert (first.title, first.company, first.location) == (
+        "Backend Engineer", "Acme", "Remote (India)",
+    )  # fmt: skip
+    assert first.url == "https://boards.greenhouse.io/acme/jobs/1"
+    assert first.stack_words == ["Software Engineer"] and second.location == "Bengaluru, India"

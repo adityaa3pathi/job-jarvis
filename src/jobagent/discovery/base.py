@@ -53,7 +53,7 @@ Board = Literal[
     "jobgether", "hirist", "cutshort", "bebee", "switchly", "jobleads", "wellfound", "yc",
     "linkedin", "himalayas", "remoteok", "jobicy", "remotive", "weworkremotely",
     "workingnomads", "hn", "instahyre", "cryptocurrencyjobs", "nodesk", "arc_dev", "dailyremote",
-    "coderound", "telegram", "bluesky", "mastodon", "reddit",
+    "coderound", "telegram", "bluesky", "mastodon", "reddit", "a16z",
 ]  # fmt: skip
 _TERM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,59}$")  # "_" for Telegram channel names
 

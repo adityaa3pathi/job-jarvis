@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from functools import partial
 
+from jobagent.discovery.a16z import A16zAdapter
 from jobagent.discovery.arc_dev import ArcDevAdapter
 from jobagent.discovery.ashby import AshbyAdapter
 from jobagent.discovery.base import (
@@ -64,7 +65,7 @@ BOARD_ADAPTERS: dict[str, Adapter[BoardSearch]] = {
         WeworkremotelyAdapter(), WorkingnomadsAdapter(), HnAdapter(), InstahyreAdapter(),
         CryptocurrencyjobsAdapter(), NodeskAdapter(), ArcDevAdapter(), DailyremoteAdapter(),
         CoderoundAdapter(), TelegramAdapter(), BlueskyAdapter(), MastodonAdapter(),
-        RedditAdapter(),
+        RedditAdapter(), A16zAdapter(),
     )
 }  # fmt: skip
 

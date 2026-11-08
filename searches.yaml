@@ -124,3 +124,9 @@ searches:
   - {board: mastodon, term: fosstodon.org}
   - {board: mastodon, term: hachyderm.io}
   - {board: reddit, term: forhire}
+# a16z portfolio job board: search text; 25 newest matches each.
+  - {board: a16z, term: india}
+  - {board: a16z, term: backend}
+  - {board: a16z, term: python}
+  - {board: a16z, term: ai engineer}
+  - {board: a16z, term: full stack}
