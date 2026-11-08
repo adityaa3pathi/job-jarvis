@@ -3,20 +3,25 @@ track replies. LinkedIn is never touched: the owner sends there and marks it her
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import re
+import secrets
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from jobagent.config import Settings
 from jobagent.db import Database
 from jobagent.discovery.base import Fetcher
 from jobagent.llm import LLM, short_cause
+from jobagent.models import Posting
 from jobagent.outreach.draft import (
     FILL,
     FILL_PROOF,
@@ -26,6 +31,7 @@ from jobagent.outreach.draft import (
     draft_for,
     has_early_proof,
     linkedin_search_url,
+    linkedin_slug,
     text_hash,
 )
 from jobagent.outreach.emails import domain_of, has_mail_server, valid_email
@@ -37,6 +43,7 @@ from jobagent.outreach.network import Network, NetworkFileError, parse_connectio
 from jobagent.outreach.store import (
     FINAL,
     LINKEDIN_CHECK_DAYS,
+    LINKEDIN_FOLLOW_UP_DAYS,
     OutreachLimit,
     OutreachStore,
     due_label,
@@ -93,6 +100,21 @@ class KnownIn(BaseModel):
     company: str = Field(min_length=1, max_length=200)
     position: str = Field(default="", max_length=200)
     url: str = Field(default="", max_length=300)
+
+
+class ExtJobIn(BaseModel):
+    url: str = Field(min_length=1, max_length=500)
+    title: str = Field(min_length=1, max_length=200)
+    company: str = Field(min_length=1, max_length=200)
+    location: str = Field(default="", max_length=200)
+    description: str = Field(default="", max_length=50_000)
+
+
+class ExtContactIn(BaseModel):
+    job_id: int
+    name: str = Field(min_length=1, max_length=120)
+    title: str = Field(default="", max_length=160)
+    linkedin_url: str = Field(min_length=1, max_length=300)
 
 
 class StateIn(BaseModel):
@@ -276,7 +298,7 @@ def add_outreach_routes(
             raise HTTPException(
                 409, "put a link to something you built in the first few lines, above the ask"
             )
-        if row["step"] > 0 and row["state"] == "waiting" and row["channel"] == "linkedin":
+        if row["step"] == 1 and row["state"] == "waiting" and row["channel"] == "linkedin":
             raise HTTPException(409, "mark the invite as accepted before sending the message")
 
     def _check_caps(out: OutreachStore, row: dict[str, Any]) -> None:
@@ -301,7 +323,8 @@ def add_outreach_routes(
             company=row["company"], facts=facts, me=me,
         )  # fmt: skip
         if row["channel"] == "linkedin":
-            return draft, (ist_today(now) + timedelta(days=LINKEDIN_CHECK_DAYS)).isoformat()
+            wait = LINKEDIN_CHECK_DAYS if step == 1 else LINKEDIN_FOLLOW_UP_DAYS
+            return draft, (ist_today(now) + timedelta(days=wait)).isoformat()
         first = datetime.fromisoformat(row["first_sent_at"]) if row["first_sent_at"] else now
         days = limits.follow_up_days[min(step - 1, len(limits.follow_up_days) - 1)]
         return draft, (ist_today(first) + timedelta(days=days)).isoformat()
@@ -318,6 +341,12 @@ def add_outreach_routes(
         if row["channel"] == "linkedin":
             out.record_send(row, next_draft=draft, next_due=due, now=now)
             return {"ok": True, "step": row["step"] + 1}
+        return _send_email(out, row, draft, due, now)
+
+    def _send_email(
+        out: OutreachStore, row: dict[str, Any], draft: Any, due: str | None, now: datetime
+    ) -> dict[str, Any]:
+        outreach_id = row["id"]
         gmail = deps.gmail()
         if gmail is None:
             raise HTTPException(400, "Gmail is not connected: see the setup steps on this page")
@@ -341,11 +370,100 @@ def add_outreach_routes(
         out = OutreachStore(db.conn)
         row = _row(out, outreach_id)
         if body.state == "accepted":
-            if row["channel"] != "linkedin" or row["step"] != 1:
-                raise HTTPException(409, "only a sent LinkedIn invite can be accepted")
-            out.set_state(outreach_id, "accepted", ist_today().isoformat())
+            accept(out, row)
         else:
             out.set_state(outreach_id, body.state)
+        return {"ok": True}
+
+    def accept(out: OutreachStore, row: dict[str, Any]) -> None:
+        if row["channel"] != "linkedin" or row["step"] != 1:
+            raise HTTPException(409, "only a sent LinkedIn invite can be accepted")
+        out.set_state(row["id"], "accepted", ist_today().isoformat())
+
+    # --- the LinkedIn helper extension: fills LinkedIn's own boxes, the owner presses Send ---
+
+    def extension(request: Request, db: DB) -> None:
+        """The extension holds its own token instead of the login cookie."""
+        given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        want = OutreachStore(db.conn).extension_token_hash()
+        digest = hashlib.sha256(given.encode()).hexdigest()
+        if not given or not want or not hmac.compare_digest(digest, want):
+            raise HTTPException(401, "extension token missing or wrong; make a new one in Outreach")
+
+    Ext = Depends(extension)
+
+    @app.post("/api/extension/token", dependencies=[owner])
+    def extension_token(db: DB) -> dict[str, str]:
+        """Shown once; making a new one disconnects the old one."""
+        token = secrets.token_urlsafe(32)
+        OutreachStore(db.conn).set_extension_token_hash(hashlib.sha256(token.encode()).hexdigest())
+        return {"token": token}
+
+    @app.get("/api/ext/profile", dependencies=[Ext])
+    def ext_profile(url: str, db: DB, response: Response) -> dict[str, Any]:
+        """What job-jarvis knows about the LinkedIn profile open in the browser."""
+        response.headers["Cache-Control"] = "no-store"
+        slug, out = linkedin_slug(url), OutreachStore(db.conn)
+        threads = [_view(r) for r in out.linkedin_threads() if slug and
+                   linkedin_slug(r["linkedin_url"]) == slug]  # fmt: skip
+        contacts = [c for c in out.linkedin_contacts() if slug and
+                    linkedin_slug(c["linkedin_url"]) == slug]  # fmt: skip
+        jobs = db.conn.execute(
+            "SELECT id, title, company FROM jobs WHERE status IN ('applied', 'interview')"
+            " OR id IN (SELECT job_id FROM outreach) OR source='linkedin'"
+            " ORDER BY id DESC LIMIT 30"
+        ).fetchall()
+        return {"slug": slug, "threads": threads, "contacts": contacts,
+                "jobs": [dict(j) for j in jobs]}  # fmt: skip
+
+    @app.post("/api/ext/job", dependencies=[Ext])
+    def ext_job(body: ExtJobIn, db: DB) -> dict[str, int]:
+        """A LinkedIn job the owner is looking at, saved so it can be reached out on."""
+        found = re.search(r"/jobs/view/(\d+)", body.url) or re.search(
+            r"currentJobId=(\d+)", body.url
+        )
+        if found is None:
+            raise HTTPException(400, "open a single LinkedIn job first")
+        posting = Posting(
+            source="linkedin", url=f"https://www.linkedin.com/jobs/view/{found.group(1)}/",
+            company=body.company.strip(), title=body.title.strip(),
+            location=body.location.strip(), description=body.description.strip(),
+        )  # fmt: skip
+        return {"job_id": db.upsert_posting(posting).job_id}
+
+    @app.post("/api/ext/contact", dependencies=[Ext])
+    def ext_contact(body: ExtContactIn, db: DB) -> dict[str, int]:
+        job = _job(db, body.job_id)
+        if not linkedin_slug(body.linkedin_url):
+            raise HTTPException(400, "that is not a LinkedIn profile link")
+        try:
+            contact_id = OutreachStore(db.conn).add_contact(
+                job["company"], name=body.name.strip(), title=body.title.strip(), email="",
+                email_source="", linkedin_url=body.linkedin_url.strip(),
+                limit=limits.people_per_company,
+            )  # fmt: skip
+        except OutreachLimit as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"id": contact_id}
+
+    @app.post("/api/ext/outreach/{outreach_id}/sent", dependencies=[Ext])
+    def ext_sent(outreach_id: int, db: DB) -> dict[str, Any]:
+        """The owner pressed LinkedIn's own Send on the text the extension filled in."""
+        out = OutreachStore(db.conn)
+        row = _row(out, outreach_id)
+        if row["channel"] != "linkedin":
+            raise HTTPException(409, "only LinkedIn messages are sent from the extension")
+        _check_ready(row)
+        _check_caps(out, row)
+        now = datetime.now(UTC)
+        draft, due = _next(row, out.profile(), now)
+        out.record_send(row, next_draft=draft, next_due=due, now=now)
+        return {"ok": True, "step": row["step"] + 1}
+
+    @app.post("/api/ext/outreach/{outreach_id}/accepted", dependencies=[Ext])
+    def ext_accepted(outreach_id: int, db: DB) -> dict[str, bool]:
+        out = OutreachStore(db.conn)
+        accept(out, _row(out, outreach_id))
         return {"ok": True}
 
     # --- warm paths: people the owner already knows (never sent to the AI) ---

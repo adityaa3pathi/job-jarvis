@@ -28,6 +28,7 @@ from jobagent.outreach.draft import (
     draft_for,
     has_early_proof,
     linkedin_draft,
+    linkedin_slug,
 )
 from jobagent.outreach.emails import emails_in, guesses, is_role_inbox
 from jobagent.outreach.facts import Fact, Page, company_pages, grounded, pick_facts
@@ -556,7 +557,8 @@ def test_linkedin_flow_is_marked_by_hand_and_waits_for_acceptance(flow: Any) -> 
     assert c.post(f"/api/outreach/{oid}/send").status_code == 200
     assert gmail.sent == []  # LinkedIn steps are never sent by the app
     row = c.get("/api/outreach").json()["items"][0]
-    assert (row["step"], row["can_send"]) == (2, False)
+    assert (row["step"], row["can_send"]) == (2, True)  # one LinkedIn follow-up is left
+    assert "following up" in row["body"] and row["todo"] == "send the LinkedIn follow-up"
 
 
 def test_check_replies_marks_replied_threads(flow: Any) -> None:
@@ -596,6 +598,77 @@ def test_network_import_shows_known_people_on_the_job(flow: Any) -> None:
     net = c.get("/api/network").json()
     assert (net["people"], net["matches"][0]["company"]) == (2, "Acme")
     assert c.delete("/api/network").json() == {"removed": 2}
+
+
+# --- the LinkedIn helper extension ---
+
+
+def test_linkedin_slug_matches_differently_written_links() -> None:
+    assert linkedin_slug("https://in.linkedin.com/in/Neha-Rao-12/?trk=x") == "neha-rao-12"
+    assert linkedin_slug("https://www.linkedin.com/in/neha-rao-12") == "neha-rao-12"
+    assert linkedin_slug("https://www.linkedin.com/company/acme") == ""
+
+
+def ext_client(c: TestClient) -> dict[str, str]:
+    token = c.post("/api/extension/token").json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_extension_routes_need_their_own_token(flow: Any) -> None:
+    c, _, _ = flow
+    assert c.get("/api/ext/profile", params={"url": "x"}).status_code == 401
+    old = ext_client(c)
+    new = ext_client(c)  # a new token locks the old one out
+    assert c.get("/api/ext/profile", params={"url": "x"}, headers=old).status_code == 401
+    assert c.get("/api/ext/profile", params={"url": "x"}, headers=new).status_code == 200
+
+
+def test_extension_saves_a_linkedin_job_and_a_person(flow: Any) -> None:
+    c, _, _ = flow
+    h = ext_client(c)
+    bad = c.post("/api/ext/job", headers=h, json={"url": "https://www.linkedin.com/feed/",
+                                                  "title": "x", "company": "y"})  # fmt: skip
+    assert bad.status_code == 400
+    job = c.post("/api/ext/job", headers=h, json={
+        "url": "https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4242",
+        "title": "Backend Engineer", "company": "Zeta", "location": "Bengaluru",
+        "description": "Build payment APIs.",
+    })  # fmt: skip
+    jid = job.json()["job_id"]
+    assert c.get(f"/api/jobs/{jid}/outreach").json()["job"]["urls"] == [
+        "https://www.linkedin.com/jobs/view/4242/"
+    ]
+    url = "https://www.linkedin.com/in/ravi-k/"
+    saved = c.post("/api/ext/contact", headers=h, json={
+        "job_id": jid, "name": "Ravi K", "title": "EM", "linkedin_url": url})  # fmt: skip
+    assert saved.status_code == 200
+    view = c.get("/api/ext/profile", params={"url": url + "?miniProfile=1"}, headers=h).json()
+    assert [x["name"] for x in view["contacts"]] == ["Ravi K"] and view["threads"] == []
+    assert jid in [j["id"] for j in view["jobs"]]
+
+
+def test_extension_records_sends_the_owner_made_on_linkedin(flow: Any) -> None:
+    c, gmail, jid = flow
+    h = ext_client(c)
+    url = "https://www.linkedin.com/in/neha-rao/"
+    cid = c.post(f"/api/jobs/{jid}/contacts", json={"name": "Neha Rao", "linkedin_url": url,
+                                                    "email_source": ""}).json()["id"]  # fmt: skip
+    state = done(c, c.post(f"/api/contacts/{cid}/outreach",
+                           json={"job_id": jid, "channel": "linkedin"}))  # fmt: skip
+    oid = state["result"]["outreach_id"]
+    thread = c.get("/api/ext/profile", params={"url": url}, headers=h).json()["threads"][0]
+    assert (thread["id"], thread["edited"]) == (oid, False)
+    assert c.post(f"/api/ext/outreach/{oid}/sent", headers=h).status_code == 409  # not edited
+    edit(c, oid, "Hi Neha, applying for the backend role. I built docnow.in alone.", subject="")
+    assert c.post(f"/api/ext/outreach/{oid}/sent", headers=h).status_code == 200
+    assert c.post(f"/api/ext/outreach/{oid}/sent", headers=h).status_code == 409  # not accepted
+    assert c.post(f"/api/ext/outreach/{oid}/accepted", headers=h).status_code == 200
+    edit(c, oid, "Hi Neha, thanks for connecting. My own words.", subject="")
+    assert c.post(f"/api/ext/outreach/{oid}/sent", headers=h).status_code == 200
+    edit(c, oid, "Hi Neha, a short nudge in my own words.", subject="")
+    assert c.post(f"/api/ext/outreach/{oid}/sent", headers=h).status_code == 200
+    last = c.get("/api/ext/profile", params={"url": url}, headers=h).json()["threads"][0]
+    assert (last["step"], last["can_send"]) == (3, False) and gmail.sent == []
 
 
 # --- Telegram reminder ---

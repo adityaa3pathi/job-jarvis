@@ -22,7 +22,9 @@ from jobagent.outreach.draft import (
 State = Literal["draft", "waiting", "accepted", "replied", "bounced", "no_reply", "stopped"]
 FINAL = frozenset({"replied", "bounced", "no_reply", "stopped"})
 LINKEDIN_CHECK_DAYS = 7  # after an invite, a reminder to look whether they accepted
+LINKEDIN_FOLLOW_UP_DAYS = 5  # after the first LinkedIn message
 PROFILE_FLAG = "outreach_profile"
+EXT_TOKEN_FLAG = "extension_token_sha256"
 
 VIEW = (
     "SELECT o.*, c.name, c.title AS contact_title, c.email, c.email_source, c.linkedin_url,"
@@ -66,6 +68,30 @@ class OutreachStore:
                 (PROFILE_FLAG, me.model_dump_json()),
             )
             bump_version(self.conn)
+
+    def extension_token_hash(self) -> str:
+        sql = "SELECT value FROM flags WHERE name=?"
+        row = self.conn.execute(sql, (EXT_TOKEN_FLAG,)).fetchone()
+        return str(row["value"]) if row else ""
+
+    def set_extension_token_hash(self, digest: str) -> None:
+        """A new token replaces the old one, so a lost browser can be locked out."""
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO flags(name, value) VALUES (?, ?) ON CONFLICT(name)"
+                " DO UPDATE SET value=excluded.value",
+                (EXT_TOKEN_FLAG, digest),
+            )
+
+    def linkedin_threads(self) -> list[dict[str, Any]]:
+        sql = f"{VIEW} WHERE o.channel='linkedin' AND c.cleared_at IS NULL ORDER BY o.id DESC"
+        return [dict(r) for r in self.conn.execute(sql).fetchall()]
+
+    def linkedin_contacts(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM contacts WHERE linkedin_url!='' AND cleared_at IS NULL ORDER BY id DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- contacts ---
 
@@ -280,5 +306,7 @@ def due_label(row: dict[str, Any]) -> str:
     if row["channel"] == "linkedin":
         if row["state"] == "accepted":
             return "send the LinkedIn message"
+        if int(row["step"]) >= 2:
+            return "send the LinkedIn follow-up"
         return "check if they accepted your LinkedIn invite"
     return f"send follow-up {int(row['step'])} of {EMAIL_STEPS - 1}"
