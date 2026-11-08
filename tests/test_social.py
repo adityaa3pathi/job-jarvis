@@ -144,3 +144,25 @@ def test_a16z_reads_the_jobs_embedded_in_its_page(policy: Policy) -> None:
     )  # fmt: skip
     assert first.url == "https://boards.greenhouse.io/acme/jobs/1"
     assert first.stack_words == ["Software Engineer"] and second.location == "Bengaluru, India"
+
+
+def test_remoteio_reads_india_jobs_from_its_api(policy: Policy) -> None:
+    def job(n: int, **kw: object) -> dict[str, object]:
+        return {"jobTitle": f"Backend Engineer {n}", "companyName": "Acme", "location": "India",
+                "locationType": "remote", "jobUrl": f"/remote-jobs/software-development/x-{n}",
+                "publishedAt": f"{TODAY}T08:00:00Z", "skillTags": ["Python"],
+                "description": "<p>Build APIs</p>", **kw}  # fmt: skip
+
+    body = json.dumps({"data": [job(1), job(2, isExpired=True)], "pagination": {}})
+    search = BoardSearch(board="remoteio", term="IN")
+    urls = BOARD_ADAPTERS["remoteio"].page_urls(search)
+    assert "country=IN" in urls[0] and "page=3" in urls[2]
+    res = discover_all(
+        [], FakeFetcher({urls[0]: FetchResult(200, body, urls[0])}), policy, [search]
+    )
+    (only,) = res.postings
+    assert (only.title, only.location, only.stack_words) == (
+        "Backend Engineer 1", "Remote (India)", ["Python"],
+    )  # fmt: skip
+    assert only.url == "https://remote.io/remote-jobs/software-development/x-1"
+    assert only.description == "Build APIs"
