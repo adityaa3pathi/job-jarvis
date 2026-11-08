@@ -69,6 +69,23 @@ def test_fact_confirmed_in_one_session_is_used_by_the_next_build_and_report(
     assert FACT in seen
 
 
+def test_resume_build_passes_owner_instructions(settings: Settings, monkeypatch: Any) -> None:
+    c = login(client_for(settings))
+    c.post("/api/profile/tex", files={"file": ("r.tex", SAMPLE.encode(), "text/plain")})
+    sid = start_session(c)
+    seen: dict[str, Any] = {}
+
+    def spy(*a: Any, **kw: Any) -> Any:
+        seen.update(kw)
+        raise RuntimeError("stop after reading the instructions")
+
+    monkeypatch.setattr("jobagent.web.app.run_tailor", spy)
+    done(c, c.post(f"/api/coach/{sid}/resume", json={"instructions": "Short bullets."}))
+    assert seen["instructions"] == "Short bullets."
+    too_long = c.post(f"/api/coach/{sid}/resume", json={"instructions": "x" * 1001})
+    assert too_long.status_code == 422
+
+
 def test_pending_facts_are_never_used(settings: Settings) -> None:
     c = login(client_for(settings))
     first = start_session(c)

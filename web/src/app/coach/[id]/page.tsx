@@ -9,12 +9,23 @@ import { PdfLink } from "@/components/PdfLink";
 import { ReportView } from "@/components/ReportView";
 import { Button, ErrorNote, FIELD, Panel, Refreshing, StateNote } from "@/components/ui";
 
+// Each preset adds one line to the instructions box; the owner can then edit it freely.
+const PRESETS = [
+  { label: "AI / LLM focus", text: "Lead with my AI, LLM and RAG work." },
+  { label: "Backend focus", text: "Lead with backend, APIs and system design." },
+  { label: "Impact first", text: "Put the result or impact at the start of each bullet." },
+  { label: "Short bullets", text: "Keep bullets short and punchy." },
+  { label: "Keep my wording", text: "Change my wording as little as possible." },
+];
+const MAX_INSTRUCTIONS = 1000;
+
 function CoachSession() {
   const { id } = useParams<{ id: string }>();
   const path = `/coach/${id}`;
   const read = useCachedApi<Session>(path);
   const session = read.key === path ? read.data : null; // never show another session's page
   const [message, setMessage] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState<"chat" | "resume" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastReport, setLastReport] = useState<string | null>(null);
@@ -65,7 +76,7 @@ function CoachSession() {
     try {
       const out = await runTask<{ build_id: number; report: string }>(
         `/coach/${id}/resume`,
-        undefined,
+        { instructions },
         alive.current?.signal,
       );
       setLastReport(out.report);
@@ -169,6 +180,39 @@ function CoachSession() {
 
           <Panel title="Tailored resume">
             <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2" aria-label="Resume style presets">
+                {PRESETS.map((p) => {
+                  const on = instructions.includes(p.text);
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={busy !== null}
+                      onClick={() =>
+                        setInstructions((cur) =>
+                          on ? cur.replace(p.text, "").replace(/\n{2,}/g, "\n").trim() : [cur.trim(), p.text].filter(Boolean).join("\n"),
+                        )
+                      }
+                      className={`h-7 rounded-ctl px-3 text-xs font-bold ${on ? "bg-brand text-brand-ink" : "bg-sunk text-ink-2 hover:text-ink"}`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <textarea
+                aria-label="Instructions for this resume (optional)"
+                placeholder="Optional: tell the AI what kind of resume you want, e.g. stress my DocNow payments work"
+                className={`${FIELD} h-24 w-full py-2.5 leading-relaxed`}
+                maxLength={MAX_INSTRUCTIONS}
+                disabled={busy !== null}
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+              />
+              <p className="text-xs text-ink-3">
+                These guide wording and emphasis. Your facts stay as written: no new numbers, tools or titles.
+              </p>
               <Button disabled={busy !== null} onClick={buildResume}>
                 <Icon name="file" />
                 {busy === "resume" ? "Building… (1–2 minutes)" : "Build my resume"}

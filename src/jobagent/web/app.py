@@ -67,6 +67,7 @@ from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
 from jobagent.resume.pipeline import run_tailor
+from jobagent.resume.rewrite import MAX_INSTRUCTIONS
 from jobagent.runs import (
     RunTally,
     digest_after_run,
@@ -254,6 +255,10 @@ class CoachIn(BaseModel):
     title: str = Field(default="", max_length=200)
     company: str = Field(default="", max_length=200)
     trust_host: bool = False
+
+
+class ResumeIn(BaseModel):
+    instructions: str = Field(default="", max_length=MAX_INSTRUCTIONS)
 
 
 class ChatIn(BaseModel):
@@ -1007,7 +1012,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/coach/{session_id}/resume", dependencies=[Owner])
-    def build_resume(session_id: int, st: ST) -> dict[str, str]:
+    def build_resume(session_id: int, st: ST, body: ResumeIn | None = None) -> dict[str, str]:
         row = _session(st, session_id)
         prof = st.profile()
         if not prof["base_tex"]:
@@ -1021,6 +1026,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 outcome = run_tailor(
                     jd_text, prof["base_tex"], cards, cfg.thinker(),
                     writer_llm=cfg.writer(), profile=profile,
+                    instructions=body.instructions if body else "",
                 )  # fmt: skip
             except (LatexError, LLMError) as exc:
                 raise HTTPException(502, f"resume build failed: {exc}") from exc
