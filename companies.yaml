@@ -234,3 +234,7 @@ companies:
   - {name: ZoomInfo, ats: greenhouse, token: zoominfo}
   - {name: Zscaler, ats: greenhouse, token: zscaler}
   - {name: Zuora, ats: greenhouse, token: zuora}
+  # Recently funded (checked 08-11-2026)
+  - {name: Firstwork, ats: ashby, token: firstwork}
+  - {name: Mistral AI, ats: ashby, token: mistral.ai}
+  - {name: Higgsfield, ats: ashby, token: higgsfieldai}
