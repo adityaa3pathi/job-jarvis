@@ -53,6 +53,8 @@ function safeJson(text: string): unknown {
 export const post = <T>(path: string, data?: unknown) =>
   api<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
+export const patch = <T>(path: string, data: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(data) });
+
 /* Stale-while-revalidate cache for owner reads, keyed by API path. Shows the last copy
  * at once, then asks the server with If-None-Match; a 304 keeps the copy. */
 
@@ -320,6 +322,65 @@ export type Job = {
   role: string;
   work_mode: string;
   city: string;
+  funded: Funded | null; // newest raise in the last few months, from startup news
+};
+
+export type Funded = { headline: string; url: string; published: string | null };
+
+export const STAGES = ["applied", "replied", "interview", "offer", "rejected"] as const;
+export type Stage = (typeof STAGES)[number];
+
+/** One application on the Tracker page (`GET /api/tracker`). */
+export type Application = {
+  id: number; // the job's id
+  company: string;
+  title: string;
+  status: Stage;
+  score: number | null;
+  city: string;
+  location: string;
+  url: string | null;
+  applied_at: string | null;
+  changed_at: string | null;
+  interview_at: string | null;
+  note: string;
+  followed_up_at: string | null;
+  days_waiting: number | null;
+  follow_up_due: boolean;
+};
+
+export type TrackerView = { items: Application[]; counts: Record<Stage, number> };
+
+export type PrepQuestion = {
+  kind: "about_you" | "technical" | "behavioral" | "company";
+  question: string;
+  answer: string[];
+  based_on: string;
+  grounded: boolean; // false: the quoted fact is not in your profile, check before using it
+};
+
+export type Prep = {
+  id: number;
+  created_at: string;
+  pitch: string[];
+  questions: PrepQuestion[];
+  gaps: { topic: string; say: string }[];
+  ask_them: string[];
+};
+
+/** `GET /api/prep/{jobId}`: the job and its newest prep, if one was made. */
+export type PrepView = {
+  job: { id: number; title: string; company: string; status: string; url: string | null };
+  prep: Prep | null;
+};
+
+/** One row of `GET /api/funding`: a recent raise and how it maps to jobs here. */
+export type FundingRow = Funded & {
+  company: string;
+  source: string;
+  open_jobs: number;
+  job_company: string;
+  watched: boolean;
 };
 
 /** One page of `GET /api/jobs`; `sources` counts ignore the source filter, zeros left out. */

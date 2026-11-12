@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { api, invalidate, istDate, useCachedApi } from "@/lib/api";
 import { Icon } from "@/components/Icon";
+import { McpKey } from "@/components/profile/McpKey";
 import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing } from "@/components/ui";
 
 type Profile = { summary: string; has_tex: boolean; updated_at: string };
@@ -122,6 +123,7 @@ export default function ProfilePage() {
           )}
         </p>
       </Panel>
+      <McpKey />
     </div>
   );
 }

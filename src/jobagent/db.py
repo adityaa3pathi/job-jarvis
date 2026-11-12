@@ -19,7 +19,7 @@ from jobagent.dedupe import (
     normalize_title,
     normalize_url,
 )
-from jobagent.models import DropReason, JobFilters, JobStatus, Posting
+from jobagent.models import TRACKED, DropReason, JobFilters, JobStatus, Posting
 from jobagent.rules import RULES_VERSION, check_hard_rules, years_asked
 from jobagent.sqlconn import chunks, connect, marks
 
@@ -81,7 +81,7 @@ LAST_EVENT = (
     " ORDER BY e.id DESC LIMIT 1)"
 )
 LAST_NOTE, LAST_AT = LAST_EVENT.format("note"), LAST_EVENT.format("at")
-POSITIVE = frozenset({"applied", "interview"})  # owner marks that count as a yes label
+POSITIVE = frozenset({"applied", "replied", "interview", "offer"})  # marks that label a yes
 RANK_TEXT_CHARS = 1500  # the embedded head of a posting (U14)
 JUDGE_TEXT_CHARS = 4000
 PRUNE_AFTER_DAYS = 30  # owner, 15-10-2026: dropped jobs keep their text this long (R4)
@@ -324,10 +324,55 @@ def _m6_network(conn: Any) -> None:
     conn.commit()
 
 
+FUNDING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS funding (
+  id INTEGER PRIMARY KEY, norm_company TEXT NOT NULL, company TEXT NOT NULL,
+  headline TEXT NOT NULL, url TEXT NOT NULL UNIQUE, published TEXT, source TEXT NOT NULL,
+  seen_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS funding_company ON funding(norm_company, published);
+"""
+
+
+def _m7_funding(conn: Any) -> None:
+    for statement in filter(str.strip, FUNDING_SCHEMA.split(";")):
+        conn.execute(statement)
+    conn.commit()
+
+
+# Migration 8: the tracker's interview time, note and last follow-up per application.
+TRACKER_COLUMNS = {
+    "interview_at": "TEXT",
+    "note": "TEXT NOT NULL DEFAULT ''",
+    "followed_up_at": "TEXT",
+}
+
+
+def _m8_tracker(conn: Any) -> None:
+    for col, kind in TRACKER_COLUMNS.items():
+        _add_column(conn, col, kind, table="applications")
+    conn.execute("CREATE INDEX IF NOT EXISTS applications_job ON applications(job_id)")
+    conn.commit()
+
+
+PREP_SCHEMA = """
+CREATE TABLE IF NOT EXISTS preps (
+  id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS preps_job ON preps(job_id);
+"""
+
+
+def _m9_prep(conn: Any) -> None:
+    for statement in filter(str.strip, PREP_SCHEMA.split(";")):
+        conn.execute(statement)
+    conn.commit()
+
+
 # Run once each, in order; a step must be safe to re-run (two handles may open at once).
 MIGRATIONS: tuple[Callable[[Any], None], ...] = (
     _m1_columns, _m2_lean_text, _m3_ranking, _m4_judge_key_and_digest_progress, _m5_outreach,
-    _m6_network,
+    _m6_network, _m7_funding, _m8_tracker, _m9_prep,
 )  # fmt: skip
 
 
@@ -668,7 +713,7 @@ class Database:
             changes |= verdict
             events += [event] if event else []
         status = str(changes.get("status", row["status"]))
-        if posting.closed and status not in ("closed", "applied"):
+        if posting.closed and status != "closed" and status not in TRACKED:
             changes["status"] = "closed"
             events.append((status, "closed", "source says closed"))
         # Only new text or a never-derived row can change them; recheck backfills rule changes.
@@ -836,7 +881,7 @@ class Database:
         return len(dups)
 
     def _merge_into(self, keep: _Job, dup: _Job) -> None:
-        for table in ("job_links", "events", "applications"):
+        for table in ("job_links", "events", "applications", "preps"):
             self.conn.execute(
                 f"UPDATE {table} SET job_id=? WHERE job_id=?", (keep["id"], dup["id"])
             )

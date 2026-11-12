@@ -40,6 +40,7 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
+from jobagent.funding import FundingStore
 from jobagent.index import Embedder, shared_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
 from jobagent.lock import LockHeldError, RunLock
@@ -71,6 +72,7 @@ from jobagent.resume.rewrite import MAX_INSTRUCTIONS
 from jobagent.runs import (
     RunTally,
     digest_after_run,
+    funding_after_run,
     note_policy,
     prune_after_run,
     rank_after_run,
@@ -78,10 +80,12 @@ from jobagent.runs import (
     save_portal,
     sweep_context,
 )
+from jobagent.web import mcp_key
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.deps import DB, ST
 from jobagent.web.outreach_routes import OutreachDeps, add_outreach_routes
 from jobagent.web.store import Store, profile_from_json, profile_to_json
+from jobagent.web.tracker_routes import add_tracker_routes
 from jobagent.web.uploads import MAX_SUMMARY_CHARS, MAX_UPLOAD_BYTES, UploadError, doc_to_text
 
 MAX_LOGIN_FAILURES = 5
@@ -115,7 +119,7 @@ DISCOVER_WORKFLOW = "discover.yml"
 DISPATCH_WAIT_S = 600.0  # a queued workflow writes its runs row within minutes, or never
 CLOCK_SKEW_S = 60.0  # the runner's clock against ours
 log = logging.getLogger(__name__)
-OwnerMark = Literal["found", "applied", "dropped", "interview", "rejected"]
+OwnerMark = Literal["found", "applied", "dropped", "replied", "interview", "offer", "rejected"]
 
 
 @dataclass
@@ -444,9 +448,16 @@ def create_app(cfg: WebConfig) -> FastAPI:
         return Policy.load(REPO_ROOT / "policy.yaml", settings.stop_file, stop_check=db_stopped)
 
     def owner(request: Request) -> None:
+        """The login cookie, or the MCP key on the few routes the MCP server calls."""
         token = request.cookies.get(COOKIE, "")
-        if not token or not token_valid(cfg.session_secret, token):
-            raise HTTPException(401, "login needed")
+        if token and token_valid(cfg.session_secret, token):
+            return
+        key = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if key.startswith("jj_") and mcp_key.allowed(request):
+            with jobs_db.borrow() as db:
+                if mcp_key.key_valid(db.conn, key):
+                    return
+        raise HTTPException(401, "login needed")
 
     Owner = Depends(owner)
 
@@ -559,7 +570,19 @@ def create_app(cfg: WebConfig) -> FastAPI:
         filters = query.model_dump(exclude={"source", "sort", "limit", "offset"})
         key = ("sources", version, jobs_module.today_ist(), *sorted(filters.items()))
         sources = counts.get(key, lambda: db.source_counts(query))
-        return {"items": [dict(r) for r in rows], "total": total, "sources": sources}
+        items = [dict(r) for r in rows]
+        funded = FundingStore(db.conn).funded({i["company"] for i in items})
+        for item in items:
+            item["funded"] = funded.get(item["company"])
+        return {"items": items, "total": total, "sources": sources}
+
+    @app.get("/api/funding", dependencies=[Owner])
+    def funding(db: DB, request: Request, response: Response) -> Any:
+        """Startups that raised money lately, and whether we read their job board yet."""
+        if hit := _not_modified(request, response, db.data_version()):
+            return hit
+        watched = [c.name for c in load_companies(REPO_ROOT / "companies.yaml")]
+        return FundingStore(db.conn).recent(watched)
 
     @app.get("/api/jobs/facets", dependencies=[Owner])
     def job_facets(
@@ -569,6 +592,22 @@ def create_app(cfg: WebConfig) -> FastAPI:
         if hit := _not_modified(request, response, version):
             return hit
         return counts.get(("facets", version, status), lambda: db.facets(status))
+
+    @app.get("/api/jobs/{job_id}", dependencies=[Owner])
+    def job_detail(job_id: int, db: DB) -> dict[str, Any]:
+        """One job with its full text, links and status history."""
+        job = db.get_job(job_id)
+        if job is None:
+            raise HTTPException(404, "no such job")
+        keep = ("id", "company", "title", "location", "experience_text", "description",
+                "posted_date", "source", "status", "score", "rank_reason", "role", "work_mode",
+                "city", "min_years", "max_years")  # fmt: skip
+        events = [{k: e[k] for k in ("at", "new_status", "note")} for e in db.events(job_id)]
+        return {k: job[k] for k in keep} | {
+            "urls": [r["url"] for r in db.links(job_id)],
+            "events": events,
+            "funded": FundingStore(db.conn).funded([job["company"]]).get(job["company"]),
+        }
 
     @app.post("/api/jobs/{job_id}/mark", dependencies=[Owner])
     def mark(job_id: int, body: Mark, db: DB) -> dict[str, bool]:
@@ -610,6 +649,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                             db, st, tally, embedder=cfg.embedder(), llm=cfg.thinker(),
                             settings=settings,
                         )  # fmt: skip
+                        funding_after_run(db, cfg.fetcher, policy, tally)
                     st.finish_run(run_id, "done", "", tally.as_dict())
                     with jobs_db.borrow() as db:
                         digest_after_run(db, run_id, cfg.digest_sender(), settings)
@@ -1105,6 +1145,11 @@ def create_app(cfg: WebConfig) -> FastAPI:
             has_mx=cfg.has_mx,
         ),
         owner=Owner, ai_budget=_ai_budget, submit=submit,
+    )  # fmt: skip
+    mcp_key.add_mcp_key_routes(app, owner=Owner)
+    add_tracker_routes(
+        app, owner=Owner, not_modified=_not_modified, thinker=cfg.thinker,
+        ai_budget=_ai_budget, submit=submit,
     )  # fmt: skip
     return app
 

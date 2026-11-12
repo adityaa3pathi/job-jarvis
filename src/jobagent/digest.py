@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import html
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -13,6 +13,7 @@ import httpx
 
 from jobagent.db import IST, Database
 from jobagent.outreach.store import OutreachStore, due_label, ist_today
+from jobagent.tracker import TrackerStore
 
 log = logging.getLogger(__name__)
 MAX_MESSAGE = 4096  # Telegram's limit for one message
@@ -143,19 +144,57 @@ def digest_last_run(db: Database, sender: Sender | None, *, limit: int) -> dict[
 FOLLOWUP_FLAG = "followups_sent_day"
 
 
-def followup_text(rows: Sequence[Mapping[str, Any]], day: str) -> str:
-    lines = [f"<b>Outreach due today</b> · {day}"]
-    for n, r in enumerate(rows[:20], 1):
-        who = html.escape(str(r.get("name") or "someone")[:60], quote=False)
-        company = html.escape(str(r.get("company") or "")[:60], quote=False)
-        lines.append(f"{n}. {who} · {company}: {due_label(dict(r))}")
-    if len(rows) > 20:
-        lines.append(f"…and {len(rows) - 20} more on the Outreach page")
-    return "\n".join(lines)
+def _esc(value: object, size: int = 60) -> str:
+    return html.escape(str(value or "")[:size], quote=False)
+
+
+def _ist_time(value: str) -> str:
+    return datetime.fromisoformat(value).astimezone(IST).strftime("%d-%m-%Y %H:%M IST")
+
+
+def _numbered(lines: Iterable[str]) -> list[str]:
+    return [f"{n}. {line}" for n, line in enumerate(lines, 1)]
+
+
+def followup_messages(
+    rows: Sequence[Mapping[str, Any]],
+    day: str,
+    tracker: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+) -> list[str]:
+    """Today's to-dos, one message per kind so each stays under Telegram's limit:
+    interviews coming up, applications to chase, outreach steps due."""
+    tracker = tracker or {}
+    out: list[str] = []
+
+    def section(head: str, items: list[str], page: str) -> None:
+        if items:
+            more = [f"…and {len(items) - 20} more on the {page} page"] if len(items) > 20 else []
+            out.append("\n".join([f"<b>{head}</b> · {day}", *items[:20], *more]))
+
+    section(
+        "Interviews today and tomorrow",
+        _numbered(f"{_esc(r['title'])} · {_esc(r['company'])}: {_ist_time(r['interview_at'])}"
+                 for r in tracker.get("interviews", [])),
+        "Tracker",
+    )  # fmt: skip
+    section(
+        "No reply yet, follow up",
+        _numbered(f"{_esc(r['title'])} · {_esc(r['company'])}: waiting {r['days_waiting']} days"
+                 for r in tracker.get("follow_ups", [])),
+        "Tracker",
+    )  # fmt: skip
+    section(
+        "Outreach due today",
+        _numbered(f"{_esc(r.get('name') or 'someone')} · {_esc(r.get('company'))}: "
+                 f"{due_label(dict(r))}" for r in rows),
+        "Outreach",
+    )  # fmt: skip
+    return out
 
 
 def send_followups(db: Database, sender: Sender | None) -> dict[str, Any]:
-    """Once per IST day: the outreach steps due. Each still needs the owner's click."""
+    """Once per IST day: interviews soon, applications to chase and outreach steps due.
+    Each still needs the owner's click."""
     if sender is None:
         return {"sent": 0, "skipped": "Telegram not configured"}
     today = ist_today()
@@ -163,12 +202,13 @@ def send_followups(db: Database, sender: Sender | None) -> dict[str, Any]:
     if flag and flag["value"] == today.isoformat():
         return {"sent": 0, "skipped": "already sent today"}
     rows = OutreachStore(db.conn).due(today)
-    if rows:
-        sender.send(followup_text(rows, today.strftime("%d-%m-%Y")))
+    tracker = TrackerStore(db).reminders(today)
+    for text in followup_messages(rows, today.strftime("%d-%m-%Y"), tracker):
+        sender.send(text)
     with db.conn:
         db.conn.execute(
             "INSERT INTO flags(name, value) VALUES (?, ?) ON CONFLICT(name)"
             " DO UPDATE SET value=excluded.value",
             (FOLLOWUP_FLAG, today.isoformat()),
         )
-    return {"sent": len(rows)}
+    return {"sent": len(rows), **{k: len(v) for k, v in tracker.items()}}
