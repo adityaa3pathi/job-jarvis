@@ -72,6 +72,7 @@ export function JobRow({ job: j, status, selected, expanded, onSelect, onMark }:
           <span className="flex items-center gap-2">
             <span className="truncate font-bold tracking-tight">{j.title}</span>
             {isNew(j) && <Tag tone="brand">New</Tag>}
+            {j.funded && <Tag tone="up">Funded</Tag>}
           </span>
           <span className="mt-0.5 block truncate text-sm text-ink-2">{where}</span>
           <span className="mt-1 flex items-center gap-2 text-xs text-ink-3">
@@ -163,6 +164,14 @@ export function JobDetail({ job: j, status, onMark }: { job: Job; status: string
   ];
   if (j.experience_text) facts.splice(1, 0, ["Experience", j.experience_text]);
   if (j.drop_reason) facts.push(["Left out because", j.drop_reason.replaceAll("_", " ")]);
+  if (j.funded)
+    facts.unshift([
+      "Recently funded",
+      <a key="f" href={j.funded.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+        {j.funded.headline}
+        {j.funded.published && <span className="text-ink-3"> · {istDate(j.funded.published)}</span>}
+      </a>,
+    ]);
   return (
     <article className="pane-in flex flex-col gap-5 pt-4" key={j.id}>
       <header>
@@ -186,6 +195,9 @@ export function JobDetail({ job: j, status, onMark }: { job: Job; status: string
         <Link href={`/outreach/${j.id}`} className={buttonClass("ghost")}>
           <Icon name="send" />
           Reach out
+        </Link>
+        <Link href={`/prep/${j.id}`} className={buttonClass("ghost")}>
+          Interview prep
         </Link>
         {moves(status).map((m) => (
           <button key={m.next} type="button" className={buttonClass("ghost")} onClick={() => onMark(j, m.next)}>

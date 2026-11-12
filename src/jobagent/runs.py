@@ -14,7 +14,8 @@ from jobagent.config import Settings
 from jobagent.db import Database, UpsertResult
 from jobagent.dedupe import normalize_url
 from jobagent.digest import Sender, send_digest, send_followups
-from jobagent.discovery.base import DiscoveryResult, SweepContext, Validators
+from jobagent.discovery.base import DiscoveryResult, Fetcher, SweepContext, Validators
+from jobagent.funding import FundingStore, read_funding
 from jobagent.index import Embedder
 from jobagent.llm import LLM
 from jobagent.models import Posting
@@ -195,6 +196,18 @@ def digest_after_run(
         log.exception("follow-up reminder failed")
         out["followups"] = {"sent": 0, "error": type(exc).__name__}
     return out
+
+
+def funding_after_run(db: Database, fetcher: Fetcher, policy: Policy, tally: RunTally) -> None:
+    """Read startup funding news and store it. Logged, never raised: jobs are saved."""
+    try:
+        read = read_funding(fetcher, policy)
+        added = FundingStore(db.conn).save(read.news)
+        log.info("funding news: %d read, %d new", len(read.news), added)
+        tally.notes += read.notes
+    except Exception:
+        log.exception("funding news failed")
+        tally.notes.append("funding news failed")
 
 
 # --- the kill switch: a DB flag, so it survives restarts ---

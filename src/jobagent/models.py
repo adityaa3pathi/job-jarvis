@@ -26,9 +26,12 @@ JobStatus = Literal[
     "applied",
     "replied",
     "interview",
+    "offer",
     "rejected",
     "closed",
 ]
+# The owner's application stages: the Tracker page lists them and nothing automatic undoes them.
+TRACKED: tuple[JobStatus, ...] = ("applied", "replied", "interview", "offer", "rejected")
 
 
 class Posting(BaseModel):
@@ -46,7 +49,9 @@ class Posting(BaseModel):
     closed: bool = False
 
 
-ListStatus = Literal["found", "applied", "interview", "rejected", "dropped", "closed"]
+ListStatus = Literal[
+    "found", "applied", "replied", "interview", "offer", "rejected", "dropped", "closed"
+]
 RoleGroup = Literal["ai_ml", "full_stack", "backend", "frontend", "mobile", "software", "other"]
 WorkMode = Literal["remote", "hybrid", "onsite", "unknown"]
 DATE_WINDOWS = (1, 3, 7, 30)

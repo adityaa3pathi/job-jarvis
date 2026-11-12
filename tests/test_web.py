@@ -90,8 +90,13 @@ def test_every_route_but_login_and_health_needs_a_session(settings: Settings) ->
         "/api/coach",
         "/api/builds",
         "/api/tasks/x",
+        "/api/tracker",
+        "/api/funding",
+        "/api/prep/1",
+        "/api/mcp/key",
     ):
         assert c.get(path).status_code == 401
+        assert c.get(path, headers={"Authorization": "Bearer jj_forged"}).status_code == 401
     assert c.post("/api/coach", json={"jd_text": JD}).status_code == 401
     c.cookies.set("jobagent_session", "forged")
     assert c.get("/api/me").status_code == 401
@@ -220,7 +225,7 @@ def save_jobs(settings: Settings, postings: list[Posting]) -> list[int]:
 JOB_FIELDS = {
     "id", "company", "title", "location", "experience_text", "posted_date", "seen_date",
     "source", "status", "drop_reason", "score", "rank_reason", "url", "min_years", "max_years",
-    "role", "work_mode", "city",
+    "role", "work_mode", "city", "funded",
 }  # fmt: skip
 
 
@@ -484,7 +489,8 @@ def test_last_run_is_kept_in_the_db_and_shown_after_a_restart(
     assert last["drop_reasons"] == {"too_senior": 1}
     assert last["unreachable"] == ["Acme: http 403"]
     assert last["notes"][0] == "hirist: ai: truncated at 1 pages"
-    assert last["notes"][1].startswith("ranked 3 found jobs") and len(last["notes"]) == 2
+    assert last["notes"][1].startswith("ranked 3 found jobs")
+    assert last["notes"][2:] == ["inc42: http 404", "entrackr: http 404"]  # funding news
     assert last["started_at"] and last["finished_at"]
 
 

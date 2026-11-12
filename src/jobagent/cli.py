@@ -22,6 +22,7 @@ from jobagent.resume import cli_tailor
 from jobagent.runs import (
     RunTally,
     digest_after_run,
+    funding_after_run,
     kill_switch_check,
     note_policy,
     prune_after_run,
@@ -62,8 +63,9 @@ def discover(settings: Settings) -> int:
                     )
 
         try:
+            fetcher = HttpFetcher()
             discover_all(
-                load_companies(REPO_ROOT / "companies.yaml"), HttpFetcher(), policy,
+                load_companies(REPO_ROOT / "companies.yaml"), fetcher, policy,
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,
                 ctx=sweep_context(db, settings.detail_fetch_cap),
             )  # fmt: skip
@@ -74,6 +76,7 @@ def discover(settings: Settings) -> int:
                 db, st, tally, embedder=shared_embedder(), llm=judge_llm(settings),
                 settings=settings,
             )  # fmt: skip
+            funding_after_run(db, fetcher, policy, tally)
         except Exception as exc:
             st.finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}", tally.as_dict())
             report(tally.as_dict(), out)  # what was saved before it failed
