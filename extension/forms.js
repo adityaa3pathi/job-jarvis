@@ -24,6 +24,8 @@
   const weak = (t) => t.replace(/[^A-Za-z]/g, "").length < 3 || /^(rs\.?|inr|lpa|usd|ctc)$/i.test(t);
   // Tag and dropdown widgets show the current choice beside their box; the question is outside.
   const WIDGET = ".selectize-control, .select2-container, .chosen-container, [class*='select__control'], [class*='tag-input'], [class*='chips']";
+  const TAG_BOX = ".selectize-control.multi, .select2-container--multiple, [class*='tag-input'], [class*='chips']";
+  const TAG_ITEM = ".item, [class*='chip'], [class*='tag-item'], .select2-selection__choice";
   const NOISE = /search|captcha|coupon|promo code|referral code|otp|one.time/i;
 
   const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
@@ -57,13 +59,19 @@
     return clean((ids || "").split(/\s+/).map((id) => textOf(document.getElementById(id))).join(" "));
   }
 
+  // Tags already chosen ("Python ×") and suggestion lists sit between a tag box and its question.
+  function pickList(n) {
+    if (n.matches(".selectized, selectize") || /×/.test(textOf(n))) return true;
+    return (n.matches("ul, ol") || !!n.querySelector("ul, ol")) && !n.querySelector("label, h1, h2, h3, h4, h5, h6");
+  }
+
   // Closest text before the control, a few levels up. Text past another control is that
   // control's question, so the search stops there.
   function nearbyText(el) {
     let node = el;
     for (let depth = 0; depth < 5 && node && node !== document.body; depth++) {
       for (let prev = node.previousElementSibling; prev; prev = prev.previousElementSibling) {
-        if (prev.matches("script, style, .jj-forms-card, #jj-forms-root")) continue;
+        if (prev.matches("script, style, .jj-forms-card, #jj-forms-root") || pickList(prev)) continue;
         if (prev.matches(CONTROLS) || prev.querySelector(CONTROLS)) return "";
         const t = textOf(prev);
         if (!t || weak(t)) continue;
@@ -163,11 +171,13 @@
         const label = labelFor(el);
         if (!label || NOISE.test(label)) continue;
         const kind = el.tagName === "TEXTAREA" || editable(el) ? "textarea"
+          : el.tagName === "INPUT" && el.closest(TAG_BOX) ? "chips"
           : el.tagName === "SELECT" ? "select"
           : type === "number" ? "number"
           : type === "date" ? "date"
           : "text";
-        const field = { id: idOf(el), label, kind, el };
+        const hint = clean(el.getAttribute("placeholder"));
+        const field = { id: idOf(el), label: kind === "chips" && hint && !label.includes(hint) ? `${label} (${hint})` : label, kind, el };
         if (kind === "select") field.options = [...el.options].filter((o) => o.value !== "" && !/^(select|choose|--)/i.test(clean(o.text))).map((o) => clean(o.text));
         const max = Number(el.getAttribute("maxlength"));
         if (max > 0) field.max_len = max;
@@ -191,8 +201,41 @@
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function press(el, type, code) {
+    const e = new KeyboardEvent(type, { key: "Enter", bubbles: true, cancelable: true });
+    Object.defineProperty(e, "keyCode", { get: () => code });
+    Object.defineProperty(e, "which", { get: () => code });
+    el.dispatchEvent(e);
+  }
+
+  // Types each tag and presses Enter, so the site's own tag box accepts it as from a person.
+  async function fillTags(field, value) {
+    const el = field.el;
+    const box = el.closest(TAG_BOX) || el.parentElement;
+    const tags = () => [...box.querySelectorAll(TAG_ITEM)].map((n) => textOf(n).replace(/×$/, "").trim().toLowerCase());
+    const items = value.split(",").map(clean).filter((v) => v && !tags().includes(v.toLowerCase()));
+    let added = 0;
+    for (const item of items) {
+      const before = tags().length;
+      el.focus();
+      setValue(el, item);
+      el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+      await wait(700); // the site looks the tag up while it is typed
+      press(el, "keydown", 13);
+      press(el, "keyup", 13);
+      await wait(200);
+      if (tags().length > before) added++;
+      else setValue(el, "");
+    }
+    if (!items.length) return { done: true, note: "Already there." };
+    const note = added === items.length ? `Added all ${added}.` : `Added ${added} of ${items.length}. Type the rest and pick from the list.`;
+    return { done: added > 0, note };
+  }
+
   // Puts one value into the page's own control the way a typing person would.
-  function fill(field, value) {
+  async function fill(field, value) {
     const el = field.el;
     if (!el?.isConnected) return { done: false, note: "The box is gone from the page." };
     if (field.kind === "radio" || field.kind === "checkbox") {
@@ -203,6 +246,7 @@
       });
       return { done: true, note: "" };
     }
+    if (field.kind === "chips") return fillTags(field, value);
     if (field.kind === "select") {
       const opt = [...el.options].find((o) => clean(o.text).toLowerCase() === value.toLowerCase());
       if (!opt) return { done: false, note: "That choice is not in the list." };
@@ -288,8 +332,10 @@
     const kids = [node("div", { className: `tag ${answer.status}`, textContent: TAGS[answer.status] || answer.status })];
     if (answer.value) {
       const fillBtn = node("button", { textContent: "Fill" });
-      fillBtn.onclick = () => {
-        status.textContent = fill(field, answer.value).note || "Filled. Check it.";
+      fillBtn.onclick = async () => {
+        fillBtn.disabled = true;
+        status.textContent = (await fill(field, answer.value)).note || "Filled. Check it.";
+        fillBtn.disabled = false;
       };
       const copyBtn = node("button", { className: "ghost", textContent: "Copy" });
       copyBtn.onclick = async () => {
@@ -328,13 +374,13 @@
     state.bar.host.style.display = count || state.on ? "" : "none";
   }
 
-  function fillAll() {
+  async function fillAll() {
     let filled = 0;
     const left = [];
     for (const field of state.fields.values()) {
       const a = state.answers.get(sig(field));
       if (a && FILL_ALL.has(a.status) && a.value) {
-        if (fill(field, a.value).done) filled++;
+        if ((await fill(field, a.value)).done) filled++;
       } else if (a?.status === "check") {
         left.push(field);
       }

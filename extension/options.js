@@ -8,6 +8,7 @@ const DETAILS = [
 const PREFS = [
   "Total experience", "Notice period", "Current CTC", "Expected CTC", "Current city",
   "Preferred locations", "Willing to relocate", "Work mode", "Earliest start date", "Work authorization",
+  "Languages known",
 ];
 
 function inputs(boxId, rows, values) {
