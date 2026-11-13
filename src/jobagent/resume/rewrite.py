@@ -79,17 +79,27 @@ def check_rewrite(original: str, new: str, allowed: set[str]) -> str | None:
         return "empty"
     if len(new) > min(MAX_BULLET_CHARS, max(int(len(original) * 1.25), len(original) + 40)):
         return "too long"
-    if not set(find_numbers(new)) <= set(find_numbers(original)):
+    return unsupported(original, new, allowed)
+
+
+def unsupported(source: str, new: str, allowed: set[str]) -> str | None:
+    """Why `new` claims more than `source` backs: a number, a bigger role or a tool."""
+    if not set(find_numbers(new)) <= set(find_numbers(source)):
         return "new number"
-    if not find_scope(new) <= find_scope(original):
+    if not find_scope(new) <= find_scope(source):
         return "bigger role claimed"
-    known = {t.lower() for t in allowed} | words(original)
-    new_tech = {w for w in words(new) & KNOWN_TECH if w not in known}
-    new_tech |= {
-        t for t in all_terms() if mention(t, new) and not mention(t, original)
+    tools = new_tools(source, new, allowed)
+    return f"new tool: {tools[0]}" if tools else None
+
+
+def new_tools(source: str, new: str, allowed: set[str]) -> list[str]:
+    known = {t.lower() for t in allowed} | words(source)
+    found = {w for w in words(new) & KNOWN_TECH if w not in known}
+    found |= {
+        t for t in all_terms() if mention(t, new) and not mention(t, source)
         and t.lower() not in known
     }  # fmt: skip
-    return f"new tool: {sorted(new_tech)[0]}" if new_tech else None
+    return sorted(found)
 
 
 def _runs(section: Section) -> list[list[int]]:

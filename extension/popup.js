@@ -1,5 +1,5 @@
-// Shows what job-jarvis has for the LinkedIn page in this tab, and fills LinkedIn's own boxes
-// when asked. The owner always presses LinkedIn's Send; the page script then records it.
+// Starts the form helper on any page, shows what job-jarvis has for a LinkedIn page, and fills
+// LinkedIn's own boxes when asked. The owner always presses LinkedIn's Send; the page script then records it.
 const out = document.getElementById("out");
 document.getElementById("options").onclick = () => chrome.runtime.openOptionsPage();
 
@@ -129,11 +129,30 @@ async function jobCard(tab) {
   return el("div", { className: "card" }, el("strong", { textContent: "LinkedIn job" }), btn, status);
 }
 
+function formCard(tab) {
+  const status = el("div", { className: "muted", textContent: "Reads the questions on this page and shows an answer under each one." });
+  const btn = el("button", { textContent: "Help with this page's form" });
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ["forms.js"] });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: () => globalThis.jjForms?.start() });
+      window.close();
+    } catch (e) {
+      status.textContent = `Could not read this page: ${e.message}`;
+      status.className = "error";
+      btn.disabled = false;
+    }
+  };
+  return el("div", { className: "card" }, el("strong", { textContent: "Job form" }), btn, status);
+}
+
 async function render() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url || "";
   const { lastError } = await chrome.storage.local.get("lastError");
   const warn = lastError ? el("div", { className: "error", textContent: lastError }) : null;
+  const form = /^https?:/.test(url) ? formCard(tab) : null;
   try {
     if (/linkedin\.com\/in\//.test(url)) {
       const data = await call(`/ext/profile?url=${encodeURIComponent(url)}`);
@@ -142,11 +161,11 @@ async function render() {
         cards.push(el("div", { className: "card" }, "Saved in job-jarvis. Write a LinkedIn note there, then come back.", await appLink(`/outreach`, "Open Outreach")));
       }
       if (!cards.length) cards.push(await saveCard(tab, data));
-      show(...[warn, ...cards].filter(Boolean));
+      show(...[warn, form, ...cards].filter(Boolean));
     } else if (/linkedin\.com\/jobs\//.test(url)) {
-      show(...[warn, await jobCard(tab)].filter(Boolean));
+      show(...[warn, form, await jobCard(tab)].filter(Boolean));
     } else {
-      show(...[warn, el("div", { className: "muted", textContent: "Open a LinkedIn profile or job to use this." })].filter(Boolean));
+      show(...[warn, form || el("div", { className: "muted", textContent: "Open a job site to use this." })].filter(Boolean));
     }
   } catch (e) {
     show(el("div", { className: "error", textContent: e.message }));
