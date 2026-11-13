@@ -4,7 +4,6 @@ track replies. LinkedIn is never touched: the owner sends there and marks it her
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import re
 import secrets
@@ -14,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from jobagent.config import Settings
@@ -50,7 +49,7 @@ from jobagent.outreach.store import (
     ist_today,
     max_steps,
 )
-from jobagent.web.deps import DB
+from jobagent.web.deps import DB, Ext
 from jobagent.web.store import Store
 from jobagent.web.uploads import MAX_UPLOAD_BYTES
 
@@ -381,16 +380,6 @@ def add_outreach_routes(
         out.set_state(row["id"], "accepted", ist_today().isoformat())
 
     # --- the LinkedIn helper extension: fills LinkedIn's own boxes, the owner presses Send ---
-
-    def extension(request: Request, db: DB) -> None:
-        """The extension holds its own token instead of the login cookie."""
-        given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-        want = OutreachStore(db.conn).extension_token_hash()
-        digest = hashlib.sha256(given.encode()).hexdigest()
-        if not given or not want or not hmac.compare_digest(digest, want):
-            raise HTTPException(401, "extension token missing or wrong; make a new one in Outreach")
-
-    Ext = Depends(extension)
 
     @app.post("/api/extension/token", dependencies=[owner])
     def extension_token(db: DB) -> dict[str, str]:

@@ -40,6 +40,7 @@ from jobagent.discovery import discover_all
 from jobagent.discovery.base import DiscoveryResult, Fetcher, load_companies, load_searches
 from jobagent.discovery.fetch import HttpFetcher, Resolver, system_resolver
 from jobagent.discovery.manual import fetch_posting
+from jobagent.formfill import FormPage, suggest
 from jobagent.funding import FundingStore
 from jobagent.index import Embedder, shared_embedder
 from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
@@ -82,7 +83,7 @@ from jobagent.runs import (
 )
 from jobagent.web import mcp_key
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
-from jobagent.web.deps import DB, ST
+from jobagent.web.deps import DB, ST, Ext
 from jobagent.web.outreach_routes import OutreachDeps, add_outreach_routes
 from jobagent.web.store import Store, profile_from_json, profile_to_json
 from jobagent.web.tracker_routes import add_tracker_routes
@@ -961,6 +962,20 @@ def create_app(cfg: WebConfig) -> FastAPI:
         p = got.posting
         title, company = body.title or p.title, body.company or p.company
         return f"{title}\n{company}\n\n{p.description}"[:MAX_JD_CHARS], title, company
+
+    @app.post("/api/ext/form", dependencies=[Ext])
+    def ext_form(body: FormPage, st: ST) -> dict[str, Any]:
+        """Suggested values for the form open in the browser; the owner fills and submits."""
+        summary = st.profile()["summary"]
+        if not summary.strip():
+            raise HTTPException(400, "add your career summary on the Profile page first")
+        _ai_budget(st)
+        with usage_sink(st.add_usage):
+            try:
+                found = suggest(body, summary, st.confirmed_facts(), cfg.writer())
+            except LLMError as exc:
+                raise HTTPException(502, f"could not draft answers: {short_cause(exc)}") from exc
+        return {"items": [asdict(s) for s in found]}
 
     @app.post("/api/coach", dependencies=[Owner])
     def coach(body: CoachIn, st: ST) -> dict[str, str]:

@@ -3,13 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="style.css" />
-    <style>body { width: 420px; padding: 12px; }</style>
+    <style>body { width: 460px; padding: 12px; } fieldset { border: 1px solid #e2e6ec; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }</style>
   </head>
   <body>
-    <h3>job-jarvis LinkedIn helper</h3>
-    <p class="muted">Make a token on the job-jarvis Outreach page (LinkedIn helper), then paste it here.</p>
-    <label>job-jarvis address <input id="appUrl" placeholder="https://your-app.vercel.app" /></label>
-    <label>Extension token <input id="token" type="password" /></label>
+    <h3>job-jarvis helper</h3>
+    <fieldset>
+      <legend>Connect to job-jarvis</legend>
+      <p class="muted">Make a token on the job-jarvis Outreach page (LinkedIn helper), then paste it here.</p>
+      <label>job-jarvis address <input id="appUrl" placeholder="https://your-app.vercel.app" /></label>
+      <label>Extension token <input id="token" type="password" /></label>
+    </fieldset>
+    <fieldset id="details">
+      <legend>Contact details</legend>
+      <p class="muted">Filled straight into name, email and phone boxes. Kept in this browser only.</p>
+    </fieldset>
+    <fieldset id="prefs">
+      <legend>Your saved answers</legend>
+      <p class="muted">Used for pay, notice period and location questions. Sent to your job-jarvis only.</p>
+    </fieldset>
     <p><button id="save">Save</button></p>
     <p id="status" class="muted"></p>
     <script src="options.js"></script>

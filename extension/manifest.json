@@ -1,11 +1,43 @@
 {
   "manifest_version": 3,
-  "name": "job-jarvis LinkedIn helper",
-  "version": "0.1.0",
-  "description": "Fills your own job-jarvis notes into LinkedIn's Connect and Message boxes. You press Send.",
+  "name": "job-jarvis helper",
+  "version": "0.2.0",
+  "description": "Suggests answers to job-site form questions from your job-jarvis profile, and fills LinkedIn notes. You always press Submit or Send.",
   "permissions": ["storage", "activeTab", "scripting"],
   "optional_host_permissions": ["https://*/*"],
   "action": { "default_popup": "popup.html", "default_title": "job-jarvis" },
   "background": { "service_worker": "background.js" },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.naukri.com/*",
+        "https://*.instahyre.com/*",
+        "https://www.linkedin.com/*",
+        "https://wellfound.com/*",
+        "https://www.workatastartup.com/*",
+        "https://www.ycombinator.com/*",
+        "https://cutshort.io/*",
+        "https://www.hirist.tech/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.eu.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://apply.workable.com/*",
+        "https://jobs.smartrecruiters.com/*",
+        "https://*.keka.com/*",
+        "https://careers.kula.ai/*",
+        "https://*.darwinbox.in/*",
+        "https://*.zohorecruit.in/*",
+        "https://*.zohorecruit.com/*",
+        "https://*.freshteam.com/*",
+        "https://*.recruiterbox.com/*",
+        "https://*.myworkdayjobs.com/*"
+      ],
+      "js": ["forms.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
 }
