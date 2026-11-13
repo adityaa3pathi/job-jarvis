@@ -30,6 +30,7 @@ ALIASES: dict[str, str] = {
     "retrieval augmented generation": "RAG",
     "retrieval-augmented generation": "RAG",
     "cicd": "CI/CD",
+    "ci": "CI/CD",
     "js": "JavaScript",
     "ts": "TypeScript",
     "express": "Express.js",

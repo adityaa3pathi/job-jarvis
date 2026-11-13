@@ -28,6 +28,7 @@ MAX_OUTPUT_TOKENS = {
 class LLMSettings(BaseModel):
     provider: str = "gemini"
     model: str = "gemini-3.5-flash-lite"
+    fallback_model: str = "gemini-3.1-flash-lite"  # used when the main model is busy (5xx)
     timeout_s: float = 30.0
     send_contact_details: bool = False
     max_output_tokens: dict[str, int] = Field(default_factory=lambda: dict(MAX_OUTPUT_TOKENS))

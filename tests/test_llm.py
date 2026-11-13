@@ -91,3 +91,23 @@ def test_empty_candidate_names_the_finish_reason() -> None:
     llm, _, _ = gemini([httpx.Response(200, json={"candidates": [{"finishReason": "MAX_TOKENS"}]})])
     with pytest.raises(LLMError, match="MAX_TOKENS"):
         llm.complete_json(system="s", user="u")
+
+
+def test_a_busy_model_hands_over_to_the_fallback_after_one_retry() -> None:
+    used: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        used.append(request.url.path.split("/")[-1].split(":")[0])
+        return httpx.Response(503, text="high demand") if used[-1] == "main" else ok()
+
+    waits: list[float] = []
+    llm = GeminiLLM("main", api_key="k", transport=httpx.MockTransport(handler),
+                    sleep=waits.append, fallback="spare")  # fmt: skip
+    assert llm.complete_json(system="s", user="u") == '{"ok": 1}'
+    assert used == ["main", "main", "spare"] and len(waits) == 1
+
+
+def test_no_fallback_keeps_the_full_retry_budget() -> None:
+    llm, _, calls = gemini([httpx.Response(503) for _ in range(MAX_RATE_RETRIES)] + [ok()])
+    assert llm.complete_json(system="s", user="u") == '{"ok": 1}'
+    assert len(calls) == MAX_RATE_RETRIES + 1
