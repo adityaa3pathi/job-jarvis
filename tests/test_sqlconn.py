@@ -152,3 +152,16 @@ def test_row_reads_keyword_columns_the_server_upper_cases() -> None:
     # Turso returns a plain `j.key` column as "KEY" (seen live 15-10-2026).
     row = Row(["link_url", "id", "KEY", "j.Title"], ["u", 1, "k", "t"])
     assert (row["key"], row["title"], row["id"]) == ("k", "t", 1)
+
+
+def test_query_results_can_be_looped_like_sqlite(tmp_path: Path) -> None:
+    from jobagent.outreach.network import Network
+
+    db = Database(tmp_path / "t.db")
+    db.upsert_posting(Posting(source="hirist", url="https://www.hirist.tech/j/a-1", company="Acme",
+                              title="Backend Engineer", location="Pune"))  # fmt: skip
+    assert [r["company"] for r in db.conn.execute("SELECT company FROM jobs")] == ["Acme"]
+    net = Network(db.conn)
+    net.add(name="Neha Rao", company="Acme", position="Engineer", url="")
+    assert net.matches()  # the Outreach page crashed here on Turso (13-11-2026)
+    db.close()

@@ -61,6 +61,10 @@ class _Cursor:
         names = self._names()
         return [Row(names, values) for values in self._cursor.fetchall()]
 
+    def __iter__(self) -> Iterator[Row]:
+        """Loop over rows like a sqlite3 cursor; libsql's own cursor cannot be looped."""
+        return iter(self.fetchall())
+
 
 def chunks[T](rows: Sequence[T], width: int) -> Iterator[Sequence[T]]:
     """Slices of at most CHUNK_ROWS rows whose `width` marks each fit in one statement."""
