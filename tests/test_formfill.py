@@ -134,3 +134,16 @@ def test_a_vague_label_with_personal_choices_is_still_personal() -> None:
     llm = replying()
     assert [s.status for s in suggest(page(f, vet), SUMMARY, [], llm)] == ["you", "you"]
     assert llm.calls == []
+
+
+def test_tag_boxes_keep_only_tags_the_profile_names() -> None:
+    f = FormField(id="sk", label="Enter your skills or area of expertise", kind="chips")
+    got = one(f, {"value": "Python, Node.js, Kafka, pgvector", "source": "profile", "lines": []})
+    assert (got.status, got.value) == ("fact", "Python, Node.js, pgvector")
+    assert "Kafka" in got.note
+    lang = FormField(id="l", label="Languages known", kind="chips")
+    saved = {"Languages known": "English, Hindi"}
+    assert (
+        one(lang, {"value": "English, Hindi", "source": "prefs"}, saved).value == "English, Hindi"
+    )
+    assert one(lang, {"value": "French", "source": "guess"}).status == "none"

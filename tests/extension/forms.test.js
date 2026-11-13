@@ -95,32 +95,54 @@ describe("contactKey", () => {
 });
 
 describe("fill", () => {
-  it("sets a text box so the site's own listeners see it", () => {
+  it("sets a text box so the site's own listeners see it", async () => {
     const [field] = page(`<label>City <input></label>`);
     const seen = [];
     field.el.addEventListener("input", (e) => seen.push(e.target.value));
-    expect(jj.fill(field, "Bengaluru")).toEqual({ done: true, note: "" });
+    expect(await jj.fill(field, "Bengaluru")).toEqual({ done: true, note: "" });
     expect(seen).toEqual(["Bengaluru"]);
   });
 
-  it("picks select options, radios and checkboxes by their text", () => {
+  it("picks select options, radios and checkboxes by their text", async () => {
     const [sel, radio, box] = page(`
       <label>Degree <select><option value="">Pick</option><option value="bt">B.Tech</option></select></label>
       <fieldset><legend>Relocate?</legend><label><input type="radio" name="r"> Yes</label><label><input type="radio" name="r"> No</label></fieldset>
       <fieldset><legend>Skills</legend><label><input type="checkbox" name="s"> Python</label><label><input type="checkbox" name="s" checked> Java</label></fieldset>`);
-    jj.fill(sel, "b.tech");
-    jj.fill(radio, "No");
-    jj.fill(box, "Python");
+    await jj.fill(sel, "b.tech");
+    await jj.fill(radio, "No");
+    await jj.fill(box, "Python");
     expect(sel.el.value).toBe("bt");
     expect(radio.inputs.map((i) => i.checked)).toEqual([false, true]);
     expect(box.inputs.map((i) => i.checked)).toEqual([true, false]);
-    expect(jj.fill(sel, "PhD").done).toBe(false);
+    expect((await jj.fill(sel, "PhD")).done).toBe(false);
   });
 
-  it("fills an editable box", () => {
+  it("fills an editable box", async () => {
     const [field] = page(`<div id="h">About</div><div contenteditable="true" aria-labelledby="h"></div>`);
-    jj.fill(field, "I build AI systems.");
+    await jj.fill(field, "I build AI systems.");
     expect(field.el.textContent).toBe("I build AI systems.");
+  });
+});
+
+describe("tag boxes", () => {
+  it("types each tag and presses Enter, skipping tags already there", async () => {
+    vi.useFakeTimers();
+    const [field] = page(`
+      <label for="sk">Skills</label><select id="sk" style="display:none"></select>
+      <div class="selectize-control multi"><div class="selectize-input"><div class="item">Python×</div><input id="sk-selectized"></div></div>`);
+    expect(field.kind).toBe("chips");
+    expect(field.label).toBe("Skills");
+    const input = field.el;
+    input.addEventListener("keydown", (e) => {
+      if (e.keyCode !== 13 || input.value === "Cobol") return;
+      input.insertAdjacentHTML("beforebegin", `<div class="item">${input.value}×</div>`);
+      input.value = "";
+    });
+    const done = jj.fill(field, "Python, Node.js, Cobol");
+    await vi.runAllTimersAsync();
+    expect(await done).toEqual({ done: true, note: "Added 1 of 2. Type the rest and pick from the list." });
+    expect([...document.querySelectorAll(".item")].map((n) => n.textContent)).toEqual(["Python×", "Node.js×"]);
+    vi.useRealTimers();
   });
 });
 
@@ -146,6 +168,7 @@ describe("on the page", () => {
 
     const bar = document.getElementById("jj-forms-root").shadowRoot;
     bar.querySelector("button").click();
+    await vi.waitFor(() => expect(bar.textContent).toContain("Filled 2."));
     expect(document.querySelector("input[type=email]").value).toBe("me@example.com");
     expect(document.getElementById("np").value).toBe("15 days");
     expect(bar.textContent).toContain("Filled 2.");

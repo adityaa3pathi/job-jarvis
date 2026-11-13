@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from jobagent.answers import scrub
 from jobagent.llm import LLM, ask, data_block
 from jobagent.resume.evidence import cards_from_profile
+from jobagent.resume.ontology import mention
 from jobagent.resume.rewrite import new_tools, unsupported
 
 Kind = Literal["text", "textarea", "number", "select", "radio", "checkbox", "chips", "date"]
@@ -49,7 +50,8 @@ def is_personal(field: FormField) -> bool:
 _PREFERENCE = re.compile(
     r"salary|\bctc\b|compensation|stipend|\bpay\b|\blpa\b|notice|\bjoin|start date|availab|"
     r"relocat|location|\bcity|cities|commute|shift|work mode|remote|hybrid|on-?site|office|"
-    r"visa|sponsor|authori[sz]|work permit|nationality|citizen|why .*(?:join|leave|switch)",
+    r"language|visa|sponsor|authori[sz]|work permit|nationality|citizen|"
+    r"why .*(?:join|leave|switch)",
     re.IGNORECASE,
 )
 _YES = re.compile(r"^(?:yes|true|i do|i have|y)\b", re.IGNORECASE)
@@ -158,6 +160,8 @@ def check(
     if not value or item.source == "none":
         return Suggestion(field.id, "", "none", "Your profile doesn't answer this.")
     prefs_text = "\n".join(f"{k}: {v}" for k, v in prefs.items())
+    if field.kind == "chips":
+        return _chips(field, value, "\n".join([*lines, prefs_text]), allowed)
     if item.source == "prefs" and unsupported(prefs_text, value, set()) is None:
         return Suggestion(field.id, value, "saved")
     if item.source != "profile":
@@ -179,6 +183,18 @@ def check(
     if reason:
         return Suggestion(field.id, "", "none", f"Blocked: {reason} not in your profile.")
     return Suggestion(field.id, value, "fact")
+
+
+def _chips(field: FormField, value: str, known_text: str, allowed: set[str]) -> Suggestion:
+    """Each tag stands alone: kept only when the profile or saved answers name it."""
+    items = list(dict.fromkeys(p.strip() for p in value.split(",") if p.strip()))
+    known = {a.lower() for a in allowed}
+    kept = [i for i in items if i.lower() in known or mention(i, known_text)]
+    if not kept:
+        return Suggestion(field.id, "", "none", "None of these are in your profile.")
+    dropped = [i for i in items if i not in kept]
+    note = f"Left out, not in your profile: {', '.join(dropped[:3])}." if dropped else ""
+    return Suggestion(field.id, ", ".join(kept), "fact", note)
 
 
 def _shape(field: FormField, raw: str) -> str | None:
