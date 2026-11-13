@@ -262,9 +262,11 @@ class GeminiLLM:
         sleep: Callable[[float], None] = time.sleep,
         max_output_tokens: dict[str, int] | None = None,
         thinking_budget: int | None = None,
+        fallback: str | None = None,
     ) -> None:
         self._sleep = sleep
         self.model = model
+        self.fallback = fallback if fallback != model else None
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens or {}
         self.thinking_budget = thinking_budget
@@ -274,9 +276,6 @@ class GeminiLLM:
     def complete_json(self, *, system: str, user: str) -> str:
         if not self._key:
             raise LLMError("GEMINI_API_KEY is not set")
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
-        )
         config: dict[str, Any] = {
             "responseMimeType": "application/json",
             "temperature": self.temperature,
@@ -292,7 +291,14 @@ class GeminiLLM:
             "generationConfig": config,
         }
         started = time.monotonic()
-        response = self._post_with_retries(url, body)
+        # A busy model (5xx) gets one quick retry, then the fallback model takes over.
+        models = [self.model, *([self.fallback] if self.fallback else [])]
+        for n, model in enumerate(models):
+            more = n < len(models) - 1
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            response = self._post_with_retries(url, body, busy_tries=1 if more else None)
+            if not (more and response.status_code in RETRY_STATUSES):
+                break
         if response.status_code == 429:
             raise LLMError(
                 f"Gemini HTTP 429: rate limit or daily quota used up: {_http_cause(response)}"
@@ -303,7 +309,7 @@ class GeminiLLM:
             data = response.json()
         except ValueError as exc:
             raise LLMError("Gemini reply was not JSON") from exc
-        report_usage(_usage(data, self.model, int((time.monotonic() - started) * 1000)))
+        report_usage(_usage(data, model, int((time.monotonic() - started) * 1000)))
         return _reply_text(data)
 
     @classmethod
@@ -311,10 +317,14 @@ class GeminiLLM:
         return cls(
             llm.model, timeout_s=llm.timeout_s, temperature=temperature,
             max_output_tokens=dict(llm.max_output_tokens), thinking_budget=llm.thinking_budget,
+            fallback=llm.fallback_model or None,
         )  # fmt: skip
 
-    def _post_with_retries(self, url: str, body: dict[str, Any]) -> httpx.Response:
-        """Retries 429, 5xx and timeouts a bounded number of times."""
+    def _post_with_retries(
+        self, url: str, body: dict[str, Any], busy_tries: int | None = None
+    ) -> httpx.Response:
+        """Retries 429, 5xx and timeouts a bounded number of times; `busy_tries` caps 5xx."""
+        busy = 0
         for attempt in range(MAX_RATE_RETRIES + 1):
             last = attempt == MAX_RATE_RETRIES
             try:
@@ -331,6 +341,9 @@ class GeminiLLM:
                     return response  # a daily quota will not clear within this run
                 self._sleep(delay)
             elif response.status_code in RETRY_STATUSES and not last:
+                if busy_tries is not None and busy >= busy_tries:
+                    return response
+                busy += 1
                 self._sleep(BACKOFF_S * 2**attempt)
             else:
                 return response

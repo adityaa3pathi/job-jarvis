@@ -76,3 +76,20 @@ def test_prep_list_covers_adjacent_gaps_and_implicit_skills() -> None:
     )
     prep = match_profile(profile, CARDS).prep
     assert prep == ["LangGraph", "Terraform", "Tool calling"]
+
+
+def test_a_combined_need_is_proven_by_any_skill_inside_it() -> None:
+    cards = [
+        make_card("claim", "Built a FastAPI service on pgvector with CI on GitHub.", "owner", True)
+    ]
+    names = ["Async Programming & FastAPI", "Embeddings & Vector Databases (pgvector)",
+             "CI/CD Pipelines", "Chunking Strategies"]  # fmt: skip
+    result = by_name(match_profile(JDProfile(skills=[need(n) for n in names]), cards))
+    assert [result[n].status for n in names] == ["proven", "proven", "proven", "gap"]
+
+
+def test_other_word_forms_count_but_tiny_parts_do_not() -> None:
+    cards = [make_card("claim", "Answers are grounded; an uptime monitor pings it.", "owner", True)]
+    names = ["Hallucination Handling & Grounding", "Logging & Monitoring", "A/B Testing"]
+    result = by_name(match_profile(JDProfile(skills=[need(n) for n in names]), cards))
+    assert [result[n].status for n in names] == ["proven", "proven", "gap"]
