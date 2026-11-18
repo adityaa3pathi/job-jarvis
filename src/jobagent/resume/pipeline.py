@@ -6,13 +6,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from jobagent.llm import LLM, LLMCache, model_id, short_cause
-from jobagent.resume.evidence import EvidenceCard
+from jobagent.resume.evidence import EvidenceCard, cards_from_resume, merge_cards
 from jobagent.resume.jd import JDProfile, SkillNeed, fit_check
 from jobagent.resume.jd_agent import analyze_jd
-from jobagent.resume.latex import parse
+from jobagent.resume.latex import parse, plain_lines
 from jobagent.resume.match import Coverage, match_profile
 from jobagent.resume.ontology import mention
-from jobagent.resume.rewrite import MAX_SKILLS, TailorResult, tailor_resume
+from jobagent.resume.rewrite import MAX_SKILLS, TailorResult, shown_name, tailor_resume
 
 
 @dataclass
@@ -65,6 +65,51 @@ def _causes(errors: list[str]) -> str:
     return "; ".join(f"{n}x {cause}" for cause, n in Counter(errors).most_common(3))
 
 
+def _job_skills(out: Outcome) -> list[str]:
+    """Every skill the posting names, by importance and by what the owner can show."""
+    resume = "\n".join(plain_lines(out.tailored.latex))
+    groups: dict[tuple[str, str], list[str]] = {}
+    for item in out.coverage.items:
+        if item.need.implicit:
+            continue
+        name = shown_name(item.need)
+        if item.status == "proven":
+            where = (
+                "on the resume"
+                if mention(item.need.name, resume) or mention(name, resume)
+                else "backed, but not on the page"
+            )
+        elif item.status == "adjacent":
+            name = f"{name} (you have {', '.join(item.related)})"
+            where = "related skill only"
+        else:
+            where = "not in your profile"
+        groups.setdefault((item.need.importance, where), []).append(name)
+    musts = sum(
+        1 for i in out.coverage.items if not i.need.implicit and i.need.importance == "must"
+    )
+    total = sum(1 for i in out.coverage.items if not i.need.implicit)
+    lines = ["", f"## Skills the job names: {total} ({musts} must-have)", ""]
+    for importance, label in (("must", "Must-have"), ("nice", "Nice-to-have")):
+        for where in (
+            "on the resume",
+            "backed, but not on the page",
+            "related skill only",
+            "not in your profile",
+        ):
+            if names := groups.get((importance, where)):
+                lines.append(f"- {label}, {where} ({len(names)}): {', '.join(names)}")
+    missing = groups.get(("must", "not in your profile"))
+    if missing:
+        lines += [
+            "",
+            "Must-haves missing from your profile are not put on the resume. If you do have "
+            "one, tell the coach chat what you did with it; once you confirm that fact, the "
+            "next build lists it.",
+        ]
+    return lines
+
+
 def build_report(out: Outcome, years_have: float | None) -> str:
     lines = [
         f"# Tailoring report: {out.profile.role_title or 'job'}",
@@ -89,20 +134,27 @@ def build_report(out: Outcome, years_have: float | None) -> str:
         lines += [f"- Your instructions: {' '.join(out.instructions.split())}"]
     notes = fit_check(out.profile, years_have) if years_have is not None else []
     lines += [f"- Fit: {n}" for n in notes]
+    lines += _job_skills(out)
     added = out.tailored.added_gap_skills
-    lines += ["", "## Added to your Skills but NOT backed by your work", ""]
     if added:
+        lines += ["", "## Added to your Skills but NOT backed by your work", ""]
         lines += [f"- {s}" for s in added]
         lines += ["", "If an interviewer asks about these, you must be ready. Prepare first."]
+    lines += ["", "## Summary", ""]
+    if out.tailored.summary:
+        lines += [
+            f"- Before: {out.tailored.summary.before}",
+            f"  After: {out.tailored.summary.after}",
+        ]
     else:
-        lines += ["- None."]
+        lines += [f"- Unchanged: {out.tailored.summary_note or 'no change'}."]
     if out.tailored.dropped_skills:
         lines += ["", "## Removed from your Skills", ""]
         lines += [f"- {s}" for s in out.tailored.dropped_skills]
         lines += [
             "",
-            f"Skills keeps at most {MAX_SKILLS}, best for this job first, and only skills your "
-            "evidence backs. Add any back by hand if you need them.",
+            f"Skills keeps at most {MAX_SKILLS}: every job skill your evidence backs first, then "
+            "your own. Add any back by hand if you need them.",
         ]
     status = {i.need.name: i.status for i in out.coverage.items}
     prep = out.coverage.prep
@@ -141,6 +193,7 @@ def run_tailor(
 ) -> Outcome:
     """Pass `profile` when the JD was already analysed, to skip a second model round."""
     resume = parse(latex_text)
+    cards = merge_cards([*cards, *cards_from_resume(latex_text)])  # the resume is evidence too
     counted = _CountingLLM(llm)
     profile = profile or analyze_jd(jd_text, counted, cache)
     coverage = match_profile(profile, cards)

@@ -182,3 +182,75 @@ def from_plain(text: str) -> str:
     """Inverse of to_plain: escape the text, then turn **bold** and arrows back into LaTeX."""
     out = escape_latex(text).replace("→", _ARROW)
     return re.sub(r"\*\*([^*]+)\*\*", r"\\textbf{\1}", out)
+
+
+_LINE_BREAKS = re.compile(
+    r"\\\\|\\item\b|\\(?:resumeItem|resumeSubheading|resumeProjectHeading|section)\b"
+)
+
+
+def plain_lines(tex: str) -> list[str]:
+    """The resume's words without LaTeX: one line per bullet, heading or skills row."""
+    begin, end = tex.find(BEGIN), tex.rfind(END)
+    body = tex[begin + len(BEGIN) : end] if 0 <= begin < end else tex
+    body = re.sub(r"(?<!\\)%[^\n]*", "", body)
+    body = re.sub(r"\\href\{[^{}]*\}", "", body).replace(_ARROW, "→")
+    body = _LINE_BREAKS.sub("\n", body)
+    for tex_text, plain in _UNESCAPE.items():
+        body = body.replace(tex_text, plain)
+    body = re.sub(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?", " ", body)
+    body = re.sub(r"[{}$|]", " ", body)
+    return [" ".join(line.split()) for line in body.splitlines() if len(line.split()) >= 2]
+
+
+def listed_skills(section_tex: str) -> list[str]:
+    """Skill names in a 'Label: a, b (c, d)' style Skills section."""
+    names: list[str] = []
+    for line in re.findall(r"\\textbf\{[^}]*:\}([^\n]*)", section_tex):
+        line = line.replace("\\\\", "").strip()
+        plain = to_plain(line) or re.sub(r"\\[a-zA-Z]+|[{}]", "", line)
+        depth, part = 0, ""
+        for ch in plain + ",":
+            depth += (ch == "(") - (ch == ")")
+            if ch == "," and depth == 0:
+                names.append(part.strip())
+                part = ""
+            else:
+                part += ch
+    return [n for n in names if n]
+
+
+def skills_section(resume: Resume) -> Section | None:
+    return next((s for s in resume.sections if re.search("skill", s.title, re.I)), None)
+
+
+_SUMMARY_TITLE = re.compile(r"summary|profile|about|objective", re.I)
+_WRAPPER = re.compile(r"\\(?:small|footnotesize|normalsize|textit|emph)\s*(?=\{)")
+MIN_SUMMARY_CHARS = 80
+
+
+def summary_span(resume: Resume) -> tuple[Raw, int, int] | None:
+    """The professional summary as (node, start, end) of its text inside that node: a
+    Summary section's paragraph, or a wrapped paragraph between the header and the first
+    section. None when there is none or it holds LaTeX we would not round-trip."""
+    places: list[tuple[Raw, int]] = []
+    for sec in resume.sections:
+        if _SUMMARY_TITLE.search(sec.title):
+            places += [(n, 0) for n in sec.nodes if isinstance(n, Raw)]
+    for node in resume.head:
+        if isinstance(node, Raw) and (at := node.text.rfind(r"\end{center}")) >= 0:
+            places.append((node, at))
+    for node, start in places:
+        for wrap in _WRAPPER.finditer(node.text, start):
+            try:
+                _, inner, after = _read_arg(node.text, wrap.end())
+            except LatexError:
+                continue
+            plain = to_plain(inner)
+            if plain and len(plain) >= MIN_SUMMARY_CHARS:
+                return node, after - 1 - len(inner), after - 1
+        bare = node.text[start:].strip() if start == 0 else ""
+        if bare and (plain := to_plain(bare)) and len(plain) >= MIN_SUMMARY_CHARS:
+            at = node.text.index(bare)
+            return node, at, at + len(bare)
+    return None

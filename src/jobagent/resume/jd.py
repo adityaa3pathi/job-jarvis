@@ -8,10 +8,10 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field, field_validator
 
-from jobagent.resume.ontology import canonical, mention
+from jobagent.resume.ontology import canonical, known, mention, positions, says
 
 LEVELS = ("intern", "junior", "mid", "senior", "lead")
-MAX_SKILLS = 25
+MAX_SKILLS = 60  # a long posting names 40+; the old cap of 25 lost must-haves
 IMPLICIT_WEIGHT = 0.3
 _YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:-\s*\d{1,2}\s*)?(?:years?|yrs?)\b", re.I)
 _TITLE_LEVELS = (
@@ -108,10 +108,95 @@ def verified_years(claimed: int | None, text: str) -> int | None:
 
 def weight(name: str, importance: str, text: str, title: str) -> float:
     base = 1.0 if importance == "must" else 0.5
-    forms = re.findall(re.escape(mention(name, text) or name), text, re.I)
-    bonus = min(0.1 * max(len(forms) - 1, 0), 0.3)
+    said = len(positions(name, text))  # whole words: "SQL" inside "PostgreSQL" is not SQL
+    bonus = min(0.1 * max(said - 1, 0), 0.3)
     in_title = 0.3 if mention(name, title) else 0.0
     return round(min(base + bonus + in_title, 2.0), 2)
+
+
+_NICE_HEAD = re.compile(
+    r"^(?:(?:good|nice)[ -]to[ -]have|preferred|bonus|(?:a |big )?plus|desirable|optional"
+    r"|added advantage|additional|extra credit|it would be (?:great|nice))", re.I,
+)  # fmt: skip
+_MUST_HEAD = re.compile(
+    r"^(?:required|requirements|must[ -]haves?|mandatory|minimum|basic|key skills|skills"
+    r"|required skills|technical skills|qualifications|what you(?:'ll| will)? need"
+    r"|what we(?:'re| are) looking for|who you are|you have|you are a great fit|ideal candidate"
+    r"|eligibility)", re.I,
+)  # fmt: skip
+_OTHER_HEAD = re.compile(
+    r"^(?:key )?(?:responsibilities|duties)|^what you(?:'ll| will) do|^about|^(?:the )?role"
+    r"|^(?:a )?day in the life|^benefits|^perks|^we offer|^why |^who we are|^job description"
+    r"|^description|^overview|^location|^experience|^employment|^work mode|^salary|^compensation",
+    re.I,
+)  # fmt: skip
+_NICE_CUE = re.compile(
+    r"\b(?:(?:nice|good)[ -]to[ -]have|preferred|preferably|plus|bonus|advantage(?:ous)?"
+    r"|desirable|optional)\b", re.I,
+)  # fmt: skip
+_MUST_CUE = re.compile(r"\b(?:required|must|mandatory|essential)\b", re.I)
+_CLAUSE = re.compile(r"[^.;!?\n]+(?:[.;!?](?=\s|$))?")
+_CHOICES = re.compile(r"\s*(?:/|,|\bor\b)\s*", re.I)
+
+
+def _heading(line: str) -> str | None:
+    """'must', 'nice' or 'other' when the line opens a part of the posting, else None."""
+    bare = re.sub(r"^[\s#*•·\-–>]+|[*#]+$", "", line).strip()
+    head = bare.split(":", 1)[0] if ":" in bare[:50] else bare
+    if not head or len(head) > 60:
+        return None
+    for label, pattern in (("nice", _NICE_HEAD), ("must", _MUST_HEAD), ("other", _OTHER_HEAD)):
+        if pattern.match(head):
+            return label
+    return None
+
+
+def _parts_of(text: str) -> list[tuple[int, int, str | None]]:
+    """(start, end, label) per line: the label of the part of the posting it sits in."""
+    out, label, pos = [], None, 0
+    for line in text.splitlines(keepends=True):
+        found = _heading(line)
+        if found is not None:
+            label = None if found == "other" else found
+        out.append((pos, pos + len(line), label))
+        pos += len(line)
+    return out
+
+
+def importance_in(text: str, at: list[int], claimed: str) -> str:
+    """Must or nice as the posting itself puts it: a "required" or "a plus" in the same
+    sentence first, then the heading the skill sits under, then what the model said."""
+    labels = []
+    for start, end, label in _parts_of(text):
+        line = text[start:end]
+        for pos in (p - start for p in at if start <= p < end):
+            clause = next(
+                (m.group(0) for m in _CLAUSE.finditer(line) if m.start() <= pos < m.end()), line
+            )
+            nice, must = bool(_NICE_CUE.search(clause)), bool(_MUST_CUE.search(clause))
+            labels.append("nice" if nice and not must else "must" if must and not nice else label)
+    if "must" in labels:
+        return "must"
+    return "nice" if "nice" in labels else claimed
+
+
+def locate(name: str, text: str) -> str | None:
+    """How the posting spells this skill; the model's spelling when the posting says it in
+    another form ("Fine-tuning" for "fine-tune"); None when the posting never says it."""
+    if found := mention(name, text):
+        return found
+    return name.strip() if says(name, text) else None
+
+
+def _named(name: str, text: str) -> list[str]:
+    """Each choice in a list like "PyTorch or TensorFlow" or "AWS/GCP" when the posting names
+    every one; a known compound such as CI/CD, or anything else, stays whole."""
+    if known(name) or not _CHOICES.search(name):
+        return [name]
+    parts = [p.strip() for p in _CHOICES.split(name) if len(p.strip()) >= 2]
+    if len(parts) > 1 and all(mention(p, text) for p in parts):
+        return parts
+    return [name] if locate(name, text) else [p for p in parts if locate(p, text)]
 
 
 def vote(passes: list[Pass], text: str, title: str) -> list[SkillNeed]:
@@ -119,18 +204,22 @@ def vote(passes: list[Pass], text: str, title: str) -> list[SkillNeed]:
     seen: Counter[str] = Counter()
     musts: Counter[str] = Counter()
     for one in passes:
-        names = {canonical(s.name): s.importance for s in one.skills}
+        names = {canonical(part): s.importance for s in one.skills for part in _named(s.name, text)}
         for name, importance in names.items():
             seen[name] += 1
             musts[name] += importance == "must"
     needs = []
     for name, votes in seen.items():
-        verbatim = mention(name, text)
+        verbatim = locate(name, text)
         if votes * 2 <= len(passes) or verbatim is None:
             continue
-        importance = "must" if musts[name] * 2 > votes else "nice"
-        needs.append(SkillNeed(name, verbatim, importance, weight(name, importance, text, title)))
-    return sorted(needs, key=lambda n: (-n.weight, n.name))[:MAX_SKILLS]
+        at = positions(name, text)
+        claimed = "must" if musts[name] * 2 > votes else "nice"
+        importance = importance_in(text, at, claimed)
+        need = SkillNeed(name, verbatim, importance, weight(name, importance, text, title))
+        needs.append((need, at[0] if at else len(text)))
+    needs.sort(key=lambda n: (-n[0].weight, n[1]))
+    return [need for need, _ in needs][:MAX_SKILLS]
 
 
 def implicit_from(passes: list[Pass], text: str) -> list[SkillNeed]:

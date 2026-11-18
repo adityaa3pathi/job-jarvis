@@ -20,20 +20,25 @@ from jobagent.resume.jd import (
 from jobagent.resume.ontology import all_terms, mention
 from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
-PROMPT_VERSION = "jd-2"
+PROMPT_VERSION = "jd-3"
 STEP = "jd_analysis"
 MAX_RESPONSIBILITIES = 8
 
 SYSTEM = (
-    "You read one job posting and list what it asks for. Copy skills as the posting spells "
-    "them. Per skill give importance: 'must' only when the posting calls it required or core "
-    "to the role, else 'nice'. implicit_skills are things the role clearly needs but the "
-    "posting never names."
+    "You read one job posting and list what it asks for. List every skill it names anywhere: "
+    "languages, frameworks, libraries, tools, platforms, databases, cloud services, methods "
+    "and technical concepts, from the requirements, the responsibilities and the good-to-have "
+    "parts alike. Copy each skill as the posting spells it, one per entry: split 'PyTorch or "
+    "TensorFlow' and 'AWS/GCP' into separate skills. Leave out soft skills, degrees and years. "
+    "Per skill give importance: 'must' when the posting calls it required or core, or lists "
+    "it under requirements; 'nice' when it is preferred, a plus or good to have. "
+    "implicit_skills are things the role clearly needs but the posting never names."
 )
 EXTRACT = (
-    'List the requirements, at most 8 responsibilities. Reply as {"role_title": str, '
-    '"level": str, "years_min": int|null, "domain": str, "responsibilities": [str], '
-    '"skills": [{"name": str, "importance": str}], "implicit_skills": [str]}.'
+    "List every skill; do not shorten the list. At most 8 responsibilities. Reply as "
+    '{"role_title": str, "level": str, "years_min": int|null, "domain": str, '
+    '"responsibilities": [str], "skills": [{"name": str, "importance": str}], '
+    '"implicit_skills": [str]}.'
 )
 SEEN = (
     "Known terms seen in the text (some may be plain words, like 'rest'): {terms}. Include "

@@ -72,6 +72,8 @@ def bold_first_word(text: str) -> str:
 
 def test_all_bullets_are_rewritten_in_one_call_and_checked_one_by_one() -> None:
     def respond(system: str, user: str) -> Any:
+        if "Rewrite the summary" in system:
+            return {"text": ""}
         sent = bullets_in(user)
         bad = min(sent, key=lambda b: len(b[1]))[0]
         return {
@@ -83,8 +85,8 @@ def test_all_bullets_are_rewritten_in_one_call_and_checked_one_by_one() -> None:
 
     llm = StubLLM(respond)
     result = tailor_resume(parse(SAMPLE), CARDS, PROFILE, match_profile(PROFILE, CARDS), llm)
-    assert len(llm.calls) == 1 and llm.steps == ["rewrite_bullets"]
-    sent = bullets_in(llm.calls[0][1])
+    assert llm.steps == ["rewrite_summary", "rewrite_bullets"]  # one call for every bullet
+    sent = bullets_in(llm.calls[1][1])
     assert len(sent) >= 10
     reasons = [r for _, r in result.rejected]
     assert reasons.count("new number") == 1  # the bad item is refused alone
@@ -176,18 +178,23 @@ def journey(settings: Settings, summary: str) -> StubLLM:
     return llm
 
 
-def test_web_journey_uses_eight_calls(settings: Settings) -> None:
+def test_web_journey_uses_nine_calls(settings: Settings) -> None:
     llm = journey(settings, SUMMARY)
-    assert llm.steps == ["jd_extract", "coach_report", *["coach_chat"] * 5, "rewrite_bullets"]
+    # The build reads the posting from the cache: no second jd_extract.
+    assert llm.steps == [
+        "jd_extract", "coach_report", *["coach_chat"] * 5, "rewrite_summary", "rewrite_bullets"
+    ]  # fmt: skip
 
 
 def test_long_summary_journey_condenses_once_and_never_sends_it_raw(settings: Settings) -> None:
     llm = journey(settings, LONG_SUMMARY)
-    assert llm.steps.count("profile_digest") == 1 and len(llm.calls) == 9
+    assert llm.steps.count("profile_digest") == 1 and len(llm.calls) == 10
     coach_users = [u for (_, u), step in zip(llm.calls, llm.steps, strict=True) if "coach" in step]
     assert all("Role 119" not in u and "Langfuse tracing" in u for u in coach_users)
 
 
-@pytest.mark.parametrize("step", ["jd_extract", "coach_report", "coach_chat", "rewrite_bullets"])
+@pytest.mark.parametrize(
+    "step", ["jd_extract", "coach_report", "coach_chat", "rewrite_summary", "rewrite_bullets"]
+)
 def test_every_flow_step_has_an_output_cap(step: str) -> None:
     assert Settings().llm.max_output_tokens[step] > 0

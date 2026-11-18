@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from jobagent.resume.evidence import EvidenceCard
 from jobagent.resume.jd import JDProfile, SkillNeed
-from jobagent.resume.ontology import all_terms, canonical, mention, related
+from jobagent.resume.ontology import all_terms, canonical, implied_by, mention, related, says
 
 ADJACENT_CREDIT = 0.5
 _SPLIT = re.compile(r"\s*(?:&|/|,|\+|\(|\)|\band\b)\s*", re.I)
@@ -38,25 +38,16 @@ def parts(name: str) -> list[str]:
     return list(dict.fromkeys([name.strip(), *known, *found]))
 
 
-def _stem(word: str) -> str:
-    return re.sub(r"(ations?|ions?|ing|ers?|ed|es|s)$", "", word.lower())
-
-
-def _says(name: str, text: str) -> bool:
-    """Named as written, or every word of it in some form: "Monitoring" in "uptime monitor"."""
-    if mention(name, text):
-        return True
-    want = {_stem(w) for w in re.findall(r"[A-Za-z]{4,}", name)}
-    have = {_stem(w) for w in re.findall(r"[A-Za-z]{3,}", text)}
-    return bool(want) and want <= have
-
-
 def _judge(need: SkillNeed, cards: list[EvidenceCard]) -> MatchItem:
     names = [canonical(p) for p in parts(need.name)]
     exact = [c.id for c in cards if c.kind == "skill" and canonical(c.text) in names]
-    said = [c.id for c in cards if c.kind != "skill" and any(_says(n, c.text) for n in names)]
+    said = [c.id for c in cards if c.kind != "skill" and any(says(n, c.text) for n in names)]
     if exact or said:
         return MatchItem(need, "proven", list(dict.fromkeys(exact + said)))
+    specific = {canonical(s) for n in names for s in implied_by(n)}
+    shown_by = [c for c in cards if c.kind == "skill" and canonical(c.text) in specific]
+    if shown_by:  # "Vector Databases" shown by pgvector work
+        return MatchItem(need, "proven", [c.id for c in shown_by], [c.text for c in shown_by])
     near = [c for c in cards if c.kind == "skill" and any(related(n, c.text) for n in names)]
     if near:
         return MatchItem(need, "adjacent", [c.id for c in near], [c.text for c in near])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from jobagent.llm import FailingLLM, StubLLM
@@ -128,3 +129,55 @@ def test_responsibilities_never_carry_facts_about_the_candidate() -> None:
               "You have 5 years of Zig"]  # fmt: skip
     profile = analyze_jd(JD, router({**GOOD, "responsibilities": duties}))
     assert profile.responsibilities == ["Build LLM agents"]
+
+
+def test_job_headings_and_cues_set_must_or_nice() -> None:
+    posting = (
+        "Backend Engineer\n\nRequirements:\n- Docker and Redis\n- Kafka is a plus\n\n"
+        "Good to Have\n- Terraform\n"
+    )
+    reply = {
+        **GOOD,
+        "skills": [
+            {"name": "Docker", "importance": "nice"},
+            {"name": "Redis", "importance": "must"},
+            {"name": "Kafka", "importance": "must"},
+            {"name": "Terraform", "importance": "must"},
+        ],
+    }
+    profile = analyze_jd(posting, router(extract=reply))
+    by = {s.name: s.importance for s in profile.skills}
+    assert by == {"Docker": "must", "Redis": "must", "Kafka": "nice", "Terraform": "nice"}
+
+
+def test_choices_are_split_and_other_word_forms_are_kept() -> None:
+    posting = (
+        "AI Engineer\nUse PyTorch or TensorFlow. Fine-tune models with the OpenAI and Gemini APIs."
+    )
+    reply = {
+        **GOOD,
+        "skills": [
+            {"name": "PyTorch or TensorFlow", "importance": "must"},
+            {"name": "Fine-tuning", "importance": "must"},
+            {"name": "OpenAI API", "importance": "must"},
+            {"name": "Haskell", "importance": "must"},
+        ],
+    }
+    names = [s.name for s in analyze_jd(posting, router(extract=reply)).skills]
+    assert set(names) == {"PyTorch", "TensorFlow", "Fine-tuning", "OpenAI API"}
+
+
+def test_a_long_posting_keeps_every_skill_it_names() -> None:
+    from pathlib import Path
+
+    here = Path(__file__).parent / "fixtures" / "resume"
+    reply = json.loads((here / "ai_engineer_extract.json").read_text())
+    profile = analyze_jd((here / "ai_engineer_jd.txt").read_text(), router(extract=reply))
+    names = {s.name for s in profile.skills}
+    assert len(names) >= 45  # the old cap kept 25 and lost must-haves like Vector Databases
+    assert {"Vector Databases", "Fine-tuning", "OpenAI API", "PostgreSQL", "Redis"} <= names
+    must = set(profile.must_have)
+    assert {"Python", "PyTorch", "TensorFlow", "Machine Learning", "Git"} <= must  # Required
+    assert {"Kafka", "Spark", "MLflow", "Computer Vision"} <= set(
+        profile.nice_to_have
+    )  # Good to have

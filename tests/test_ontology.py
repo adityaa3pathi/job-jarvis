@@ -38,3 +38,25 @@ def test_related_skills_share_a_family() -> None:
     assert related("pgvector", "FAISS")
     assert not related("LangGraph", "Kubernetes")
     assert not related("Python", "Python")  # same skill is a match, not "related"
+
+
+@pytest.mark.parametrize(
+    ("raw", "name"),
+    [
+        ("Large Language Models (LLMs)", "LLM"),
+        ("RAG (hybrid retrieval)", "RAG"),
+        ("Amazon Web Services", "AWS"),
+        ("Embeddings & Vector Databases (pgvector)", "Embeddings & Vector Databases (pgvector)"),
+    ],
+)
+def test_canonical_reads_either_half_of_a_bracketed_name(raw: str, name: str) -> None:
+    assert canonical(raw) == name
+
+
+def test_everyday_words_are_not_skills() -> None:
+    assert mention("Node.js", "the planner node calls tools") is None
+    assert mention("Node.js", "Node and React") == "Node"
+    assert mention("REST", "idle the rest of the time") is None
+    assert mention("REST", "RESTful APIs") == "RESTful"
+    assert mention("JavaScript", "a Node.js service") is None
+    assert mention("Go", "Hyderabad's go-to platform") is None

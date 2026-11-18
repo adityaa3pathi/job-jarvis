@@ -1,6 +1,9 @@
 # JD extraction golden set (U16). Built by evals/make_jd_golden.py from a DB copy.
 # OWNER: `expected` came from the code ontology scan, not a person. Check each list:
 # delete plain-word hits the job does not ask for, add skills the scan missed.
+# 2026-11-19: removed old-scan false hits (Go from "go-to", REST from "the rest of",
+# JavaScript from "Node.js") and added skills each text names (Amazon Web Services, Spring
+# Boot, Hadoop, NoSQL, LlamaIndex, RESTful).
 cases:
 - id: lever-22425
   source: lever
@@ -18,6 +21,9 @@ cases:
   - Spark
   - MySQL
   - Microservices
+  - AWS
+  - Hadoop
+  - Spring Boot
   text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
     \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
     \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
@@ -64,6 +70,7 @@ cases:
   - Azure
   - REST
   - Node.js
+  - LlamaIndex
   text: "Role \n: Senior Full Stack Engineer (Frontend Focus)\nLocation \n: Hyderabad/Bangalore/Gurgaon/Mumbai\n\
     Role Summary\nWe're looking for a **Senior Full Stack Engineer (Frontend Focus)** to build modern,\
     \ AI-powered enterprise applications. You'll primarily focus on creating scalable, high-performance\
@@ -136,6 +143,7 @@ cases:
   - AWS
   - Google Cloud
   - SQL
+  - NoSQL
   text: '**About the job**
 
     Role: Software Engineer - Full stack
@@ -242,9 +250,7 @@ cases:
   company: Craft My Plate
   title: Founding Engineer Lead
   expected:
-  - Go
   - AWS
-  - REST
   text: 'Read This Before Anything Else
 
     We have 6 developers who can ship. What we don''t have is someone who turns that into a real engineering
@@ -333,6 +339,8 @@ cases:
   - CI/CD
   - Terraform
   - SQL
+  - NoSQL
+  - Spring Boot
   text: "Who We Are\nAddepar is a global data and AI platform empowering investment professionals to turn\
     \ complex financial information into actionable intelligence. Addepar unifies portfolio, market and\
     \ client data in a total portfolio view and delivers AI-powered insights within investment and client\
@@ -378,6 +386,8 @@ cases:
   - Linux
   - Agile
   - Microservices
+  - NoSQL
+  - REST
   text: "Role: Full Stack Developer - Mid-Level \nLocation: Bengaluru (MG Road), Karnataka\nNote: We are\
     \ looking for candidates who are currently based in Bengaluru\nWork Model\n - Hybrid (3 days in office,\
     \ 2 days remote)\n - Monday to Friday\n - Indian holidays observed\nWork Hours: 12:30 PM – 9:30 PM\
@@ -461,6 +471,7 @@ cases:
   - CI/CD
   - REST
   - Node.js
+  - NoSQL
   text: "Ebullient Gaming India\n is India’s biggest network of gaming generating 250 Million+ Views per\
     \ month for gaming content. It is powered by a Talent management agency, an Online Publication, an\
     \ Event arm and a creative agency that works with the best brands and gaming talent of the country.\n\
@@ -542,6 +553,7 @@ cases:
   - Git
   - Agile
   - Microservices
+  - Spring Boot
   text: "Job Summary\nWe are looking for an experienced \nJava Full Stack Developer\n with strong hands-on\
     \ experience in \nJava, Spring Boot, and Angular\n. The candidate will be responsible for developing\
     \ scalable applications, building responsive user interfaces, developing REST APIs, and collaborating\
@@ -802,6 +814,7 @@ cases:
   - AWS
   - SQL
   - Git
+  - REST
   text: "Job Overview :\nWe are seeking a passionate and experienced Full Stack Developer with a strong\
     \ background in Java and modern front-end technologies. The ideal candidate should possess a keen\
     \ analytical mindset, be comfortable working in a cross-functional, fast-paced environment, and demonstrate\
@@ -831,7 +844,6 @@ cases:
   - TypeScript
   - PostgreSQL
   - Express.js
-  - JavaScript
   - Prisma
   - Google Cloud
   - GraphQL

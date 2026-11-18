@@ -20,8 +20,9 @@ class ConfigError(Exception):
 
 
 MAX_OUTPUT_TOKENS = {
-    "jd_extract": 1200, "jd_repair": 1200, "coach_report": 800, "coach_chat": 400,
-    "rewrite_bullets": 3000, "profile_digest": 1200, "outreach_facts": 600, "interview_prep": 4000,
+    "jd_extract": 3000, "jd_repair": 3000, "coach_report": 800, "coach_chat": 400,
+    "rewrite_bullets": 3000, "rewrite_summary": 700, "profile_digest": 1200,
+    "outreach_facts": 600, "interview_prep": 4000,
 }  # fmt: skip
 
 
