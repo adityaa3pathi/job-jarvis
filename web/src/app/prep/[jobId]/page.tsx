@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { invalidate, istDate, runTask, TaskAborted, useCachedApi, type PrepQuestion, type PrepView } from "@/lib/api";
+import { Suspense, useState } from "react";
+import { invalidate, istDate, useCachedApi, useTask, type PrepQuestion, type PrepView } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { Button, ErrorNote, Panel, Refreshing, StateNote, Tag } from "@/components/ui";
 
@@ -44,22 +44,15 @@ function JobPrep() {
   const data = read.key === path ? read.data : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const alive = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    alive.current = ctl;
-    return () => ctl.abort();
-  }, []);
+  const runTask = useTask();
 
   async function make() {
     setError(null);
     setBusy(true);
     try {
-      await runTask(path, undefined, alive.current?.signal);
+      await runTask(path);
       await invalidate(path);
     } catch (e) {
-      if (e instanceof TaskAborted) return;
       setError((e as Error).message);
     } finally {
       setBusy(false);

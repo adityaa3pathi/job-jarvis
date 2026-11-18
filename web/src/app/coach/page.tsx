@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { ApiError, invalidate, istDate, runTask, TaskAborted, useCachedApi, type SessionRow } from "@/lib/api";
+import { Suspense, useState } from "react";
+import { ApiError, invalidate, istDate, useCachedApi, useTask, type SessionRow } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { Button, ErrorNote, FIELD, PageHead, Panel, Refreshing } from "@/components/ui";
 
@@ -18,13 +18,7 @@ function NewCoach() {
   const [askTrust, setAskTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const alive = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    alive.current = ctl;
-    return () => ctl.abort();
-  }, []);
+  const runTask = useTask();
 
   async function start(trustHost = false) {
     setBusy(true);
@@ -34,14 +28,19 @@ function NewCoach() {
         tab === "link"
           ? { url, title, company, trust_host: trustHost }
           : { jd_text: jdText, title, company };
-      const signal = alive.current?.signal;
-      const { session_id } = await runTask<{ session_id: number }>("/coach", body, signal);
+      const { session_id } = await runTask<{ session_id: number }>("/coach", body);
       invalidate("/coach");
-      if (!signal?.aborted) router.push(`/coach/${session_id}`);
+      // Next keeps this page's state after we leave it, so clear the form for the next check.
+      setUrl("");
+      setJdText("");
+      setTitle("");
+      setCompany("");
+      setAskTrust(false);
+      router.push(`/coach/${session_id}`);
     } catch (e) {
-      if (e instanceof TaskAborted) return;
       if (e instanceof ApiError && e.status === 409) setAskTrust(true);
       setError((e as Error).message);
+    } finally {
       setBusy(false);
     }
   }

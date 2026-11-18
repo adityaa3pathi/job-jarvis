@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { api, invalidate, post, runTask, TaskAborted, useCachedApi, type Candidate, type JobOutreach } from "@/lib/api";
+import { Suspense, useState } from "react";
+import { api, invalidate, post, useCachedApi, useTask, type Candidate, type JobOutreach } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { ThreadCard } from "@/components/outreach/ThreadCard";
 import { Button, ErrorNote, FIELD, Panel, Refreshing, StateNote, Tag, buttonClass } from "@/components/ui";
@@ -31,13 +31,7 @@ function JobOutreach() {
   const [manual, setManual] = useState({ name: "", title: "", email: "", linkedin_url: "" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const alive = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    alive.current = ctl;
-    return () => ctl.abort();
-  }, []);
+  const runTask = useTask();
 
   const site = domain ?? data?.domain_hint ?? "";
   const refresh = () => invalidate(path);
@@ -48,7 +42,7 @@ function JobOutreach() {
     try {
       await work();
     } catch (e) {
-      if (!(e instanceof TaskAborted)) setError((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -56,7 +50,7 @@ function JobOutreach() {
 
   const find = () =>
     run("find", async () => {
-      const got = await runTask<Found>(`/jobs/${jobId}/contacts/find`, { domain: site, use_hunter: useHunter, use_apollo: useApollo }, alive.current?.signal);
+      const got = await runTask<Found>(`/jobs/${jobId}/contacts/find`, { domain: site, use_hunter: useHunter, use_apollo: useApollo });
       setFound(got);
       if (!domain && got.domain) setDomain(got.domain);
     });
@@ -70,7 +64,7 @@ function JobOutreach() {
 
   const write = (contactId: number, channel: "email" | "linkedin") =>
     run(`write-${contactId}-${channel}`, async () => {
-      await runTask(`/contacts/${contactId}/outreach`, { job_id: Number(jobId), channel, domain: site }, alive.current?.signal);
+      await runTask(`/contacts/${contactId}/outreach`, { job_id: Number(jobId), channel, domain: site });
       await refresh();
       invalidate("/outreach");
     });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { invalidate, istDate, post, runTask, TaskAborted, useCachedApi, type Session } from "@/lib/api";
+import { invalidate, istDate, post, useCachedApi, useTask, type Session } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { PdfLink } from "@/components/PdfLink";
 import { ReportView } from "@/components/ReportView";
@@ -31,13 +31,7 @@ function CoachSession() {
   const [lastReport, setLastReport] = useState<string | null>(null);
   const [factError, setFactError] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
-  const alive = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    alive.current = ctl;
-    return () => ctl.abort();
-  }, []);
+  const runTask = useTask();
 
   // Scroll the chat box only, so a new reply never jumps the whole page.
   useEffect(() => {
@@ -49,11 +43,10 @@ function CoachSession() {
     setBusy("chat");
     setError(null);
     try {
-      await runTask(`/coach/${id}/chat`, { message }, alive.current?.signal);
+      await runTask(`/coach/${id}/chat`, { message });
       setMessage("");
       await invalidate(path);
     } catch (err) {
-      if (err instanceof TaskAborted) return;
       setError((err as Error).message);
     } finally {
       setBusy(null);
@@ -74,16 +67,11 @@ function CoachSession() {
     setBusy("resume");
     setError(null);
     try {
-      const out = await runTask<{ build_id: number; report: string }>(
-        `/coach/${id}/resume`,
-        { instructions },
-        alive.current?.signal,
-      );
+      const out = await runTask<{ build_id: number; report: string }>(`/coach/${id}/resume`, { instructions });
       setLastReport(out.report);
       invalidate("/builds");
       await invalidate(path);
     } catch (err) {
-      if (err instanceof TaskAborted) return;
       setError((err as Error).message);
     } finally {
       setBusy(null);
