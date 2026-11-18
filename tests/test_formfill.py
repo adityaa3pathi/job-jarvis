@@ -38,7 +38,7 @@ def test_an_answer_backed_by_a_profile_line_is_a_fact() -> None:
 @pytest.mark.parametrize(
     ("value", "status"),
     [
-        ("I built 176 REST APIs with Kafka.", "none"),  # a tool the profile never names
+        ("I built 176 REST APIs with Kafka.", "check"),  # a tool the profile never names
         ("I built 300 REST APIs in Node.js.", "check"),  # a number the profile never states
         ("I led a team building REST APIs.", "none"),  # a bigger role
     ],
@@ -48,6 +48,23 @@ def test_claims_beyond_the_cited_lines_are_held_back(value: str, status: str) ->
     got = one(f, {"value": value, "source": "profile", "lines": [1]})
     assert got.status == status
     assert got.value == ("" if status == "none" else value)
+
+
+def test_tools_count_from_any_profile_line_not_only_the_cited_ones() -> None:
+    summary = f"{SUMMARY}\nUsed Git and Docker every day."
+    f = FormField(id="q1", label="What other tech stack have you used?", kind="text")
+    llm = replying(
+        {"id": "q1", "value": "Node.js, Git and Docker.", "source": "profile", "lines": [1]}
+    )
+    got = suggest(page(f), summary, [], llm)[0]
+    assert (got.status, got.value) == ("fact", "Node.js, Git and Docker.")
+
+
+def test_an_answer_naming_an_unknown_tool_is_shown_for_checking() -> None:
+    f = FormField(id="q1", label="What other tech stack have you used?", kind="text")
+    got = one(f, {"value": "Node.js, Git and Kafka.", "source": "profile", "lines": [1]})
+    assert (got.status, got.value) == ("check", "Node.js, Git and Kafka.")
+    assert "Git, Kafka" in got.note
 
 
 def test_a_profile_answer_without_cited_lines_is_dropped() -> None:
