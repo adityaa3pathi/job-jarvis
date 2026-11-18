@@ -172,17 +172,30 @@ def check(
     if not cited:
         return Suggestion(field.id, "", "none", "No line in your profile backs this.")
     source = "\n".join([*cited, prefs_text])
+    # Tools are judged against the whole profile: the model often cites only some lines.
+    everything = "\n".join([*lines, prefs_text])
     if field.kind in (*CHOICE_KINDS, "checkbox") and _YES.match(value):
-        tools = new_tools(source, field.label, allowed)
+        tools = new_tools(everything, field.label, allowed)
         if tools:
             return Suggestion(field.id, "", "none", f"Your profile doesn't mention {tools[0]}.")
         return Suggestion(field.id, value, "fact")
     reason = unsupported(source, value, allowed)
+    if reason and reason.startswith("new tool"):
+        tools = new_tools(everything, value, allowed)
+        if tools:
+            return Suggestion(field.id, value, "check", _tools_note(tools))
+        reason = None
     if reason == "new number":
         return Suggestion(field.id, value, "check", "Has a number your profile doesn't state.")
     if reason:
         return Suggestion(field.id, "", "none", f"Blocked: {reason} not in your profile.")
     return Suggestion(field.id, value, "fact")
+
+
+def _tools_note(tools: list[str]) -> str:
+    """Shown, not filled by Fill all: the owner removes the tools or adds them to the profile."""
+    names = ", ".join(tools[:3]) + (f" and {len(tools) - 3} more" if len(tools) > 3 else "")
+    return f"Names {names}, not in your profile: remove or add to your Profile before using."
 
 
 def _chips(field: FormField, value: str, known_text: str, allowed: set[str]) -> Suggestion:
