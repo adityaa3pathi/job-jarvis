@@ -979,7 +979,8 @@ def create_app(cfg: WebConfig) -> FastAPI:
 
     @app.post("/api/coach", dependencies=[Owner])
     def coach(body: CoachIn, st: ST) -> dict[str, str]:
-        summary = st.profile()["summary"]
+        owner = st.profile()
+        summary, base_tex = owner["summary"], owner["base_tex"] or ""
         if not summary:
             raise HTTPException(400, "add your career summary on the Profile page first")
         _ai_budget(st)
@@ -992,7 +993,7 @@ def create_app(cfg: WebConfig) -> FastAPI:
                 thinker = cfg.thinker()
                 profile = analyze_jd(jd_text, thinker, cache=st)
                 digest = with_facts(profile_digest(summary, thinker, st), facts)
-                coverage = match_profile(profile, cards_from_profile(summary, facts))
+                coverage = match_profile(profile, cards_from_profile(summary, facts, base_tex))
                 report = build_report(profile, coverage, digest, thinker, cache=st)
             except LLMError as exc:
                 raise HTTPException(502, f"AI step failed: {exc}") from exc
@@ -1074,14 +1075,18 @@ def create_app(cfg: WebConfig) -> FastAPI:
             raise HTTPException(400, "upload your base resume .tex on the Profile page first")
         _ai_budget(st)
         cards = cards_from_profile(prof["summary"], st.confirmed_facts())
-        jd_text, profile = row["jd_text"], profile_from_json(row["profile_json"])
+        jd_text, stored = row["jd_text"], profile_from_json(row["profile_json"])
 
         def work(st: Store, cancelled: threading.Event) -> dict[str, Any]:
             try:
+                thinker = cfg.thinker()
+                # Read the posting again with today's prompt (cached per prompt version), so an
+                # older session gets the full skill list; the stored read is the fallback.
+                profile = analyze_jd(jd_text, thinker, cache=st)
                 outcome = run_tailor(
-                    jd_text, prof["base_tex"], cards, cfg.thinker(),
-                    writer_llm=cfg.writer(), profile=profile,
-                    instructions=body.instructions if body else "",
+                    jd_text, prof["base_tex"], cards, thinker,
+                    writer_llm=cfg.writer(), profile=stored if profile.degraded else profile,
+                    add_gaps=False, instructions=body.instructions if body else "",
                 )  # fmt: skip
             except (LatexError, LLMError) as exc:
                 raise HTTPException(502, f"resume build failed: {exc}") from exc

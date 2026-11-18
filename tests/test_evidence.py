@@ -78,3 +78,17 @@ def test_card_ids_are_stable() -> None:
     one = cards_from_summary("I use FastAPI daily.")
     two = cards_from_summary("I use FastAPI daily.")
     assert [c.id for c in one] == [c.id for c in two]
+
+
+def test_base_resume_is_evidence_with_its_own_skill_names() -> None:
+    from pathlib import Path
+
+    from jobagent.resume.evidence import cards_from_resume
+
+    tex = (Path(__file__).parent / "fixtures" / "resume" / "sample.tex").read_text()
+    cards = cards_from_resume(tex)
+    assert {"RAG (hybrid retrieval)", "Kubernetes", "Langfuse"} <= skills(cards)
+    claims = [c.text for c in cards if c.kind == "claim"]
+    assert any("147 production APIs" in c and "\\" not in c for c in claims)
+    assert all(c.sources == ("resume",) and c.confirmed for c in cards)
+    assert cards_from_resume("") == []

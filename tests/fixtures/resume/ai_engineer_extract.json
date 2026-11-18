@@ -1,0 +1,224 @@
+{
+ "role_title": "AI Engineer",
+ "level": "mid",
+ "years_min": 2,
+ "domain": "Generative AI",
+ "responsibilities": [
+  "Build LLM applications",
+  "Design RAG pipelines",
+  "Develop AI agents",
+  "Fine-tune open-source models",
+  "Build REST APIs",
+  "Deploy on cloud with Docker and Kubernetes"
+ ],
+ "skills": [
+  {
+   "name": "Python",
+   "importance": "must"
+  },
+  {
+   "name": "PyTorch",
+   "importance": "must"
+  },
+  {
+   "name": "TensorFlow",
+   "importance": "must"
+  },
+  {
+   "name": "Large Language Models (LLMs)",
+   "importance": "must"
+  },
+  {
+   "name": "Generative AI",
+   "importance": "must"
+  },
+  {
+   "name": "Retrieval-Augmented Generation (RAG)",
+   "importance": "must"
+  },
+  {
+   "name": "Vector Databases",
+   "importance": "must"
+  },
+  {
+   "name": "Pinecone",
+   "importance": "nice"
+  },
+  {
+   "name": "FAISS",
+   "importance": "nice"
+  },
+  {
+   "name": "Weaviate",
+   "importance": "nice"
+  },
+  {
+   "name": "LangChain",
+   "importance": "must"
+  },
+  {
+   "name": "LlamaIndex",
+   "importance": "must"
+  },
+  {
+   "name": "LangGraph",
+   "importance": "must"
+  },
+  {
+   "name": "AI Agents",
+   "importance": "must"
+  },
+  {
+   "name": "Multi-agent workflows",
+   "importance": "nice"
+  },
+  {
+   "name": "Fine-tuning",
+   "importance": "must"
+  },
+  {
+   "name": "LoRA",
+   "importance": "nice"
+  },
+  {
+   "name": "QLoRA",
+   "importance": "nice"
+  },
+  {
+   "name": "Hugging Face",
+   "importance": "must"
+  },
+  {
+   "name": "Prompt Engineering",
+   "importance": "must"
+  },
+  {
+   "name": "LLM Evaluation",
+   "importance": "nice"
+  },
+  {
+   "name": "REST APIs",
+   "importance": "must"
+  },
+  {
+   "name": "FastAPI",
+   "importance": "must"
+  },
+  {
+   "name": "Flask",
+   "importance": "nice"
+  },
+  {
+   "name": "AWS",
+   "importance": "must"
+  },
+  {
+   "name": "Azure",
+   "importance": "nice"
+  },
+  {
+   "name": "GCP",
+   "importance": "nice"
+  },
+  {
+   "name": "Docker",
+   "importance": "must"
+  },
+  {
+   "name": "Kubernetes",
+   "importance": "must"
+  },
+  {
+   "name": "CI/CD",
+   "importance": "nice"
+  },
+  {
+   "name": "MLOps",
+   "importance": "nice"
+  },
+  {
+   "name": "SQL",
+   "importance": "must"
+  },
+  {
+   "name": "NoSQL",
+   "importance": "must"
+  },
+  {
+   "name": "PostgreSQL",
+   "importance": "nice"
+  },
+  {
+   "name": "MongoDB",
+   "importance": "nice"
+  },
+  {
+   "name": "Redis",
+   "importance": "nice"
+  },
+  {
+   "name": "Machine Learning",
+   "importance": "must"
+  },
+  {
+   "name": "Deep Learning",
+   "importance": "must"
+  },
+  {
+   "name": "NLP",
+   "importance": "must"
+  },
+  {
+   "name": "OpenAI API",
+   "importance": "must"
+  },
+  {
+   "name": "Gemini API",
+   "importance": "must"
+  },
+  {
+   "name": "Claude API",
+   "importance": "must"
+  },
+  {
+   "name": "Git",
+   "importance": "must"
+  },
+  {
+   "name": "Linux",
+   "importance": "must"
+  },
+  {
+   "name": "Agile",
+   "importance": "must"
+  },
+  {
+   "name": "Computer Vision",
+   "importance": "nice"
+  },
+  {
+   "name": "OCR",
+   "importance": "nice"
+  },
+  {
+   "name": "Kafka",
+   "importance": "nice"
+  },
+  {
+   "name": "Spark",
+   "importance": "nice"
+  },
+  {
+   "name": "MLflow",
+   "importance": "nice"
+  },
+  {
+   "name": "Weights & Biases",
+   "importance": "nice"
+  }
+ ],
+ "implicit_skills": [
+  "Data structures",
+  "System design"
+ ]
+}

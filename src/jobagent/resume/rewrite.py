@@ -10,27 +10,58 @@ from pydantic import BaseModel, Field
 from jobagent.lexicon import KNOWN_TECH, find_numbers, find_scope, words
 from jobagent.llm import LLM, LLMError, ask, data_block
 from jobagent.resume.evidence import EvidenceCard
-from jobagent.resume.jd import JDProfile
-from jobagent.resume.latex import Command, Raw, Resume, Section, from_plain, to_plain
+from jobagent.resume.jd import JDProfile, SkillNeed
+from jobagent.resume.latex import (
+    Command,
+    Raw,
+    Resume,
+    Section,
+    from_plain,
+    listed_skills,
+    skills_section,
+    summary_span,
+    to_plain,
+)
 from jobagent.resume.match import Coverage
-from jobagent.resume.ontology import all_terms, canonical, mention
+from jobagent.resume.ontology import all_terms, canonical, known, mention
 
-MAX_SKILLS = 15
+MAX_SKILLS = 36  # every job skill the owner has first; was 15, which cut proven must-haves
 MAX_BULLET_CHARS = 320
 BULLET_SECTIONS = ("Experience", "Projects")
-_AI = {"RAG", "LLM", "MCP", "Generative AI", "LangGraph", "LangChain", "CrewAI", "pgvector",
-       "FAISS", "Chroma", "Pinecone", "vLLM", "PEFT", "QLoRA", "Gemini API", "OpenAI API",
-       "Claude API", "PyTorch", "Hugging Face Transformers", "bitsandbytes"}  # fmt: skip
-_EVAL = {"RAGAS", "Langfuse", "LangSmith"}
-_BACKEND = {"Python", "TypeScript", "JavaScript", "Go", "Java", "Rust", "C++", "C#", "Kotlin",
-            "FastAPI", "Flask", "Django", "Node.js", "Express.js", "tRPC", "REST", "GraphQL",
-            "Pydantic"}  # fmt: skip
+_LANGUAGES = {"python", "typescript", "javascript", "go", "java", "rust", "c++", "c#", "kotlin",
+              "sql", "bash", "scala", "ruby", "php", "swift", "r", "c"}  # fmt: skip
+_AI_WORDS = (
+    "ai", "llm", "llms", "ml", "nlp", "rag", "genai", "gpt", "machine learning", "deep learning",
+    "computer vision", "ocr", "generative", "agent", "agents", "agentic", "embedding",
+    "embeddings", "vector", "fine-tuning", "fine tuning", "lora", "qlora", "peft", "prompt",
+    "transformers", "hugging face", "pytorch", "tensorflow", "keras", "scikit-learn",
+    "langchain", "langgraph", "llamaindex", "crewai", "autogen", "vllm", "openai", "gemini",
+    "claude", "anthropic", "mcp", "pgvector", "faiss", "chroma", "pinecone", "weaviate",
+    "milvus", "qdrant", "ragas", "langfuse", "langsmith", "mlflow", "mlops", "weights & biases",
+    "model", "models", "retrieval", "reranking", "evaluation", "evals", "bitsandbytes",
+    "inference",
+)  # fmt: skip
+_WEB_WORDS = (
+    "fastapi", "flask", "django", "node.js", "express.js", "trpc", "rest", "restful", "api",
+    "apis", "graphql", "grpc", "pydantic", "next.js", "react", "vue.js", "angular", "tailwind",
+    "microservices", "spring boot", "spring", "html", "css", "websockets", "vercel ai sdk",
+)  # fmt: skip
+_INFRA_WORDS = (
+    "postgresql", "mysql", "mongodb", "redis", "sqlite", "nosql", "sqlalchemy", "prisma",
+    "database", "databases", "kafka", "spark", "hadoop", "airflow", "rabbitmq", "celery",
+    "inngest", "elasticsearch", "snowflake", "dbt", "pandas", "numpy", "etl", "aws", "azure",
+    "google cloud", "gcp", "docker", "kubernetes", "k8s", "ci/cd", "terraform", "linux", "git",
+    "github actions", "jenkins", "helm", "ec2", "s3", "lambda", "gke", "eks", "cloud", "devops",
+    "nginx", "serverless",
+)  # fmt: skip
 CATEGORIES = (
-    ("Languages \\& Backend", _BACKEND),
-    ("AI \\& Retrieval", _AI),
-    ("Eval \\& Observability", _EVAL),
+    ("Languages", None),
+    ("AI \\& ML", _AI_WORDS),
+    ("Backend \\& Web", _WEB_WORDS),
+    ("Data, Cloud \\& DevOps", _INFRA_WORDS),
 )
-OTHER = "Data, Infra \\& Frontend"
+OTHER = "Tools \\& Practices"
+_SMALL_WORDS = {"and", "or", "of", "for", "with", "the", "to", "in", "on", "a", "an"}
 MAX_BATCH = 30  # bullets per model call; keeps the reply well under its token cap
 SYSTEM = (
     "Rewrite each resume bullet for a job. Keep every fact, number, tool and level of "
@@ -43,6 +74,13 @@ OWNER_STYLE = (
     " The owner's wishes for this resume are in the owner_style block. Follow them for wording, "
     "emphasis and tone only; every rule above still wins."
 )
+SUMMARY_SYSTEM = (
+    "Rewrite the summary at the top of a resume for one job. Keep every fact, number, tool "
+    "and level of responsibility as written; add none. Open with the candidate's own role, "
+    "then lead with what this job asks for most. You may use these job terms, which the "
+    "candidate's evidence backs: {terms}. Keep **double asterisks** around key numbers. "
+    'No longer than the original. Reply as {{"text": str}}.'
+)
 MAX_INSTRUCTIONS = 1000
 
 
@@ -53,6 +91,10 @@ class _Item(BaseModel):
 
 class _Batch(BaseModel):
     items: list[_Item] = Field(default_factory=list)
+
+
+class _Summary(BaseModel):
+    text: str = ""
 
 
 @dataclass
@@ -71,13 +113,16 @@ class TailorResult:
     rejected: list[tuple[str, str]] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)  # (bullet, model error)
     dropped_skills: list[str] = field(default_factory=list)
+    summary: Change | None = None  # the tailored summary, when one was written and passed
+    summary_note: str = ""  # why the summary was kept as it was
 
 
 def check_rewrite(original: str, new: str, allowed: set[str]) -> str | None:
     """Returns the reason a rewrite is refused, or None when it adds nothing new."""
     if not new.strip():
         return "empty"
-    if len(new) > min(MAX_BULLET_CHARS, max(int(len(original) * 1.25), len(original) + 40)):
+    grown = min(MAX_BULLET_CHARS, max(int(len(original) * 1.25), len(original) + 40))
+    if len(new) > max(grown, len(original)):  # a bullet already past the cap may still tighten
         return "too long"
     return unsupported(original, new, allowed)
 
@@ -126,7 +171,7 @@ def _tailor_bullets(
     resume: Resume, cards: list[EvidenceCard], profile: JDProfile, coverage: Coverage,
     llm: LLM, out: TailorResult, instructions: str = "",
 ) -> None:  # fmt: skip
-    allowed = {canonical(c.text) for c in cards if c.kind == "skill"}
+    allowed = _allowed(cards, coverage)
     terms = ", ".join(
         i.need.verbatim for i in coverage.items if i.status == "proven" and not i.need.implicit
     )
@@ -194,64 +239,82 @@ def _apply(cmd: Command, plain: str, new: str, allowed: set[str], out: TailorRes
     out.changes.append(Change("bullet", plain, new, "stronger wording for this job"))
 
 
+def _allowed(cards: list[EvidenceCard], coverage: Coverage) -> set[str]:
+    """Tools a rewrite may name: the owner's skills and the job skills their evidence proves."""
+    owned = {canonical(c.text) for c in cards if c.kind == "skill"}
+    return owned | {canonical(i.need.name) for i in coverage.items if i.status == "proven"}
+
+
 def _bucket(skill: str) -> str:
-    for label, members in CATEGORIES:
-        if skill in members:
+    lower = canonical(skill).lower()
+    if lower in _LANGUAGES or skill.lower() in _LANGUAGES:
+        return CATEGORIES[0][0]
+    for label, keys in CATEGORIES[1:]:
+        if any(re.search(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", lower) for k in keys or ()):
             return label
     return OTHER
 
 
+def _title_case(text: str) -> str:
+    return " ".join(
+        w if w in _SMALL_WORDS or len(w) <= 2 else w[0].upper() + w[1:] for w in text.split()
+    )
+
+
+def shown_name(need: SkillNeed) -> str:
+    """How a job skill reads in Skills: a known skill by its usual name, any other in the
+    posting's own words (what an ATS looks for), capitalised when the posting wrote it in
+    running text ("vector databases")."""
+    said = need.verbatim
+    if known(need.name) or need.name.lower() == said.lower():
+        return need.name
+    return _title_case(said) if said == said.lower() else said
+
+
+def _covers(name: str, shown: list[str]) -> bool:
+    """True when `name` is already in the list, as itself or inside a longer entry."""
+    key = canonical(name).lower()
+    return any(canonical(s).lower() == key or mention(name, s) for s in shown)
+
+
 def build_skills(
-    cards: list[EvidenceCard], coverage: Coverage, cap: int = MAX_SKILLS, add_gaps: bool = True
+    cards: list[EvidenceCard],
+    coverage: Coverage,
+    cap: int = MAX_SKILLS,
+    add_gaps: bool = True,
+    listed: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """The skills to show, best for this job first, and which of them are not backed by evidence."""
+    """The Skills to show and which of them no evidence backs. Order: every job skill the
+    owner's evidence proves (must-haves first, then by weight and the posting's order), then
+    must-have gaps if asked for, then the owner's own skills as their resume lists them."""
     proven = [i for i in coverage.items if i.status == "proven" and not i.need.implicit]
-    shown = [i.need.verbatim for i in sorted(proven, key=lambda i: -i.need.weight)]
-    gaps = []
-    if add_gaps:
-        verb = {i.need.name: i.need.verbatim for i in coverage.items}
-        gaps = [verb.get(n, n) for n in coverage.auto_add]
-    have = {canonical(s) for s in shown}
-    extras = [c.text for c in cards if c.kind == "skill" and canonical(c.text) not in have]
-    ordered = [*shown[: max(cap - len(gaps), 0)], *gaps, *extras]
-    unique = list(dict.fromkeys(ordered))
-    kept = unique[:cap]
+    proven.sort(key=lambda i: (i.need.importance != "must", -i.need.weight))
+    needs = {i.need.name: i.need for i in coverage.items}
+    gaps = (
+        [shown_name(needs[n]) if n in needs else n for n in coverage.auto_add] if add_gaps else []
+    )
+    owned = [*(listed or []), *(c.text for c in cards if c.kind == "skill")]
+    kept: list[str] = []
+    for name in [*(shown_name(i.need) for i in proven), *gaps, *owned]:
+        if len(kept) < cap and not _covers(name, kept):
+            kept.append(name)
     return kept, [g for g in gaps if g in kept]
 
 
-def _listed_skills(section_tex: str) -> list[str]:
-    """Skill names in a 'Label: a, b (c, d)' style Skills section."""
-    names: list[str] = []
-    for line in re.findall(r"\\textbf\{[^}]*:\}([^\n]*)", section_tex):
-        line = line.replace("\\\\", "").strip()
-        plain = to_plain(line) or re.sub(r"\\[a-zA-Z]+|[{}]", "", line)
-        depth, part = 0, ""
-        for ch in plain + ",":
-            depth += (ch == "(") - (ch == ")")
-            if ch == "," and depth == 0:
-                names.append(part.strip())
-                part = ""
-            else:
-                part += ch
-    return [n for n in names if n]
-
-
 def _dropped(before: list[str], cards: list[EvidenceCard], kept: list[str]) -> list[str]:
-    """Owner skills (old section or evidence) that are not in the new section."""
-    have = {canonical(s) for s in kept}
+    """Owner skills (old section or evidence) that the new section leaves out."""
     owned = [*before, *(c.text for c in cards if c.kind == "skill")]
     out: dict[str, str] = {}
     for name in owned:
-        key = canonical(name)
-        if key not in have:
-            out.setdefault(key, name)
+        if not _covers(name, kept):
+            out.setdefault(canonical(name).lower(), name)
     return list(out.values())
 
 
 def _skills_block(skills: list[str]) -> str:
     groups: dict[str, list[str]] = {}
     for skill in skills:
-        groups.setdefault(_bucket(canonical(skill)), []).append(skill)
+        groups.setdefault(_bucket(skill), []).append(skill)
     labels = [label for label, _ in CATEGORIES] + [OTHER]
     lines = [
         f"\\textbf{{{label}:}} {', '.join(from_plain(s) for s in groups[label])} \\\\"
@@ -265,6 +328,50 @@ def _skills_block(skills: list[str]) -> str:
     )
 
 
+def _tailor_summary(
+    resume: Resume, cards: list[EvidenceCard], profile: JDProfile, coverage: Coverage,
+    llm: LLM, out: TailorResult, instructions: str = "",
+) -> None:  # fmt: skip
+    """Rewrite the top summary for this job under the same fact check as the bullets."""
+    span = summary_span(resume)
+    if span is None:
+        out.summary_note = "no summary paragraph found at the top of the resume"
+        return
+    node, start, end = span
+    before = to_plain(node.text[start:end]) or ""
+    proven = [i for i in coverage.items if i.status == "proven" and not i.need.implicit]
+    proven.sort(key=lambda i: (i.need.importance != "must", -i.need.weight))
+    terms = ", ".join(shown_name(i.need) for i in proven[:15]) or "none"
+    user = data_block("job_title", profile.role_title) + data_block("summary", before)
+    system = SUMMARY_SYSTEM.format(terms=terms)
+    if instructions := instructions.strip()[:MAX_INSTRUCTIONS]:
+        user += data_block("owner_style", instructions)
+        system += OWNER_STYLE
+    try:
+        new = " ".join(
+            ask(llm, _Summary, system=system, user=user, step="rewrite_summary").text.split()
+        )
+    except LLMError as exc:
+        out.summary_note = f"kept as it was: model error ({exc})"
+        return
+    plain_before, plain_new = before.replace("**", ""), new.replace("**", "")
+    if not plain_new or plain_new == plain_before:
+        out.summary_note = "the model kept it as it was"
+        return
+    if len(plain_new) > len(plain_before) * 1.1 + 20:
+        reason: str | None = "too long"
+    else:
+        reason = unsupported(plain_before, plain_new, _allowed(cards, coverage))
+    if reason:
+        out.summary_note = f"rewrite refused by the fact check ({reason}); kept as it was"
+        out.rejected.append((before, f"summary: {reason}"))
+        return
+    lead = node.text[start:end][: len(node.text[start:end]) - len(node.text[start:end].lstrip())]
+    trail = node.text[start:end][len(node.text[start:end].rstrip()) :]
+    node.text = node.text[:start] + lead + from_plain(new) + trail + node.text[end:]
+    out.summary = Change("summary", before, new, "summary tailored to the job")
+
+
 def tailor_resume(
     resume: Resume,
     cards: list[EvidenceCard],
@@ -275,14 +382,16 @@ def tailor_resume(
     instructions: str = "",
 ) -> TailorResult:
     out = TailorResult(latex="")
+    _tailor_summary(resume, cards, profile, coverage, llm, out, instructions)
     _tailor_bullets(resume, cards, profile, coverage, llm, out, instructions)
-    section = next((s for s in resume.sections if re.search("skill", s.title, re.I)), None)
+    section = skills_section(resume)
     if section is not None:
-        skills, added = build_skills(cards, coverage, add_gaps=add_gaps)
         before = "".join(n.emit() for n in section.nodes)
+        listed = listed_skills(before)
+        skills, added = build_skills(cards, coverage, add_gaps=add_gaps, listed=listed)
         section.nodes[:] = [Raw(_skills_block(skills))]
         out.added_gap_skills = added
-        out.dropped_skills = _dropped(_listed_skills(before), cards, skills)
+        out.dropped_skills = _dropped(listed, cards, skills)
         out.changes.append(
             Change("skills", before.strip(), ", ".join(skills), "ordered for this job")
         )

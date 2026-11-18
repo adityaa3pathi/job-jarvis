@@ -117,22 +117,42 @@ def cards_from_manifests(manifests: dict[str, str], source_prefix: str) -> list[
     return merge_cards(cards)
 
 
-def cards_from_summary(text: str) -> list[EvidenceCard]:
-    """Lines the owner wrote count as confirmed; skills are found by exact word match."""
+def cards_from_summary(text: str, source: str = "owner") -> list[EvidenceCard]:
+    """Lines the owner wrote count as confirmed; skills are found by whole-word match."""
+    from jobagent.resume.ontology import all_terms, mention  # ontology imports SKILL_NAMES
+
     cards = [
-        make_card("claim", line.strip(), "owner", True)
-        for line in text.splitlines()
-        if line.strip()
+        make_card("claim", line.strip(), source, True) for line in text.splitlines() if line.strip()
     ]
-    for skill in SKILL_NAMES:
-        if re.search(rf"(?<![A-Za-z0-9]){re.escape(skill)}(?![A-Za-z0-9])", text, re.IGNORECASE):
-            cards.append(make_card("skill", skill, "owner", True))
+    for skill in all_terms():
+        if mention(skill, text):
+            cards.append(make_card("skill", skill, source, True))
     return merge_cards(cards)
 
 
-def cards_from_profile(summary: str, facts: list[str]) -> list[EvidenceCard]:
-    """The owner's whole profile: summary plus every confirmed fact, matched the same way."""
-    return cards_from_summary("\n".join([summary, *facts]))
+def cards_from_resume(tex: str) -> list[EvidenceCard]:
+    """The owner's base resume: every line is their own claim, and every name in its Skills
+    section is a skill they list, spelled as they wrote it. Unparseable LaTeX gives none."""
+    from jobagent.resume.latex import LatexError, listed_skills, parse, plain_lines, skills_section
+
+    if not tex.strip():
+        return []
+    cards = cards_from_summary("\n".join(plain_lines(tex)), "resume")
+    try:
+        section = skills_section(parse(tex))
+    except LatexError:
+        section = None
+    if section is not None:
+        listed = listed_skills("".join(n.emit() for n in section.nodes))
+        cards += [make_card("skill", name, "resume", True) for name in listed]
+    return merge_cards(cards)
+
+
+def cards_from_profile(summary: str, facts: list[str], resume_tex: str = "") -> list[EvidenceCard]:
+    """The owner's whole profile: summary, every confirmed fact and the base resume."""
+    return merge_cards(
+        [*cards_from_summary("\n".join([summary, *facts])), *cards_from_resume(resume_tex)]
+    )
 
 
 def merge_cards(cards: list[EvidenceCard]) -> list[EvidenceCard]:

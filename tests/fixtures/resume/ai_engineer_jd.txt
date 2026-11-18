@@ -1,0 +1,31 @@
+AI Engineer
+
+Experience: 2-4 Years
+Employment Type: Full-Time
+Work Mode: Coimbatore / Hybrid
+
+About the role
+We are looking for an AI Engineer to design, build and deploy LLM-powered products.
+
+Key Responsibilities
+- Build and deploy applications using Large Language Models (LLMs) and Generative AI.
+- Design Retrieval-Augmented Generation (RAG) pipelines with vector databases such as Pinecone, FAISS or Weaviate.
+- Develop AI agents and multi-agent workflows using LangChain, LlamaIndex or LangGraph.
+- Fine-tune open-source models (Llama, Mistral) using LoRA / QLoRA and Hugging Face.
+- Apply prompt engineering and evaluate model outputs; monitor quality in production.
+- Build REST APIs with FastAPI or Flask and integrate AI services into products.
+- Deploy models on AWS / Azure / GCP using Docker and Kubernetes; set up CI/CD and MLOps practices.
+- Work with SQL and NoSQL databases (PostgreSQL, MongoDB) and Redis caching.
+
+Required Skills
+- Strong programming skills in Python.
+- Hands-on experience with PyTorch or TensorFlow.
+- Solid understanding of Machine Learning, Deep Learning and NLP concepts.
+- Experience with OpenAI, Gemini or Claude APIs.
+- Familiarity with Git, Linux and Agile development.
+
+Good to Have
+- Knowledge of Computer Vision and OCR.
+- Experience with Kafka or Spark for data pipelines.
+- Exposure to MLflow or Weights & Biases.
+- Strong communication and problem-solving skills.

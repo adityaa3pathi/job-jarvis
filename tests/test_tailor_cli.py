@@ -8,7 +8,7 @@ import pytest
 from jobagent import cli
 from jobagent.llm import StubLLM
 from jobagent.resume import cli_tailor
-from jobagent.resume.evidence import cards_from_summary
+from jobagent.resume.evidence import cards_from_summary, make_card
 from jobagent.resume.pipeline import run_tailor
 
 SAMPLE = (Path(__file__).parent / "fixtures" / "resume" / "sample.tex").read_text()
@@ -114,12 +114,19 @@ def test_gemini_waits_and_retries_after_rate_limit() -> None:
     assert waits == [3.5]
 
 
-def test_report_lists_skills_removed_from_the_resume() -> None:
-    out = run_tailor(JD, SAMPLE, CARDS, StubLLM(fake))
+def test_report_lists_skills_cut_by_the_cap() -> None:
+    many = [*CARDS, *(make_card("skill", f"Tool{i}", "owner", True) for i in range(60))]
+    out = run_tailor(JD, SAMPLE, many, StubLLM(fake))
     assert "## Removed from your Skills" in out.report
-    assert "Kubernetes" in out.tailored.dropped_skills
+    assert "Tool59" in out.tailored.dropped_skills
     for name in out.tailored.dropped_skills:
         assert f"- {name}" in out.report
+
+
+def test_owner_skills_are_kept_when_there_is_room() -> None:
+    out = run_tailor(JD, SAMPLE, CARDS, StubLLM(fake))
+    assert out.tailored.dropped_skills == []
+    assert "Kubernetes" in out.tailored.latex and "## Removed from your Skills" not in out.report
 
 
 def test_report_says_when_bullet_rewrites_failed() -> None:

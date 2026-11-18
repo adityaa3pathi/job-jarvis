@@ -158,19 +158,89 @@ def test_model_failure_is_recorded_with_its_cause() -> None:
     assert all("TimeoutError" in cause for _, cause in result.failed)
 
 
-def test_skills_left_out_of_the_new_section_are_listed() -> None:
+def test_owner_skills_stay_after_the_job_skills() -> None:
     result = run()
     kept = parse(result.latex).section("Technical Skills").emit()
-    assert "Kubernetes" not in kept and "TypeScript" not in kept
-    assert {"Kubernetes", "TypeScript"} <= set(result.dropped_skills)
-    assert "Python" not in result.dropped_skills
+    assert "Kubernetes" in kept and "TypeScript" in kept  # the owner's own list is kept
+    assert kept.index("Python") < kept.index("Kubernetes")
+    assert result.dropped_skills == []
 
 
 def test_skills_cut_by_the_cap_are_listed() -> None:
-    many = [make_card("skill", f"Tool{i}", "owner", True) for i in range(30)]
+    many = [make_card("skill", f"Tool{i}", "owner", True) for i in range(60)]
     coverage = match_profile(PROFILE, many)
-    kept, _ = build_skills(many, coverage)
     result = tailor_resume(parse(SAMPLE), many, PROFILE, coverage, FailingLLM())
-    cut = [f"Tool{i}" for i in range(30) if f"Tool{i}" not in kept]
-    assert len(cut) >= 15
+    kept = parse(result.latex).section("Technical Skills").emit()
+    cut = [f"Tool{i}" for i in range(60) if not re.search(rf"\bTool{i}\b", kept)]
+    assert len(cut) >= 20
     assert set(cut) <= set(result.dropped_skills)
+
+
+def test_proven_job_skills_are_never_cut_for_gaps_or_owner_extras() -> None:
+    owner = [make_card("skill", f"Tool{i}", "owner", True) for i in range(40)]
+    cards = [*CARDS, *owner]
+    profile = JDProfile(skills=[need(s) for s in ("Python", "FastAPI", "PostgreSQL", "Terraform")])
+    skills, _ = build_skills(cards, match_profile(profile, cards), cap=5, add_gaps=True)
+    assert skills[:3] == ["Python", "FastAPI", "PostgreSQL"] and "Terraform" in skills
+
+
+def test_skills_are_grouped_by_kind() -> None:
+    from jobagent.resume.rewrite import _bucket
+
+    assert _bucket("SQL") == "Languages" and _bucket("Python") == "Languages"
+    assert _bucket("PyTorch") == "AI \\& ML" and _bucket("Vector Databases") == "AI \\& ML"
+    assert _bucket("FastAPI") == "Backend \\& Web" and _bucket("REST APIs") == "Backend \\& Web"
+    assert (
+        _bucket("Docker") == "Data, Cloud \\& DevOps"
+        and _bucket("NoSQL") == "Data, Cloud \\& DevOps"
+    )
+    assert _bucket("Agile") == "Tools \\& Practices"
+
+
+def summary_llm(summary: str) -> StubLLM:
+    def respond(system: str, user: str) -> Any:
+        if "Rewrite the summary" in system:
+            return {"text": summary}
+        return {"items": []}
+
+    return StubLLM(respond)
+
+
+def test_summary_is_tailored_when_it_adds_no_facts() -> None:
+    new = (
+        "AI engineer with **2500+ healthcare users** in production: LangGraph agents, hybrid "
+        "RAG, eval harnesses gating CI and Langfuse observability. Fine-tuned Mistral-7B with "
+        "QLoRA, served via vLLM on Kubernetes; answer quality **55% → 82%**, wrong responses "
+        "**9% → 2%**."
+    )
+    result = tailor_resume(
+        parse(SAMPLE), CARDS, PROFILE, match_profile(PROFILE, CARDS), summary_llm(new)
+    )
+    assert result.summary is not None and result.summary.after == new
+    assert "\\textbf{2500+ healthcare users} in production" in result.latex
+    assert parse(result.latex).emit() == result.latex
+
+
+@pytest.mark.parametrize(
+    ("new", "reason"),
+    [
+        (
+            "AI engineer with 5 years leading teams of 10 building agents for 2500+ users.",
+            "new number",
+        ),
+        ("AI engineer who built agents on Terraform for 2500+ healthcare users.", "new tool"),
+    ],
+)
+def test_summary_that_adds_facts_is_refused(new: str, reason: str) -> None:
+    result = tailor_resume(
+        parse(SAMPLE), CARDS, PROFILE, match_profile(PROFILE, CARDS), summary_llm(new)
+    )
+    assert result.summary is None and reason in result.summary_note
+    assert "AI engineer who took a multi-agent agentic system" in result.latex
+
+
+def test_a_bullet_already_past_the_cap_may_be_tightened_but_not_grown() -> None:
+    long = "Built APIs with FastAPI for 2500+ users, " + "with retries and queues " * 14
+    assert len(long) > 320
+    assert check_rewrite(long, long[:-30], set()) is None
+    assert check_rewrite(long, long + " and more", set()) == "too long"
