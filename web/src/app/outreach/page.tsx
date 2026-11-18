@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { api, invalidate, runTask, TaskAborted, useCachedApi, type OutreachOverview, type SenderProfile } from "@/lib/api";
+import { useState } from "react";
+import { api, invalidate, useCachedApi, useTask, type OutreachOverview, type SenderProfile } from "@/lib/api";
 import { Icon } from "@/components/Icon";
 import { LinkedInHelper } from "@/components/outreach/LinkedInHelper";
 import { NetworkPanel } from "@/components/outreach/NetworkPanel";
@@ -109,13 +109,7 @@ export default function OutreachPage() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const alive = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    alive.current = ctl;
-    return () => ctl.abort();
-  }, []);
+  const runTask = useTask();
 
   const refresh = () => invalidate(PATH);
 
@@ -125,13 +119,11 @@ export default function OutreachPage() {
     try {
       const got = await runTask<{ checked: number; replied: number; bounced: number; errors: number }>(
         "/outreach/check-replies",
-        undefined,
-        alive.current?.signal,
       );
       setNote(`Checked ${got.checked} threads: ${got.replied} replied, ${got.bounced} bounced.`);
       await refresh();
     } catch (e) {
-      if (!(e instanceof TaskAborted)) setActionError((e as Error).message);
+      setActionError((e as Error).message);
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 export class ApiError extends Error {
   constructor(
@@ -251,8 +251,8 @@ type TaskState<T> ={ status: "running" | "done" | "failed"; result: T | null; er
 const POLL_MS = 1500;
 const MAX_POLL_MISSES = 5;
 
-/** Thrown when the caller stopped waiting (page left); callers should stay silent. */
-export class TaskAborted extends Error {}
+/** The wait was stopped because the page was hidden or left; the task itself runs on. */
+class TaskAborted extends Error {}
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -276,16 +276,15 @@ function transient(e: unknown): boolean {
   return e instanceof TypeError;
 }
 
-/** Start a slow AI step, then poll the same task until it finishes; AI calls outlast proxy timeouts.
- * Failed polls are retried a few times, never by starting a second task. Abort `signal` on unmount. */
-export async function runTask<T>(path: string, data?: unknown, signal?: AbortSignal): Promise<T> {
-  const { task_id } = await post<{ task_id: string }>(path, data);
+/** Poll a started task until it ends. Failed polls are retried a few times, never by
+ * starting a second task. Rejects with `TaskAborted` once `signal` is aborted. */
+async function waitTask<T>(taskId: string, signal: AbortSignal): Promise<T> {
   let misses = 0;
   for (;;) {
     await wait(POLL_MS * (misses + 1), signal);
     let state: TaskState<T>;
     try {
-      state = await api<TaskState<T>>(`/tasks/${task_id}`, { signal });
+      state = await api<TaskState<T>>(`/tasks/${taskId}`, { signal });
       misses = 0;
     } catch (e) {
       if (signal?.aborted) throw new TaskAborted("stopped");
@@ -301,6 +300,45 @@ export async function runTask<T>(path: string, data?: unknown, signal?: AbortSig
     if (state.status === "done") return state.result as T;
     if (state.status === "failed") throw new ApiError(state.code, state.error || "the task failed");
   }
+}
+
+type Waiting = { id: string; resolve: (result: unknown) => void; reject: (error: unknown) => void };
+
+/** Returns `runTask(path, data)`: starts a slow AI step as a server task (AI calls outlast
+ * proxy timeouts) and resolves with its result.
+ *
+ * Next.js keeps a page the owner leaves mounted but hidden (React Activity) and runs its
+ * Effect cleanups, then runs its Effects again when the page is shown. So the waiting lives
+ * in an Effect: leaving pauses it, coming back resumes it, and the promise settles only
+ * while the page is on screen, so its follow-up (a redirect, a download) never fires on a
+ * page the owner has left. If the page is dropped for good, it never settles. */
+export function useTask() {
+  const [waiting, setWaiting] = useState<Waiting[]>([]);
+
+  useEffect(() => {
+    if (!waiting.length) return;
+    const ctl = new AbortController();
+    for (const task of waiting) {
+      const settle = (done: () => void) => {
+        if (ctl.signal.aborted) return; // hidden, or another task ended: the next run polls again
+        setWaiting((list) => list.filter((t) => t !== task));
+        done();
+      };
+      waitTask(task.id, ctl.signal).then(
+        (result) => settle(() => task.resolve(result)),
+        (error) => settle(() => task.reject(error)),
+      );
+    }
+    return () => ctl.abort();
+  }, [waiting]);
+
+  return useCallback(async <T>(path: string, data?: unknown): Promise<T> => {
+    const { task_id } = await post<{ task_id: string }>(path, data);
+    return new Promise<T>((resolve, reject) => {
+      const task: Waiting = { id: task_id, resolve: (r) => resolve(r as T), reject };
+      setWaiting((list) => [...list, task]);
+    });
+  }, []);
 }
 
 export type Job = {
