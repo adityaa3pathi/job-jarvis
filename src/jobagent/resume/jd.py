@@ -13,7 +13,24 @@ from jobagent.resume.ontology import canonical, known, mention, positions, says
 LEVELS = ("intern", "junior", "mid", "senior", "lead")
 MAX_SKILLS = 60  # a long posting names 40+; the old cap of 25 lost must-haves
 IMPLICIT_WEIGHT = 0.3
-_YEARS = re.compile(r"(\d{1,2})\s*\+?\s*(?:-\s*\d{1,2}\s*)?(?:years?|yrs?)\b", re.I)
+# "3+ years", "1-6 yrs", "1 to 6+ Years", "1–6+ years": the first number is the minimum.
+_YEARS = re.compile(
+    r"(\d{1,2})\s*\+?\s*(?:(?:-|–|—|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)\b", re.I
+)
+# Traits, not skills a profile can show: never listed, whatever the model returns.
+_SOFT = re.compile(
+    r"^(?:(?:strong |good |excellent )?(?:problem[- ]solving|communication|ownership|teamwork"
+    r"|team player|leadership|collaboration|attention to detail|critical thinking|"
+    r"time management|adaptability|analytical(?: thinking| skills)?|interpersonal|self[- ]starter"
+    r"|work ethic|ownership mindset|growth mindset|curiosity)(?: skills)?)$",
+    re.I,
+)
+# Interview topics a work profile cannot prove: prep list only, never a missing must-have.
+_PREP = re.compile(
+    r"^(?:dsa|data structures(?: (?:and|&) algorithms)?|algorithms|lld|hld|low[- ]level design"
+    r"|high[- ]level design|competitive programming|leetcode|coding rounds?)$",
+    re.I,
+)
 _TITLE_LEVELS = (
     ("lead", r"\b(?:lead|principal|staff|head)\b"),
     ("senior", r"\b(?:senior|sr\.?)\b"),
@@ -124,6 +141,10 @@ _MUST_HEAD = re.compile(
     r"|what we(?:'re| are) looking for|who you are|you have|you are a great fit|ideal candidate"
     r"|eligibility)", re.I,
 )  # fmt: skip
+_INTERVIEW_HEAD = re.compile(
+    r"^(?:(?:the )?(?:interview|selection|hiring|recruitment) (?:process|rounds?|stages?|steps?)"
+    r"|interviews?|how (?:we|you(?:'ll| will)?) (?:hire|interview))\s*$", re.I,
+)  # fmt: skip
 _OTHER_HEAD = re.compile(
     r"^(?:key )?(?:responsibilities|duties)|^what you(?:'ll| will) do|^about|^(?:the )?role"
     r"|^(?:a )?day in the life|^benefits|^perks|^we offer|^why |^who we are|^job description"
@@ -140,12 +161,14 @@ _CHOICES = re.compile(r"\s*(?:/|,|\bor\b)\s*", re.I)
 
 
 def _heading(line: str) -> str | None:
-    """'must', 'nice' or 'other' when the line opens a part of the posting, else None."""
+    """'must', 'nice', 'interview' or 'other' when the line opens a part of the posting."""
     bare = re.sub(r"^[\s#*•·\-–>]+|[*#]+$", "", line).strip()
     head = bare.split(":", 1)[0] if ":" in bare[:50] else bare
     if not head or len(head) > 60:
         return None
-    for label, pattern in (("nice", _NICE_HEAD), ("must", _MUST_HEAD), ("other", _OTHER_HEAD)):
+    heads = (("interview", _INTERVIEW_HEAD), ("nice", _NICE_HEAD), ("must", _MUST_HEAD),
+             ("other", _OTHER_HEAD))  # fmt: skip
+    for label, pattern in heads:
         if pattern.match(head):
             return label
     return None
@@ -174,10 +197,17 @@ def importance_in(text: str, at: list[int], claimed: str) -> str:
                 (m.group(0) for m in _CLAUSE.finditer(line) if m.start() <= pos < m.end()), line
             )
             nice, must = bool(_NICE_CUE.search(clause)), bool(_MUST_CUE.search(clause))
-            labels.append("nice" if nice and not must else "must" if must and not nice else label)
+            part = None if label == "interview" else label
+            labels.append("nice" if nice and not must else "must" if must and not nice else part)
     if "must" in labels:
         return "must"
     return "nice" if "nice" in labels else claimed
+
+
+def only_in_interview(text: str, at: list[int]) -> bool:
+    """True when every mention sits in the interview-process part ("Coding round: DSA")."""
+    labels = [label for start, end, label in _parts_of(text) for p in at if start <= p < end]
+    return bool(labels) and all(label == "interview" for label in labels)
 
 
 def locate(name: str, text: str) -> str | None:
@@ -211,9 +241,12 @@ def vote(passes: list[Pass], text: str, title: str) -> list[SkillNeed]:
     needs = []
     for name, votes in seen.items():
         verbatim = locate(name, text)
-        if votes * 2 <= len(passes) or verbatim is None:
+        if votes * 2 <= len(passes) or verbatim is None or _SOFT.match(name.strip()):
             continue
         at = positions(name, text)
+        if _PREP.match(name.strip()) or only_in_interview(text, at):
+            needs.append((SkillNeed(name, verbatim, "nice", IMPLICIT_WEIGHT, implicit=True), 10**9))
+            continue
         claimed = "must" if musts[name] * 2 > votes else "nice"
         importance = importance_in(text, at, claimed)
         need = SkillNeed(name, verbatim, importance, weight(name, importance, text, title))

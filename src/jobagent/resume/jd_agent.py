@@ -20,7 +20,7 @@ from jobagent.resume.jd import (
 from jobagent.resume.ontology import all_terms, mention
 from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
-PROMPT_VERSION = "jd-3"
+PROMPT_VERSION = "jd-4"  # jd-4: year ranges, soft skills and interview topics
 STEP = "jd_analysis"
 MAX_RESPONSIBILITIES = 8
 
@@ -104,8 +104,9 @@ def _analyze(text: str, flagged: bool, llm: LLM) -> JDProfile:
         work_mode=work_mode(text),
         domain=lead.domain.strip()[:80],
         responsibilities=duties(lead.responsibilities)[:MAX_RESPONSIBILITIES],
-        skills=skills,
-        implicit_skills=implicit_from([lead], text),
+        skills=[s for s in skills if not s.implicit],
+        # Interview topics the posting names, then skills it never names: prep list only.
+        implicit_skills=[*(s for s in skills if s.implicit), *implicit_from([lead], text)],
         injection_flagged=flagged,
         rounds=calls,
     )

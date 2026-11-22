@@ -181,3 +181,43 @@ def test_a_long_posting_keeps_every_skill_it_names() -> None:
     assert {"Kafka", "Spark", "MLflow", "Computer Vision"} <= set(
         profile.nice_to_have
     )  # Good to have
+
+
+FULL_STACK_JD = """Job Title : Full Stack Engineer (Python + React.js/Next.js)
+Experience : 1 to 6+ Years
+Main Tech Stack :
+Backend : Python, FastAPI, Django
+Database : PostgreSQL, MongoDB, Redis
+Tools : Git, GitHub, CI/CD, Elasticsearch
+Requirements :
+Must-Have :
+1–6+ years of full-stack experience.
+Strong DSA + problem-solving skills.
+Hands-on experience with APIs, microservices, Git, CI/CD, cloud.
+Good-to-Have :
+Experience with containers, system design, observability tools.
+Interview Process :
+Coding Round : DSA + problem solving
+System Design : LLD + HLD, scalability, microservices
+"""
+
+
+def test_year_ranges_give_the_lower_bound() -> None:
+    for text in ("1 to 6+ Years", "1–6+ years of experience", "2 - 5 yrs", "3+ years"):
+        assert verified_years(None, text) == int(text[0]), text
+    assert verified_years(1, FULL_STACK_JD) == 1
+    assert verified_years(6, FULL_STACK_JD) == 1  # "6" only ever appears as the range top
+
+
+def test_soft_skills_are_dropped_and_interview_topics_are_prep_only() -> None:
+    names = ["Python", "Git", "MongoDB", "DSA", "problem-solving", "LLD", "HLD", "containers"]
+    reply = {**GOOD, "years_min": 6, "implicit_skills": [],
+             "skills": [{"name": n, "importance": "must"} for n in names]}  # fmt: skip
+    profile = analyze_jd(FULL_STACK_JD, StubLLM(lambda s, u: reply))
+    explicit = {s.name: s.importance for s in profile.skills}
+    prep = {s.name for s in profile.implicit_skills}
+    assert profile.years_min == 1
+    assert "problem-solving" not in explicit | {n: "" for n in prep}
+    assert {"DSA", "LLD", "HLD"} <= prep  # named only as interview rounds or DSA topics
+    assert {"DSA", "LLD", "HLD"}.isdisjoint(explicit)
+    assert explicit["Git"] == "must" and explicit["containers"] == "nice"

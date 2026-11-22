@@ -13,7 +13,7 @@ EXTRA_TERMS = (
     "Machine Learning", "Deep Learning", "NLP", "Computer Vision", "OCR", "Generative AI",
     "TensorFlow", "Keras", "scikit-learn", "Pandas", "NumPy", "LlamaIndex", "Fine-tuning",
     "LoRA", "QLoRA", "Prompt Engineering", "MLOps", "MLflow", "Weaviate", "Milvus", "Qdrant",
-    "Spring Boot", "Hadoop", "Bash",
+    "Spring Boot", "Hadoop", "Bash", "GitHub", "GitLab", "HTML", "CSS",
 )  # fmt: skip
 ALIASES: dict[str, str] = {
     "k8s": "Kubernetes",
@@ -51,6 +51,8 @@ ALIASES: dict[str, str] = {
     "fine tuning": "Fine-tuning",
     "finetuning": "Fine-tuning",
     "sklearn": "scikit-learn",
+    "html5": "HTML",
+    "css3": "CSS",
 }
 # Spellings that are also everyday words ("the planner node", "go live", "the rest of"):
 # they name the skill only when written in this exact case.
@@ -95,6 +97,11 @@ IMPLIED_BY: dict[str, tuple[str, ...]] = {
     "Fine-tuning": ("QLoRA", "LoRA", "PEFT"),
     "LoRA": ("QLoRA",),
     "REST": ("FastAPI", "Flask", "Django", "Express.js"),
+    "Git": ("GitHub", "GitLab", "Bitbucket"),
+    "Containers": ("Docker", "Kubernetes"),
+    "Containerization": ("Docker", "Kubernetes"),
+    "HTML": ("React", "Next.js", "Vue.js", "Angular", "CSS", "Tailwind CSS"),
+    "CSS": ("Tailwind CSS",),
 }
 _KNOWN = {name.lower(): name for name in (*SKILL_NAMES, *EXTRA_TERMS)}
 _PAREN = re.compile(r"(.+?)\s*\(([^()]+)\)")

@@ -56,6 +56,8 @@ cases:
   company: Auxo AI
   title: Full Stack Engineer (Frontend Focus)
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - JavaScript
   - LangChain
@@ -96,6 +98,8 @@ cases:
   company: unhr
   title: Sr Backend Developer (Full Stack – Python / Django)
   expected:
+  - HTML
+  - CSS
   - PostgreSQL
   - JavaScript
   - Python
@@ -372,6 +376,8 @@ cases:
   company: Allwyn
   title: 'Mid Level: Full-Stack Software Engineer'
   expected:
+  - HTML
+  - CSS
   - PostgreSQL
   - JavaScript
   - MongoDB
@@ -420,6 +426,8 @@ cases:
   company: Acceldata
   title: Staff Frontend Engineer
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - JavaScript
   - Vue.js
@@ -540,6 +548,8 @@ cases:
   company: MNC
   title: Java Full Stack Developer
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - JavaScript
   - Docker
@@ -586,6 +596,8 @@ cases:
   company: Kraftbase
   title: Software Engineer - Frontend
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - JavaScript
   - Next.js
@@ -623,6 +635,8 @@ cases:
   company: appscrip
   title: Full-Stack Engineer (AI-Native)
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - PostgreSQL
   - Express.js
@@ -732,6 +746,8 @@ cases:
   company: AiPrise
   title: Software Engineer II, Frontend (Bangalore, India)
   expected:
+  - HTML
+  - CSS
   - TypeScript
   - JavaScript
   - Python
@@ -807,6 +823,7 @@ cases:
   company: Deqode
   title: Java + Angular Developer
   expected:
+  - HTML
   - TypeScript
   - JavaScript
   - React
@@ -841,6 +858,7 @@ cases:
   company: CareValidate
   title: Backend Fullstack
   expected:
+  - GitHub
   - TypeScript
   - PostgreSQL
   - Express.js
