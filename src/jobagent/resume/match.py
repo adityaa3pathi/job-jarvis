@@ -45,9 +45,17 @@ def _judge(need: SkillNeed, cards: list[EvidenceCard]) -> MatchItem:
     if exact or said:
         return MatchItem(need, "proven", list(dict.fromkeys(exact + said)))
     specific = {canonical(s) for n in names for s in implied_by(n)}
-    shown_by = [c for c in cards if c.kind == "skill" and canonical(c.text) in specific]
+    shown_by = [
+        (c.id, c.text) for c in cards if c.kind == "skill" and canonical(c.text) in specific
+    ]
+    # A line the owner wrote counts too: "code on GitHub" shows Git.
+    shown_by += [
+        (c.id, s) for c in cards if c.kind != "skill"
+        for s in sorted(specific) if mention(s, c.text)
+    ]  # fmt: skip
     if shown_by:  # "Vector Databases" shown by pgvector work
-        return MatchItem(need, "proven", [c.id for c in shown_by], [c.text for c in shown_by])
+        ids, texts = zip(*shown_by, strict=True)
+        return MatchItem(need, "proven", list(dict.fromkeys(ids)), list(dict.fromkeys(texts)))
     near = [c for c in cards if c.kind == "skill" and any(related(n, c.text) for n in names)]
     if near:
         return MatchItem(need, "adjacent", [c.id for c in near], [c.text for c in near])

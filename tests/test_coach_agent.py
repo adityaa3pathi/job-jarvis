@@ -293,3 +293,15 @@ def test_candidate_facts_in_the_posting_never_reach_the_coach() -> None:
     reply(report, "D", [], "Am I a Zig expert?", chat_llm, job=profile, tools=tools)
     (quoted,) = results(chat_llm.calls[1][1])
     assert quoted["result"] == ["Zig experts welcome."]
+
+
+def test_unnamed_skills_are_interview_prep_not_missing() -> None:
+    from jobagent.resume.jd import JDProfile, SkillNeed
+
+    prep = [SkillNeed("DSA", "DSA", "nice", 0.3, implicit=True)]
+    profile = JDProfile(skills=[SkillNeed("Python", "Python", "must", 1.0)], implicit_skills=prep)
+    coverage = match_profile(profile, cards_from_summary("I write Python."))
+    seen: list[str] = []
+    report = build_report(profile, coverage, "D", StubLLM(lambda s, u: seen.append(u) or ADVICE))
+    assert report.missing_nice == [] and report.missing_must == []
+    assert '"interview_prep": ["DSA"]' in seen[0]

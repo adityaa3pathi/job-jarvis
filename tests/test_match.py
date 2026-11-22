@@ -93,3 +93,16 @@ def test_other_word_forms_count_but_tiny_parts_do_not() -> None:
     names = ["Hallucination Handling & Grounding", "Logging & Monitoring", "A/B Testing"]
     result = by_name(match_profile(JDProfile(skills=[need(n) for n in names]), cards))
     assert [result[n].status for n in names] == ["proven", "proven", "gap"]
+
+
+def test_general_skills_are_shown_by_specific_ones() -> None:
+    cards = [
+        make_card("skill", "Docker", "owner", True),
+        make_card("skill", "React", "owner", True),
+        make_card("claim", "Shipped every project from GitHub with CI/CD.", "owner", True),
+    ]
+    needs = [need("Git"), need("containers", "nice"), need("HTML", "nice")]
+    items = by_name(match_profile(JDProfile(skills=needs), cards))
+    assert {n: i.status for n, i in items.items()} == {
+        "Git": "proven", "containers": "proven", "HTML": "proven"
+    }  # fmt: skip

@@ -17,7 +17,7 @@ from jobagent.resume.pipeline import _prep_line
 from jobagent.sanitize import clean_posting_text, states_candidate_fact
 
 MAX_JD_CHARS = 50_000
-PROMPT_VERSION = "coach-3"
+PROMPT_VERSION = "coach-4"  # coach-4: interview_prep in MATCH
 DIGEST_VERSION = "digest-1"
 DIGEST_MIN_CHARS = 6_000  # shorter summaries (about 1.5k tokens) are sent as they are
 MAX_HISTORY_CHARS = 6_000
@@ -37,7 +37,8 @@ REPORT_STEP = (
     'higher, "fit_reason": "why, if below fit_max", "summary": "2 sentences", '
     '"good": [what already fits, at most 5], "learn": [{"topic", "why", "resource" '
     '(one free resource), "days" (rough number)} for each gap worth learning, at most 5], '
-    '"risks": [likely interview weak spots, at most 3]}.'
+    '"risks": [likely interview weak spots; MATCH interview_prep topics are interview '
+    "rounds, not missing skills, so name them here first; at most 3]}."
 )
 CHAT_STEP = (
     "Answer the person's latest message in at most 120 words. If they state a new fact about "
@@ -184,9 +185,11 @@ def shared_prefix(profile: JDProfile, digest: str) -> str:
 
 
 def _split(coverage: Coverage) -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {"proven": [], "adjacent": [], "must": [], "nice": []}
+    out: dict[str, list[str]] = {"proven": [], "adjacent": [], "must": [], "nice": [], "prep": []}
     for item in coverage.items:
-        if item.status == "gap":
+        if item.status == "gap" and item.need.implicit:
+            out["prep"].append(item.need.name)  # never named as required: prep, not missing
+        elif item.status == "gap":
             out["must" if item.need.importance == "must" else "nice"].append(item.need.name)
         else:
             out[item.status].append(item.need.name)
@@ -207,7 +210,8 @@ def _rules_only(
 ) -> CoachReport:
     """Everything the matcher knows, without the model: used when the advice step fails."""
     gaps = [(n, "must-have") for n in split["must"]] + [(n, "nice to have") for n in split["nice"]]
-    prep = [(n, "gap") for n, _ in gaps] + [(n, "adjacent") for n in split["adjacent"]]
+    prep = [(n, "prep") for n in split["prep"]] + [(n, "gap") for n, _ in gaps]
+    prep += [(n, "adjacent") for n in split["adjacent"]]
     return CoachReport(
         role_title=profile.role_title,
         fit=ceiling,
@@ -237,7 +241,8 @@ def build_report(
     ceiling, why = fit_ceiling(coverage)
     match = json.dumps(
         {"proven": split["proven"], "adjacent": split["adjacent"],
-         "gap_must": split["must"], "gap_nice": split["nice"], "score": coverage.score,
+         "gap_must": split["must"], "gap_nice": split["nice"],
+         "interview_prep": split["prep"], "score": coverage.score,
          "fit_max": ceiling}
     )  # fmt: skip
     # The report step reads the posting, so it is never given lookups.
