@@ -1207,7 +1207,7 @@ def compile_pdf(tex: str, timeout: float = PDF_TIMEOUT_S) -> bytes:
 def app_from_env() -> FastAPI:
     """Entry point for uvicorn: `uvicorn --factory jobagent.web.app:app_from_env`."""
     from jobagent.config import check_config, load_settings
-    from jobagent.llm import GeminiLLM
+    from jobagent.llm import make_llm
     from jobagent.redact import Redactor, configure_logging
 
     # Task tracebacks reach the host's logs, one JSON object per line.
@@ -1220,8 +1220,8 @@ def app_from_env() -> FastAPI:
             settings=settings,
             owner_hash=os.environ.get("JOBAGENT_OWNER_HASH", ""),
             session_secret=os.environ.get("JOBAGENT_SESSION_SECRET", ""),
-            thinker=lambda: GeminiLLM.from_settings(settings.llm, 0.0),
-            writer=lambda: GeminiLLM.from_settings(settings.llm, 0.5),
+            thinker=lambda: make_llm(settings.llm, 0.0),
+            writer=lambda: make_llm(settings.llm, 0.5),
             cookie_secure=os.environ.get("JOBAGENT_COOKIE_SECURE", "1") != "0",
             cron_token=os.environ.get("JOBAGENT_CRON_TOKEN", ""),
             proxy_secret=os.environ.get("JOBAGENT_PROXY_SECRET", ""),

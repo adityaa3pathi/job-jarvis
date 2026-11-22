@@ -1,12 +1,21 @@
-# API image for Render: FastAPI + Tectonic (LaTeX to PDF). The Next.js app deploys to Vercel.
+# API image: FastAPI + Tectonic (LaTeX to PDF), for x86 (Render) and ARM (AWS t4g).
+# The Next.js app deploys to Vercel.
 FROM python:3.12-slim
 
+ARG TARGETARCH
 ARG TECTONIC_VERSION=0.17.0
-ARG TECTONIC_SHA256=8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ARG TECTONIC_SHA256_AMD64=8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7
+ARG TECTONIC_SHA256_ARM64=b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8
+RUN set -eu; arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch" in \
+      amd64) triple=x86_64-unknown-linux-musl; sum="$TECTONIC_SHA256_AMD64" ;; \
+      arm64) triple=aarch64-unknown-linux-musl; sum="$TECTONIC_SHA256_ARM64" ;; \
+      *) echo "no Tectonic build for $arch" >&2; exit 1 ;; \
+    esac; \
+    apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL -o /tmp/tectonic.tgz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-    && echo "${TECTONIC_SHA256}  /tmp/tectonic.tgz" | sha256sum -c - \
+    && curl -fsSL -o /tmp/tectonic.tgz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-${triple}.tar.gz" \
+    && echo "${sum}  /tmp/tectonic.tgz" | sha256sum -c - \
     && tar -xzf /tmp/tectonic.tgz -C /usr/local/bin tectonic && rm /tmp/tectonic.tgz
 
 COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
@@ -15,7 +24,7 @@ WORKDIR /app
 COPY --chown=app pyproject.toml uv.lock ./
 COPY --chown=app src ./src
 COPY --chown=app config.yaml policy.yaml companies.yaml searches.yaml ./
-RUN uv sync --frozen --no-dev --extra agent --extra turso --extra embed && chown -R app /app
+RUN uv sync --frozen --no-dev --extra agent --extra turso --extra embed --extra bedrock && chown -R app /app
 
 USER app
 ENV PATH="/app/.venv/bin:$PATH" \

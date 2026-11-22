@@ -348,3 +348,120 @@ class GeminiLLM:
             else:
                 return response
         raise AssertionError("unreachable")
+
+
+_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
+# Bedrock errors worth waiting for; anything else fails the call at once.
+_BEDROCK_BUSY = frozenset(
+    {"ThrottlingException", "ServiceUnavailableException", "ModelNotReadyException",
+     "InternalServerException", "ModelTimeoutException"}
+)  # fmt: skip
+
+
+class BedrockLLM:
+    """Amazon Bedrock through the Converse API (Amazon Nova by default). AWS credentials come
+    from the usual chain: the server's IAM role, or AWS_* variables. Needs the `bedrock` extra."""
+
+    def __init__(
+        self,
+        model: str,
+        region: str = "ap-south-1",
+        timeout_s: float = 30.0,
+        temperature: float = 0.0,
+        max_output_tokens: dict[str, int] | None = None,
+        client: Any = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.model = model
+        self.region = region
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens or {}
+        self._timeout_s = timeout_s
+        self._client = client
+        self._sleep = sleep
+
+    def _bedrock(self) -> Any:
+        if self._client is None:
+            import boto3  # type: ignore[import-not-found]
+            from botocore.config import Config  # type: ignore[import-not-found]
+
+            config = Config(read_timeout=self._timeout_s, retries={"max_attempts": 1})
+            self._client = boto3.client("bedrock-runtime", region_name=self.region, config=config)
+        return self._client
+
+    def complete_json(self, *, system: str, user: str) -> str:
+        inference: dict[str, Any] = {"temperature": self.temperature}
+        if cap := self.max_output_tokens.get(current_step()):
+            inference["maxTokens"] = cap
+        request = {
+            "modelId": self.model,
+            "system": [{"text": system}],
+            "messages": [{"role": "user", "content": [{"text": user}]}],
+            "inferenceConfig": inference,
+        }
+        started = time.monotonic()
+        data = self._converse(request)
+        meta = data.get("usage") or {}
+        report_usage(Usage(
+            current_step(), self.model, int(meta.get("inputTokens", 0)),
+            int(meta.get("outputTokens", 0)), int(meta.get("cacheReadInputTokens", 0)),
+            int((time.monotonic() - started) * 1000),
+        ))  # fmt: skip
+        try:
+            parts = data["output"]["message"]["content"]
+            text = "".join(str(p["text"]) for p in parts if "text" in p)
+        except (KeyError, TypeError):
+            raise LLMError(f"Bedrock returned no text: {data.get('stopReason', '?')}") from None
+        if not text.strip():
+            raise LLMError(f"Bedrock returned no text: {data.get('stopReason', '?')}")
+        found = _FENCE.match(text)  # Nova has no JSON mode and sometimes fences its reply
+        return found.group(1) if found else text.strip()
+
+    def _converse(self, request: dict[str, Any]) -> dict[str, Any]:
+        for attempt in range(MAX_RATE_RETRIES + 1):
+            try:
+                return dict(self._bedrock().converse(**request))
+            except Exception as exc:  # botocore is optional, so its classes are read by name
+                code = str(getattr(exc, "response", {}).get("Error", {}).get("Code", ""))
+                busy = code in _BEDROCK_BUSY or "timeout" in type(exc).__name__.lower()
+                if not busy or attempt == MAX_RATE_RETRIES:
+                    raise LLMError(f"Bedrock {code or 'error'}: {short_cause(exc)}") from exc
+                self._sleep(BACKOFF_S * 2**attempt)
+        raise AssertionError("unreachable")
+
+    @classmethod
+    def from_settings(cls, llm: LLMSettings, temperature: float) -> BedrockLLM:
+        return cls(
+            llm.bedrock_model, region=llm.bedrock_region, timeout_s=llm.timeout_s,
+            temperature=temperature, max_output_tokens=dict(llm.max_output_tokens),
+        )  # fmt: skip
+
+
+class FallbackLLM:
+    """The first model answers; when its call fails (busy, quota used up, timeout, no key),
+    the next one does. Cache keys keep the first model's id, so a swap never empties the cache."""
+
+    def __init__(self, *chain: LLM) -> None:
+        if not chain:
+            raise ValueError("FallbackLLM needs at least one model")
+        self.chain = chain
+        self.model = model_id(chain[0])
+
+    def complete_json(self, *, system: str, user: str) -> str:
+        causes = []
+        for llm in self.chain:
+            try:
+                return llm.complete_json(system=system, user=user)
+            except Exception as exc:  # a network error is as good a reason to move on
+                causes.append(f"{model_id(llm)}: {short_cause(exc)}")
+                log.warning("model %s failed, trying the next: %s", model_id(llm), exc)
+        raise LLMError("; ".join(causes))
+
+
+def make_llm(llm: LLMSettings, temperature: float) -> LLM:
+    """Gemini, then Bedrock when `bedrock_model` is set: the one place the app picks models."""
+    gemini = GeminiLLM.from_settings(llm, temperature)
+    if not llm.bedrock_model:
+        return gemini
+    bedrock = BedrockLLM.from_settings(llm, temperature)
+    return bedrock if llm.provider == "bedrock" else FallbackLLM(gemini, bedrock)

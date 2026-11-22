@@ -30,6 +30,9 @@ turso = [
 embed = [
     "fastembed>=0.7,<0.10",
 ]
+bedrock = [
+    "boto3>=1.35",
+]
 mcp = [
     "mcp>=1.2",
 ]

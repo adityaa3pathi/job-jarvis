@@ -12,6 +12,9 @@ llm:
   model: gemini-3.5-flash-lite
   timeout_s: 30
   send_contact_details: false
+  # On AWS: Nova answers when Gemini fails. Check the model id in the Bedrock console.
+  # bedrock_model: global.amazon.nova-2-lite-v1:0
+  # bedrock_region: ap-south-1
 ranking:
   owner_years: 2  # DocNow since 06-2024; jobs asking 4+ years rank lower, 6+ are dropped
 outreach:

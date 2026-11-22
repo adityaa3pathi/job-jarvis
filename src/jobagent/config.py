@@ -30,6 +30,10 @@ class LLMSettings(BaseModel):
     provider: str = "gemini"
     model: str = "gemini-3.5-flash-lite"
     fallback_model: str = "gemini-3.1-flash-lite"  # used when the main model is busy (5xx)
+    # Amazon Bedrock (Nova): the next model when Gemini fails; empty turns it off.
+    # provider "bedrock" makes it the only model. Paid from AWS credits.
+    bedrock_model: str = ""
+    bedrock_region: str = "ap-south-1"
     timeout_s: float = 30.0
     send_contact_details: bool = False
     max_output_tokens: dict[str, int] = Field(default_factory=lambda: dict(MAX_OUTPUT_TOKENS))
