@@ -78,5 +78,5 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["libsql"]
+module = ["libsql", "boto3", "botocore.*"]
 ignore_missing_imports = true

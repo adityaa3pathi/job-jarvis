@@ -382,8 +382,8 @@ class BedrockLLM:
 
     def _bedrock(self) -> Any:
         if self._client is None:
-            import boto3  # type: ignore[import-not-found]
-            from botocore.config import Config  # type: ignore[import-not-found]
+            import boto3
+            from botocore.config import Config
 
             config = Config(read_timeout=self._timeout_s, retries={"max_attempts": 1})
             self._client = boto3.client("bedrock-runtime", region_name=self.region, config=config)
