@@ -30,6 +30,9 @@ turso = [
 embed = [
     "fastembed>=0.7,<0.10",
 ]
+bedrock = [
+    "boto3>=1.35",
+]
 mcp = [
     "mcp>=1.2",
 ]
@@ -75,5 +78,5 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["libsql"]
+module = ["libsql", "boto3", "botocore.*"]
 ignore_missing_imports = true

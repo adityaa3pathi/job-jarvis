@@ -8,10 +8,12 @@ import logging
 import os
 import re
 import secrets
+import threading
 import time
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -116,6 +118,51 @@ def _deliver(usage: Usage) -> None:
         record(usage)
     except Exception as exc:  # a lost usage row must not fail the AI step
         log.warning("could not record AI usage: %s", short_cause(exc))
+
+
+MAX_PARALLEL = 4  # model calls at once; Gemini's per-minute limit is the real cap
+
+
+def parallel[T](*calls: Callable[[], T]) -> list[T]:
+    """Run independent AI steps at the same time; results come back in call order.
+
+    Each call runs in a copy of this thread's context, so step names and the run id carry
+    over. Usage rows are held and handed to this thread's sink after every call has ended,
+    because a store connection must never be used by two threads at once. If a call
+    raises, the first error is raised once all have finished."""
+    if len(calls) <= 1:
+        return [call() for call in calls]
+    held: list[list[Usage]] = [[] for _ in calls]
+
+    def run(i: int, call: Callable[[], T]) -> T:
+        _SINK.set(held[i].append)
+        return call()
+
+    with ThreadPoolExecutor(max_workers=min(len(calls), MAX_PARALLEL)) as pool:
+        futures = [pool.submit(copy_context().run, run, i, c) for i, c in enumerate(calls)]
+        errors = [f.exception() for f in futures]  # waits for each
+    for rows in held:
+        for usage in rows:
+            _deliver(usage)
+    if first := next((e for e in errors if e is not None), None):
+        raise first
+    return [f.result() for f in futures]
+
+
+class LockedCache:
+    """Lets calls inside `parallel` share one store's cache, one at a time."""
+
+    def __init__(self, inner: LLMCache) -> None:
+        self.inner = inner
+        self._lock = threading.Lock()
+
+    def cache_get(self, key: str) -> str | None:
+        with self._lock:
+            return self.inner.cache_get(key)
+
+    def cache_put(self, key: str, step: str, value: str) -> None:
+        with self._lock:
+            self.inner.cache_put(key, step, value)
 
 
 def model_id(llm: LLM) -> str:
@@ -262,6 +309,7 @@ class GeminiLLM:
         sleep: Callable[[float], None] = time.sleep,
         max_output_tokens: dict[str, int] | None = None,
         thinking_budget: int | None = None,
+        thinking_level: str | None = None,
         fallback: str | None = None,
     ) -> None:
         self._sleep = sleep
@@ -270,6 +318,7 @@ class GeminiLLM:
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens or {}
         self.thinking_budget = thinking_budget
+        self.thinking_level = thinking_level
         # A key pasted with its newline makes httpx refuse the header, and its error
         # quotes the header value, so strip it here.
         self._key = (api_key or os.environ.get("GEMINI_API_KEY", "")).strip()
@@ -285,7 +334,9 @@ class GeminiLLM:
         cap = self.max_output_tokens.get(current_step())
         if cap:
             config["maxOutputTokens"] = cap
-        if self.thinking_budget is not None:
+        if self.thinking_level:  # Gemini 3 models; takes the place of a token budget
+            config["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
+        elif self.thinking_budget is not None:
             config["thinkingConfig"] = {"thinkingBudget": self.thinking_budget}
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -319,6 +370,7 @@ class GeminiLLM:
         return cls(
             llm.model, timeout_s=llm.timeout_s, temperature=temperature,
             max_output_tokens=dict(llm.max_output_tokens), thinking_budget=llm.thinking_budget,
+            thinking_level=llm.thinking_level or None,
             fallback=llm.fallback_model or None,
         )  # fmt: skip
 
@@ -356,3 +408,121 @@ class GeminiLLM:
             else:
                 return response
         raise AssertionError("unreachable")
+
+
+_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
+# Bedrock errors worth waiting for; anything else fails the call at once.
+_BEDROCK_BUSY = frozenset(
+    {"ThrottlingException", "ServiceUnavailableException", "ModelNotReadyException",
+     "InternalServerException", "ModelTimeoutException"}
+)  # fmt: skip
+
+
+class BedrockLLM:
+    """Amazon Bedrock through the Converse API (Amazon Nova by default). AWS credentials come
+    from the usual chain: the server's IAM role, or AWS_* variables. Needs the `bedrock` extra."""
+
+    def __init__(
+        self,
+        model: str,
+        region: str = "ap-south-1",
+        timeout_s: float = 30.0,
+        temperature: float = 0.0,
+        max_output_tokens: dict[str, int] | None = None,
+        client: Any = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.model = model
+        self.region = region
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens or {}
+        self._timeout_s = timeout_s
+        self._client = client
+        self._sleep = sleep
+
+    def _bedrock(self) -> Any:
+        if self._client is None:
+            import boto3
+            from botocore.config import Config
+
+            config = Config(read_timeout=self._timeout_s, retries={"max_attempts": 1})
+            self._client = boto3.client("bedrock-runtime", region_name=self.region, config=config)
+        return self._client
+
+    def complete_json(self, *, system: str, user: str) -> str:
+        inference: dict[str, Any] = {"temperature": self.temperature}
+        if cap := self.max_output_tokens.get(current_step()):
+            inference["maxTokens"] = cap
+        request = {
+            "modelId": self.model,
+            "system": [{"text": system}],
+            "messages": [{"role": "user", "content": [{"text": user}]}],
+            "inferenceConfig": inference,
+        }
+        started = time.monotonic()
+        data = self._converse(request)
+        meta = data.get("usage") or {}
+        report_usage(Usage(
+            current_step(), self.model, int(meta.get("inputTokens", 0)),
+            int(meta.get("outputTokens", 0)), int(meta.get("cacheReadInputTokens", 0)),
+            int((time.monotonic() - started) * 1000),
+        ))  # fmt: skip
+        try:
+            parts = data["output"]["message"]["content"]
+            text = "".join(str(p["text"]) for p in parts if "text" in p)
+        except (KeyError, TypeError):
+            raise LLMError(f"Bedrock returned no text: {data.get('stopReason', '?')}") from None
+        if not text.strip():
+            raise LLMError(f"Bedrock returned no text: {data.get('stopReason', '?')}")
+        found = _FENCE.match(text)  # Nova has no JSON mode and sometimes fences its reply
+        return found.group(1) if found else text.strip()
+
+    def _converse(self, request: dict[str, Any]) -> dict[str, Any]:
+        for attempt in range(MAX_RATE_RETRIES + 1):
+            try:
+                return dict(self._bedrock().converse(**request))
+            except Exception as exc:  # botocore is optional, so its classes are read by name
+                code = str(getattr(exc, "response", {}).get("Error", {}).get("Code", ""))
+                busy = code in _BEDROCK_BUSY or "timeout" in type(exc).__name__.lower()
+                busy = busy and "per day" not in str(exc)  # a daily quota will not clear now
+                if not busy or attempt == MAX_RATE_RETRIES:
+                    raise LLMError(f"Bedrock {code or 'error'}: {short_cause(exc)}") from exc
+                self._sleep(BACKOFF_S * 2**attempt)
+        raise AssertionError("unreachable")
+
+    @classmethod
+    def from_settings(cls, llm: LLMSettings, temperature: float) -> BedrockLLM:
+        return cls(
+            llm.bedrock_model, region=llm.bedrock_region, timeout_s=llm.timeout_s,
+            temperature=temperature, max_output_tokens=dict(llm.max_output_tokens),
+        )  # fmt: skip
+
+
+class FallbackLLM:
+    """The first model answers; when its call fails (busy, quota used up, timeout, no key),
+    the next one does. Cache keys keep the first model's id, so a swap never empties the cache."""
+
+    def __init__(self, *chain: LLM) -> None:
+        if not chain:
+            raise ValueError("FallbackLLM needs at least one model")
+        self.chain = chain
+        self.model = model_id(chain[0])
+
+    def complete_json(self, *, system: str, user: str) -> str:
+        causes = []
+        for llm in self.chain:
+            try:
+                return llm.complete_json(system=system, user=user)
+            except Exception as exc:  # a network error is as good a reason to move on
+                causes.append(f"{model_id(llm)}: {short_cause(exc)}")
+                log.warning("model %s failed, trying the next: %s", model_id(llm), exc)
+        raise LLMError("; ".join(causes))
+
+
+def make_llm(llm: LLMSettings, temperature: float) -> LLM:
+    """Gemini, then Bedrock when `bedrock_model` is set: the one place the app picks models."""
+    gemini = GeminiLLM.from_settings(llm, temperature)
+    if not llm.bedrock_model:
+        return gemini
+    bedrock = BedrockLLM.from_settings(llm, temperature)
+    return bedrock if llm.provider == "bedrock" else FallbackLLM(gemini, bedrock)
