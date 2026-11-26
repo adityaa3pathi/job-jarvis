@@ -14,7 +14,7 @@ portals:
   workatastartup: {mode: discover_only, live: false, discover: false, notes: "Job list needs a YC login (406); read via the yc row instead"}
   yc: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; ycombinator.com/jobs is public and robots.txt allows it"}
   uplers: {mode: discover_only, live: false, discover: false, notes: "No public search; only a 5 MB sitemap plus one request per job"}
-  jobleads: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; 25 jobs per search, loose matching, /api/ banned"}
+  jobleads: {mode: discover_only, live: false, discover: false, discover_pause_s: 3, notes: "Medium; 25 jobs per search, loose matching, /api/ banned. Off 26-11-2026: 403 on every search"}
   bebee: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; first role page only, robots.txt bans query strings"}
   switchly: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Medium; public role pages show ~3 jobs, /api/ banned"}
   jobgether: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public API built for agents, robots.txt Crawl-delay 2"}
@@ -31,7 +31,7 @@ portals:
   telegram: {mode: discover_only, live: false, discover: true, discover_pause_s: 4, notes: "Medium; public channel web preview t.me/s, no account; owner chose 08-11-2026; scam filter on every post"}
   bluesky: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; public post search api.bsky.app, no account"}
   mastodon: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; per-server #hiring tag RSS"}
-  reddit: {mode: discover_only, live: false, discover: true, discover_pause_s: 50, notes: "Medium; search RSS, about 1 request per 45 s per IP; Reddit ends RSS 13-11-2026, then turn off"}
+  reddit: {mode: discover_only, live: false, discover: false, discover_pause_s: 50, notes: "Medium; search RSS, about 1 request per 45 s per IP. Off 26-11-2026: RSS ended 13-11-2026, 404 since"}
   a16z: {mode: discover_only, live: false, discover: true, discover_pause_s: 3, notes: "Low; a16z portfolio job board, robots.txt allows all; 25 matches per search"}
   remoteio: {mode: discover_only, live: false, discover: true, discover_pause_s: 5, notes: "Medium; robots.txt disallows /api/ list calls; owner chose 08-11-2026 to read it, up to 6 requests a day"}
   inc42: {mode: discover_only, live: false, discover: true, discover_pause_s: 2, notes: "Low; startup news RSS for the funded badge, robots.txt allows"}

@@ -138,13 +138,18 @@ def _clean_reason(text: str) -> str:
     return re.sub(r"[\x00-\x1f]+", " ", text).strip()[:200]
 
 
-def judge(llm: LLM, user: str, step: str = "") -> tuple[Judgement | None, int]:
-    """One retry on a bad reply. Returns (judgement or None, number of calls made)."""
+def judge(
+    llm: LLM, user: str, step: str = "", errors: list[str] | None = None
+) -> tuple[Judgement | None, int]:
+    """One retry on a bad reply. Returns (judgement or None, number of calls made).
+    Each failure is logged and, when `errors` is given, added to it."""
     for attempt in (1, 2):
         try:
             return ask(llm, Judgement, system=JUDGE_SYSTEM, user=user, step=step), attempt
-        except LLMError:
-            continue
+        except LLMError as exc:
+            log.warning("AI judge call %d failed: %s", attempt, exc)
+            if errors is not None:
+                errors.append(str(exc))
     return None, 2
 
 
@@ -410,6 +415,7 @@ class JudgeSummary:
     cache_hits: int = 0
     stopped_by_budget: bool = False
     failed: bool = False
+    error: str = ""  # the last failure, shown in the run's note
 
 
 def judge_top(
@@ -438,10 +444,13 @@ def judge_top(
         else:
             posting = f"Title: {job['title']}\nLocation: {job['location']}\n{clean}"
             with usage_sink(st.add_usage):
-                verdict, calls = judge(llm, f"{me}\n{data_block('posting', posting)}", JUDGE_STEP)
+                errors: list[str] = []
+                verdict, calls = judge(
+                    llm, f"{me}\n{data_block('posting', posting)}", JUDGE_STEP, errors
+                )
             out.calls += calls
             if verdict is None:  # outage or bad replies: leave the job for the next run
-                out.failed = True
+                out.failed, out.error = True, errors[-1] if errors else ""
                 break
             st.cache_put(key, JUDGE_STEP, verdict.model_dump_json())
         cap, why = verdict.score * 20, _clean_reason(verdict.reasons[0])
@@ -476,4 +485,6 @@ def rank_jobs(
             note += "; daily AI budget reached"
         if j.failed:
             note += "; AI judge failed, the rest wait for the next run"
+            if j.error:
+                note += f" ({_clean_reason(j.error)})"
     return note

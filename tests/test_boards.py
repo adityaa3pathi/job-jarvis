@@ -101,6 +101,7 @@ def test_searches_file_loads_and_every_url_is_on_an_allowed_host() -> None:
 
 
 def test_jobleads_unpacks_nuxt_state(policy: Policy) -> None:
+    policy.portals["jobleads"].discover = True  # off in policy.yaml (403s); the parser stays
     first, second = run("jobleads", "full stack developer", "jobleads.html", policy)
     assert (first.title, first.company) == ("Full stack developer", "Wait4Ads")
     assert first.location == "Chennai District, Tamil Nadu"

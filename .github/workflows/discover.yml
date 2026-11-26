@@ -1,6 +1,8 @@
-# Daily job search at 08:53 IST (03:23 UTC), run here: on Render's small CPU it starved the
-# health check. Writes the Turso runs table, so the web Jobs page shows progress and result.
-# "Find new jobs" on the web starts it too (workflow_dispatch). Fails when the run fails.
+# Daily job search, run here: on Render's small CPU it starved the health check. Writes the
+# Turso runs table, so the web Jobs page shows progress and result. Fails when the run fails.
+# Started by workflow_dispatch: cron-job.org at 08:53 IST (GitHub's own schedule started
+# 7-10 h late), and "Find new jobs" on the web. The schedule below is only a backup: it
+# skips itself when a dispatched run already succeeded today (IST) or is still running.
 name: daily-discover
 on:
   schedule:
@@ -8,10 +10,31 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read  # the backup's check of today's runs
 concurrency:
   group: daily-discover
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != schedule ]; then echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          since=$(date -u -d "$(TZ=Asia/Kolkata date +%F) 00:00 +0530" +%Y-%m-%dT%H:%M:%SZ)
+          n=$(gh run list -R "$GITHUB_REPOSITORY" --workflow discover.yml \
+                --event workflow_dispatch --created ">=$since" --json conclusion,status \
+                --jq '[.[] | select(.conclusion == "success" or .status != "completed")] | length')
+          echo "dispatched runs since $since (IST midnight): $n"
+          echo "skip=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
   discover:
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45  # keep under STALE_RUN_S in web/store.py (50 min)
     env:

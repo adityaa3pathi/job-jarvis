@@ -111,3 +111,27 @@ def test_no_fallback_keeps_the_full_retry_budget() -> None:
     llm, _, calls = gemini([httpx.Response(503) for _ in range(MAX_RATE_RETRIES)] + [ok()])
     assert llm.complete_json(system="s", user="u") == '{"ok": 1}'
     assert len(calls) == MAX_RATE_RETRIES + 1
+
+
+def test_key_with_a_trailing_newline_still_works() -> None:
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request.headers["x-goog-api-key"])
+        return ok()
+
+    llm = GeminiLLM("m", api_key="secret-key\n", transport=httpx.MockTransport(handler))
+    assert llm.complete_json(system="s", user="u") == '{"ok": 1}'
+    assert sent == ["secret-key"]
+
+
+def test_a_key_httpx_refuses_never_appears_in_the_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        # What the real transport raises: its message quotes the header value.
+        raise httpx.LocalProtocolError("Illegal header value b'secret\\x01key'")
+
+    llm = GeminiLLM("m", api_key="secret\x01key", transport=httpx.MockTransport(handler))
+    with pytest.raises(LLMError) as info:
+        llm.complete_json(system="s", user="u")
+    assert "secret" not in str(info.value) and info.value.__cause__ is None
+    assert info.value.__suppress_context__

@@ -319,7 +319,9 @@ class GeminiLLM:
         self.max_output_tokens = max_output_tokens or {}
         self.thinking_budget = thinking_budget
         self.thinking_level = thinking_level
-        self._key = api_key or os.environ.get("GEMINI_API_KEY", "")
+        # A key pasted with its newline makes httpx refuse the header, and its error
+        # quotes the header value, so strip it here.
+        self._key = (api_key or os.environ.get("GEMINI_API_KEY", "")).strip()
         self._client = httpx.Client(timeout=timeout_s, transport=transport)
 
     def complete_json(self, *, system: str, user: str) -> str:
@@ -382,6 +384,12 @@ class GeminiLLM:
             try:
                 # The key goes in a header, not the URL, so it never reaches logs.
                 response = self._client.post(url, json=body, headers={"x-goog-api-key": self._key})
+            except httpx.LocalProtocolError:
+                # Its message quotes the header value, i.e. the key: never chain or log it.
+                raise LLMError(
+                    "Gemini request refused by httpx: GEMINI_API_KEY has characters a header "
+                    "cannot carry"
+                ) from None
             except httpx.TimeoutException as exc:
                 if last:
                     raise LLMError(f"Gemini timed out {attempt + 1} times") from exc
