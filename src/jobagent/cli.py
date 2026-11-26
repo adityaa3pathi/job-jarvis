@@ -63,7 +63,9 @@ def discover(settings: Settings) -> int:
                     )
 
         try:
-            fetcher = HttpFetcher()
+            # 20 s per request: a source that slow fails anyway, and waiting 60 s on it
+            # stretched every daily run (stage 1 of docs/accuracy-speed-plan.md).
+            fetcher = HttpFetcher(deadline_s=20.0)
             discover_all(
                 load_companies(REPO_ROOT / "companies.yaml"), fetcher, policy,
                 load_searches(REPO_ROOT / "searches.yaml"), on_portal_done=save,

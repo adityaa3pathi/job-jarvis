@@ -62,7 +62,6 @@ companies:
   - {name: DevRev, ats: greenhouse, token: devrev}
   - {name: DigitalOcean, ats: greenhouse, token: digitalocean98}
   - {name: Diligent, ats: greenhouse, token: diligentcorporation}
-  - {name: Docsumo, ats: lever, token: docsumo}
   - {name: DoorDash India, ats: greenhouse, token: doordashindia}
   - {name: Drivetrain, ats: lever, token: drivetrain}
   - {name: Druva, ats: greenhouse, token: druva}
@@ -121,7 +120,6 @@ companies:
   - {name: LaunchDarkly, ats: greenhouse, token: launchdarkly}
   - {name: Leena AI, ats: workable, token: leena-ai}
   - {name: Level AI, ats: lever, token: levelai}
-  - {name: Libra AI, ats: ashby, token: libra}
   - {name: Lingaro, ats: lever, token: lingarogroup}
   - {name: Litmus, ats: ashby, token: litmus}
   - {name: Lynx Analytics, ats: greenhouse, token: lynxanalytics}
@@ -206,7 +204,6 @@ companies:
   - {name: Tekion, ats: ashby, token: tekion}
   - {name: Temporal, ats: ashby, token: temporal}
   - {name: Tenstorrent, ats: greenhouse, token: tenstorrent}
-  - {name: Thoughtworks, ats: greenhouse, token: thoughtworks}
   - {name: Tide, ats: greenhouse, token: tide}
   - {name: Toast, ats: greenhouse, token: toast}
   - {name: Together AI, ats: greenhouse, token: togetherai}

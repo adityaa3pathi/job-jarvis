@@ -192,6 +192,7 @@ def test_failed_judge_leaves_jobs_for_the_next_run(settings: Settings) -> None:
     out = judge_top(db, Store(settings.db_path), llm, top_n=5, budget=LLMSettings())
     assert (out.judged, out.failed, llm.calls) == (0, True, 2)  # one job, one retry, then stop
     assert db.judged_on(today_ist().isoformat()) == 0
+    assert "stubbed timeout" in out.error  # the cause reaches the run's note
 
 
 def test_judge_skipped_without_a_profile(settings: Settings) -> None:

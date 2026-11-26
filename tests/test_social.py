@@ -107,6 +107,7 @@ def test_mastodon_reads_the_hiring_tag_feed(policy: Policy) -> None:
 
 
 def test_reddit_reads_hiring_posts_from_search_rss(policy: Policy) -> None:
+    policy.portals["reddit"].discover = True  # off in policy.yaml since its RSS ended
     atom = (
         '<feed xmlns="http://www.w3.org/2005/Atom"><entry>'
         "<author><name>/u/demo</name></author>"
