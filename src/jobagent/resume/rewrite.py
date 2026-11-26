@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from jobagent.lexicon import KNOWN_TECH, find_numbers, find_scope, words
-from jobagent.llm import LLM, LLMError, ask, data_block
+from jobagent.llm import LLM, LLMError, ask, data_block, parallel
 from jobagent.resume.evidence import EvidenceCard
 from jobagent.resume.jd import JDProfile, SkillNeed
 from jobagent.resume.latex import (
@@ -167,28 +170,34 @@ def _score(plain: str, coverage: Coverage) -> float:
     )  # fmt: skip
 
 
-def _tailor_bullets(
-    resume: Resume, cards: list[EvidenceCard], profile: JDProfile, coverage: Coverage,
-    llm: LLM, out: TailorResult, instructions: str = "",
-) -> None:  # fmt: skip
-    allowed = _allowed(cards, coverage)
-    terms = ", ".join(
-        i.need.verbatim for i in coverage.items if i.status == "proven" and not i.need.implicit
-    )
+def _bullet_sections(resume: Resume) -> list[tuple[str, Section]]:
     sections = []
     for title in BULLET_SECTIONS:
         try:
             sections.append((title, resume.section(title)))
         except KeyError:
             continue
+    return sections
+
+
+def _bullet_requests(
+    resume: Resume, coverage: Coverage, profile: JDProfile, instructions: str = ""
+) -> list[_BatchRequest]:
+    """One request per batch of bullets; the model is not called here."""
+    terms = ", ".join(
+        i.need.verbatim for i in coverage.items if i.status == "proven" and not i.need.implicit
+    )
+    sections = _bullet_sections(resume)
     cmds = [
         node for _, section in sections for run in _runs(section) for pos in run
         if isinstance(node := section.nodes[pos], Command)
     ]  # fmt: skip
-    for start in range(0, len(cmds), MAX_BATCH):
-        batch = cmds[start : start + MAX_BATCH]
-        _rewrite_batch(batch, allowed, terms, profile, llm, out, instructions)
-    for title, section in sections:
+    batches = (cmds[start : start + MAX_BATCH] for start in range(0, len(cmds), MAX_BATCH))
+    return [r for batch in batches if (r := _batch_request(batch, terms, profile, instructions))]
+
+
+def _reorder_bullets(resume: Resume, coverage: Coverage, out: TailorResult) -> None:
+    for title, section in _bullet_sections(resume):
         for run in _runs(section):
             order = sorted(
                 (section.nodes[p] for p in run),
@@ -200,29 +209,40 @@ def _tailor_bullets(
                     section.nodes[pos] = node
 
 
-def _rewrite_batch(
-    cmds: list[Command], allowed: set[str], terms: str, profile: JDProfile, llm: LLM,
-    out: TailorResult, instructions: str = "",
-) -> None:  # fmt: skip
+@dataclass
+class _BatchRequest:
+    cmds: list[Command]
+    plains: dict[int, str]
+    system: str
+    user: str
+
+
+def _batch_request(
+    cmds: list[Command], terms: str, profile: JDProfile, instructions: str = ""
+) -> _BatchRequest | None:
     """One model call for many bullets; each reply still passes `check_rewrite` on its own."""
     plains = {i: p for i, cmd in enumerate(cmds) if (p := to_plain(cmd.args[0])) is not None}
     if not plains:
-        return
+        return None
     listed = "\n".join(f"{i}. {p}" for i, p in plains.items())
     user = data_block("job_title", profile.role_title) + data_block("bullets", listed)
     system = SYSTEM.format(terms=terms or "none")
     if instructions := instructions.strip()[:MAX_INSTRUCTIONS]:
         user += data_block("owner_style", instructions)
         system += OWNER_STYLE
-    try:
-        batch = ask(llm, _Batch, system=system, user=user, step="rewrite_bullets")
-    except LLMError as exc:
-        out.failed += [(p, str(exc)) for p in plains.values()]
+    return _BatchRequest(cmds, plains, system, user)
+
+
+def _apply_batch(
+    req: _BatchRequest, batch: _Batch | LLMError, allowed: set[str], out: TailorResult
+) -> None:
+    if isinstance(batch, LLMError):
+        out.failed += [(p, str(batch)) for p in req.plains.values()]
         return
     replies = {item.id: item.text for item in batch.items}
-    for i, plain in plains.items():
+    for i, plain in req.plains.items():
         if i in replies:
-            _apply(cmds[i], plain, replies[i], allowed, out)
+            _apply(req.cmds[i], plain, replies[i], allowed, out)
         else:
             out.failed.append((plain, "model reply left this bullet out"))
 
@@ -237,6 +257,15 @@ def _apply(cmd: Command, plain: str, new: str, allowed: set[str], out: TailorRes
         return
     cmd.args[0] = from_plain(new)
     out.changes.append(Change("bullet", plain, new, "stronger wording for this job"))
+
+
+def _ask_or_error[T: BaseModel](
+    llm: LLM, schema: type[T], system: str, user: str, step: str
+) -> T | LLMError:
+    try:
+        return ask(llm, schema, system=system, user=user, step=step)
+    except LLMError as exc:
+        return exc
 
 
 def _allowed(cards: list[EvidenceCard], coverage: Coverage) -> set[str]:
@@ -328,15 +357,25 @@ def _skills_block(skills: list[str]) -> str:
     )
 
 
-def _tailor_summary(
-    resume: Resume, cards: list[EvidenceCard], profile: JDProfile, coverage: Coverage,
-    llm: LLM, out: TailorResult, instructions: str = "",
-) -> None:  # fmt: skip
+@dataclass
+class _SummaryRequest:
+    node: Raw
+    start: int
+    end: int
+    before: str
+    system: str
+    user: str
+
+
+def _summary_request(
+    resume: Resume, coverage: Coverage, profile: JDProfile, out: TailorResult,
+    instructions: str = "",
+) -> _SummaryRequest | None:  # fmt: skip
     """Rewrite the top summary for this job under the same fact check as the bullets."""
     span = summary_span(resume)
     if span is None:
         out.summary_note = "no summary paragraph found at the top of the resume"
-        return
+        return None
     node, start, end = span
     before = to_plain(node.text[start:end]) or ""
     proven = [i for i in coverage.items if i.status == "proven" and not i.need.implicit]
@@ -347,13 +386,18 @@ def _tailor_summary(
     if instructions := instructions.strip()[:MAX_INSTRUCTIONS]:
         user += data_block("owner_style", instructions)
         system += OWNER_STYLE
-    try:
-        new = " ".join(
-            ask(llm, _Summary, system=system, user=user, step="rewrite_summary").text.split()
-        )
-    except LLMError as exc:
-        out.summary_note = f"kept as it was: model error ({exc})"
+    return _SummaryRequest(node, start, end, before, system, user)
+
+
+def _apply_summary(
+    req: _SummaryRequest, reply: _Summary | LLMError, cards: list[EvidenceCard],
+    coverage: Coverage, out: TailorResult,
+) -> None:  # fmt: skip
+    if isinstance(reply, LLMError):
+        out.summary_note = f"kept as it was: model error ({reply})"
         return
+    node, start, end, before = req.node, req.start, req.end, req.before
+    new = " ".join(reply.text.split())
     plain_before, plain_new = before.replace("**", ""), new.replace("**", "")
     if not plain_new or plain_new == plain_before:
         out.summary_note = "the model kept it as it was"
@@ -382,8 +426,23 @@ def tailor_resume(
     instructions: str = "",
 ) -> TailorResult:
     out = TailorResult(latex="")
-    _tailor_summary(resume, cards, profile, coverage, llm, out, instructions)
-    _tailor_bullets(resume, cards, profile, coverage, llm, out, instructions)
+    summary = _summary_request(resume, coverage, profile, out, instructions)
+    batches = _bullet_requests(resume, coverage, profile, instructions)
+    # The summary and every bullet batch are independent, so the model writes them at the
+    # same time; replies are then checked and applied in the usual order.
+    calls: list[Callable[[], Any]] = [
+        partial(_ask_or_error, llm, _Batch, r.system, r.user, "rewrite_bullets") for r in batches
+    ]
+    if summary is not None:
+        calls.insert(0, partial(_ask_or_error, llm, _Summary, summary.system, summary.user,
+                                "rewrite_summary"))  # fmt: skip
+    replies = parallel(*calls)
+    if summary is not None:
+        _apply_summary(summary, replies.pop(0), cards, coverage, out)
+    allowed = _allowed(cards, coverage)
+    for req, batch in zip(batches, replies, strict=True):
+        _apply_batch(req, batch, allowed, out)
+    _reorder_bullets(resume, coverage, out)
     section = skills_section(resume)
     if section is not None:
         before = "".join(n.emit() for n in section.nodes)

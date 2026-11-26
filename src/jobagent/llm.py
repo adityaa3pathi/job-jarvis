@@ -8,10 +8,12 @@ import logging
 import os
 import re
 import secrets
+import threading
 import time
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -116,6 +118,51 @@ def _deliver(usage: Usage) -> None:
         record(usage)
     except Exception as exc:  # a lost usage row must not fail the AI step
         log.warning("could not record AI usage: %s", short_cause(exc))
+
+
+MAX_PARALLEL = 4  # model calls at once; Gemini's per-minute limit is the real cap
+
+
+def parallel[T](*calls: Callable[[], T]) -> list[T]:
+    """Run independent AI steps at the same time; results come back in call order.
+
+    Each call runs in a copy of this thread's context, so step names and the run id carry
+    over. Usage rows are held and handed to this thread's sink after every call has ended,
+    because a store connection must never be used by two threads at once. If a call
+    raises, the first error is raised once all have finished."""
+    if len(calls) <= 1:
+        return [call() for call in calls]
+    held: list[list[Usage]] = [[] for _ in calls]
+
+    def run(i: int, call: Callable[[], T]) -> T:
+        _SINK.set(held[i].append)
+        return call()
+
+    with ThreadPoolExecutor(max_workers=min(len(calls), MAX_PARALLEL)) as pool:
+        futures = [pool.submit(copy_context().run, run, i, c) for i, c in enumerate(calls)]
+        errors = [f.exception() for f in futures]  # waits for each
+    for rows in held:
+        for usage in rows:
+            _deliver(usage)
+    if first := next((e for e in errors if e is not None), None):
+        raise first
+    return [f.result() for f in futures]
+
+
+class LockedCache:
+    """Lets calls inside `parallel` share one store's cache, one at a time."""
+
+    def __init__(self, inner: LLMCache) -> None:
+        self.inner = inner
+        self._lock = threading.Lock()
+
+    def cache_get(self, key: str) -> str | None:
+        with self._lock:
+            return self.inner.cache_get(key)
+
+    def cache_put(self, key: str, step: str, value: str) -> None:
+        with self._lock:
+            self.inner.cache_put(key, step, value)
 
 
 def model_id(llm: LLM) -> str:
@@ -262,6 +309,7 @@ class GeminiLLM:
         sleep: Callable[[float], None] = time.sleep,
         max_output_tokens: dict[str, int] | None = None,
         thinking_budget: int | None = None,
+        thinking_level: str | None = None,
         fallback: str | None = None,
     ) -> None:
         self._sleep = sleep
@@ -270,6 +318,7 @@ class GeminiLLM:
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens or {}
         self.thinking_budget = thinking_budget
+        self.thinking_level = thinking_level
         self._key = api_key or os.environ.get("GEMINI_API_KEY", "")
         self._client = httpx.Client(timeout=timeout_s, transport=transport)
 
@@ -283,7 +332,9 @@ class GeminiLLM:
         cap = self.max_output_tokens.get(current_step())
         if cap:
             config["maxOutputTokens"] = cap
-        if self.thinking_budget is not None:
+        if self.thinking_level:  # Gemini 3 models; takes the place of a token budget
+            config["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
+        elif self.thinking_budget is not None:
             config["thinkingConfig"] = {"thinkingBudget": self.thinking_budget}
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -317,6 +368,7 @@ class GeminiLLM:
         return cls(
             llm.model, timeout_s=llm.timeout_s, temperature=temperature,
             max_output_tokens=dict(llm.max_output_tokens), thinking_budget=llm.thinking_budget,
+            thinking_level=llm.thinking_level or None,
             fallback=llm.fallback_model or None,
         )  # fmt: skip
 

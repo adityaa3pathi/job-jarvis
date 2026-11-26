@@ -38,6 +38,10 @@ class LLMSettings(BaseModel):
     send_contact_details: bool = False
     max_output_tokens: dict[str, int] = Field(default_factory=lambda: dict(MAX_OUTPUT_TOKENS))
     thinking_budget: int | None = None  # off: the field name for this model is unconfirmed
+    # Gemini 3 thinking: "minimal" spends the fewest tokens before answering, so replies
+    # come fastest. Flash-Lite defaults to it already; set here so a model change keeps it.
+    # "" sends nothing and leaves the model default.
+    thinking_level: str = "minimal"
     daily_token_budget: int = Field(default=1_000_000, ge=0)  # 0 means no limit
     daily_call_budget: int = Field(default=200, ge=0)  # 0 means no limit
 
