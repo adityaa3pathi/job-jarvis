@@ -77,6 +77,15 @@ def test_bedrock_waits_out_throttling_but_not_other_errors() -> None:
         bedrock(FakeBedrock(AwsError("AccessDeniedException"))).complete_json(system="S", user="U")
 
 
+def test_a_used_up_daily_quota_fails_at_once() -> None:
+    daily = AwsError("ThrottlingException")
+    daily.args = ("Too many tokens per day, please wait before trying again.",)
+    fake = FakeBedrock(daily, said('{"ok": true}'))
+    with pytest.raises(LLMError, match="per day"):
+        bedrock(fake).complete_json(system="S", user="U")
+    assert len(fake.requests) == 1
+
+
 def test_empty_bedrock_reply_is_an_error() -> None:
     with pytest.raises(LLMError, match="no text"):
         bedrock(FakeBedrock(said("  "))).complete_json(system="S", user="U")

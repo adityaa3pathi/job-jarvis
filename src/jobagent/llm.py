@@ -424,6 +424,7 @@ class BedrockLLM:
             except Exception as exc:  # botocore is optional, so its classes are read by name
                 code = str(getattr(exc, "response", {}).get("Error", {}).get("Code", ""))
                 busy = code in _BEDROCK_BUSY or "timeout" in type(exc).__name__.lower()
+                busy = busy and "per day" not in str(exc)  # a daily quota will not clear now
                 if not busy or attempt == MAX_RATE_RETRIES:
                     raise LLMError(f"Bedrock {code or 'error'}: {short_cause(exc)}") from exc
                 self._sleep(BACKOFF_S * 2**attempt)
