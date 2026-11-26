@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from jobagent.config import load_settings
-from jobagent.llm import LLM, GeminiLLM, LLMError
+from jobagent.llm import LLM, LLMError, make_llm
 from jobagent.resume.evidence import EvidenceCard, cards_from_summary, merge_cards
 from jobagent.resume.github import (
     GitHubError,
@@ -35,7 +35,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 def build_llms() -> tuple[LLM, LLM]:
     """(thinker, writer): extraction at temperature 0, bullet rewrites at 0.5, as on the web."""
     llm = load_settings().llm
-    return GeminiLLM.from_settings(llm, 0.0), GeminiLLM.from_settings(llm, 0.5)
+    return make_llm(llm, 0.0), make_llm(llm, 0.5)
 
 
 def collect_cards(summary: Path | None, repos: list[str]) -> list[EvidenceCard]:

@@ -96,11 +96,11 @@ def discover(settings: Settings) -> int:
 
 def judge_llm(settings: Settings) -> LLM | None:
     """The ranking judge (U14) runs only when an AI key is set."""
-    if not os.environ.get("GEMINI_API_KEY"):
+    if not (os.environ.get("GEMINI_API_KEY") or settings.llm.bedrock_model):
         return None
-    from jobagent.llm import GeminiLLM
+    from jobagent.llm import make_llm
 
-    return GeminiLLM.from_settings(settings.llm, 0.0)
+    return make_llm(settings.llm, 0.0)
 
 
 def digest_line(result: dict[str, Any]) -> str:
