@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -43,7 +43,15 @@ from jobagent.discovery.manual import fetch_posting
 from jobagent.formfill import FormPage, suggest
 from jobagent.funding import FundingStore
 from jobagent.index import Embedder, shared_embedder
-from jobagent.llm import LLM, LLMError, Usage, short_cause, usage_sink
+from jobagent.llm import (
+    LLM,
+    LLMError,
+    LockedCache,
+    Usage,
+    parallel,
+    short_cause,
+    usage_sink,
+)  # fmt: skip
 from jobagent.lock import LockHeldError, RunLock
 from jobagent.models import JobFilters, ListStatus
 from jobagent.outreach.apollo import Apollo
@@ -65,6 +73,7 @@ from jobagent.resume.coach import (
     with_facts,
 )
 from jobagent.resume.evidence import cards_from_profile
+from jobagent.resume.jd import JDProfile
 from jobagent.resume.jd_agent import analyze_jd
 from jobagent.resume.latex import LatexError
 from jobagent.resume.match import match_profile
@@ -991,8 +1000,14 @@ def create_app(cfg: WebConfig) -> FastAPI:
             # Each AI step here has a rules fallback (plain JD scan, raw summary, rules report).
             try:
                 thinker = cfg.thinker()
-                profile = analyze_jd(jd_text, thinker, cache=st)
-                digest = with_facts(profile_digest(summary, thinker, st), facts)
+                # Two independent model calls: run them at the same time on one locked cache.
+                shared = LockedCache(st)
+                read, short = parallel(
+                    lambda: analyze_jd(jd_text, thinker, cache=shared),
+                    lambda: profile_digest(summary, thinker, shared),
+                )
+                profile = cast(JDProfile, read)
+                digest = with_facts(cast(str, short), facts)
                 coverage = match_profile(profile, cards_from_profile(summary, facts, base_tex))
                 report = build_report(profile, coverage, digest, thinker, cache=st)
             except LLMError as exc:
