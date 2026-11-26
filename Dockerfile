@@ -24,7 +24,15 @@ WORKDIR /app
 COPY --chown=app pyproject.toml uv.lock ./
 COPY --chown=app src ./src
 COPY --chown=app config.yaml policy.yaml companies.yaml searches.yaml ./
-RUN uv sync --frozen --no-dev --extra agent --extra turso --extra embed --extra bedrock && chown -R app /app
+# libsql (the Turso driver) ships x86 wheels only, so on Arm it compiles from Rust source:
+# that needs a C toolchain, installed only on Arm and removed again in the same layer.
+RUN set -eu; arm=0; [ "$(dpkg --print-architecture)" = arm64 ] && arm=1; \
+    if [ "$arm" = 1 ]; then apt-get update \
+      && apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev; fi; \
+    uv sync --frozen --no-dev --extra agent --extra turso --extra embed --extra bedrock \
+    && chown -R app /app; \
+    if [ "$arm" = 1 ]; then apt-get purge -y --auto-remove build-essential pkg-config libssl-dev \
+      && rm -rf /var/lib/apt/lists/* /root/.cache /root/.cargo /root/.rustup; fi
 
 USER app
 ENV PATH="/app/.venv/bin:$PATH" \
