@@ -16,6 +16,7 @@ DropReason = Literal[
     "spam",
     "unpaid",
     "no_track",
+    "off_target_title",  # stage 4, only with discovery.title_filter on
 ]
 JobStatus = Literal[
     "found",

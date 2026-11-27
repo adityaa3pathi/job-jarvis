@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from jobagent.models import DropReason, Posting
 
@@ -24,6 +26,36 @@ FOREIGN_MARKERS = (
     "emea", "latam", "brazil", "mexico", "japan", "tokyo", "china", "philippines",
     "new york", "san francisco", "california", "texas", "seattle", "toronto", "poland", "israel",
 )  # fmt: skip
+# Read only with `discovery.region_words` on (stage 4, owner approval pending): more
+# countries and cities seen in found jobs (Coupang's Seoul and Taipei passed as India).
+MORE_REGIONS = (
+    "americas", "north america", "south america", "latin america", "eu", "european union",
+    "korea", "south korea", "seoul", "taiwan", "taipei", "taoyuan", "thailand", "bangkok",
+    "vietnam", "ho chi minh", "hanoi", "indonesia", "jakarta", "malaysia", "kuala lumpur",
+    "hong kong", "fukuoka", "osaka", "switzerland", "zurich", "geneva", "portugal", "lisbon",
+    "italy", "milan", "rome", "sweden", "stockholm", "denmark", "copenhagen", "norway", "oslo",
+    "finland", "helsinki", "belgium", "brussels", "austria", "vienna", "czech", "prague",
+    "romania", "bucharest", "hungary", "budapest", "ukraine", "greece", "turkey", "istanbul",
+    "egypt", "cairo", "nigeria", "lagos", "kenya", "nairobi", "south africa", "cape town",
+    "argentina", "buenos aires", "colombia", "bogota", "chile", "santiago", "peru", "lima",
+    "costa rica", "uruguay", "pakistan", "karachi", "lahore", "bangladesh", "dhaka",
+    "sri lanka", "colombo", "nepal", "kathmandu", "qatar", "doha", "bahrain", "kuwait",
+    "oman", "riyadh", "abu dhabi", "munich", "hamburg", "frankfurt", "warsaw", "krakow",
+    "madrid", "barcelona", "boston", "chicago", "los angeles", "denver", "atlanta",
+    "vancouver", "montreal", "melbourne", "auckland", "estonia", "tallinn", "lithuania",
+    "latvia", "serbia", "croatia", "bulgaria", "slovakia", "slovenia", "luxembourg",
+    "scotland", "edinburgh", "manchester", "cambridge, uk", "united states of america",
+    "great britain", "england", "nordics", "dach", "benelux",
+)  # fmt: skip
+_CODES = r"(?:us|usa|u\.s\.|uk|eu|emea|latam|amer|americas|na|ca|anz)"
+_NOT_PLACE = r"(?!\s*(?:shift|client|clients|hours|time|timezone|time zone|process|project|market))"
+# Region codes only in a place-like spot: "(US, full-time)", "US Remote", "Remote - EMEA".
+REGION_CODE = re.compile(
+    rf"\(\s*{_CODES}\b{_NOT_PLACE}|\b{_CODES}[- ](?:only|based|remote|citizens?|residents?)\b"
+    rf"|\bremote\s*[-,(/|:]?\s*{_CODES}\b{_NOT_PLACE}|\[\s*{_CODES}\s*\]",
+    re.IGNORECASE,
+)
+_AMBIGUOUS = frozenset(("us", "uk", "eu", "u.s.", "na", "ca"))  # read as codes only, above
 # Fee words alone are normal fintech text; spam asks the applicant to pay the employer.
 SPAM_PATTERNS = (
     r"\bpay (?:a |an |the )?(?:\w+ )?(?:registration|processing|joining|training|application"
@@ -181,14 +213,67 @@ def _open_to_india(location: str) -> bool:
     return bool(_REMOTE.search(location)) and _has_marker(location, OPEN_REGIONS)
 
 
-def outside_india(location: str) -> bool:
+def outside_india(location: str, more: bool = False) -> bool:
+    """Tied to another country and not open to India. `more` adds MORE_REGIONS."""
     if not location.strip():
         return False
-    foreign = _has_marker(location, FOREIGN_MARKERS) or _us_state_suffix(location)
+    markers = FOREIGN_MARKERS + MORE_REGIONS if more else FOREIGN_MARKERS
+    foreign = _has_marker(location, markers) or _us_state_suffix(location)
     return foreign and not _has_marker(location, INDIA_MARKERS) and not _open_to_india(location)
 
 
-def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason | None:
+_FULL_NAMES = tuple(m for m in FOREIGN_MARKERS + MORE_REGIONS if m not in _AMBIGUOUS)
+
+
+def region_in_title(title: str, location: str = "") -> bool:
+    """A title tied to another region ("Backend Engineer (US Remote)", "AI Engineer, EMEA")
+    whose title and location name neither India nor a region open to it."""
+    named = bool(REGION_CODE.search(title)) or _has_marker(title, _FULL_NAMES)
+    both = f"{title} | {location}"
+    return named and not _has_marker(both, INDIA_MARKERS) and not _open_to_india(both)
+
+
+SOCIAL_SOURCES = frozenset(("telegram", "bluesky", "mastodon", "reddit"))
+
+
+def location_from_text(text: str) -> str:
+    """Where a social post says the job is, for posts without a "Location:" line: India
+    names win; otherwise the other places and any remote or open-region words it names."""
+    found = [m for m in INDIA_MARKERS if _has_marker(text, (m,))]
+    if found:
+        return ", ".join(found[:3])
+    places = [m for m in _FULL_NAMES if _has_marker(text, (m,))]
+    places += [m.group(0).strip("()[] ") for m in REGION_CODE.finditer(text)][:2]
+    if not places:
+        return ""
+    open_words = [m for m in OPEN_REGIONS if _has_marker(text, (m,))]
+    remote = ["Remote"] if _REMOTE.search(text) else []
+    return ", ".join(places[:3] + remote + open_words[:1])
+
+
+@dataclass(frozen=True)
+class RuleFilters:
+    """Stage 4 discovery filters, each off until the owner approves it (`discovery.*` in
+    config.yaml). `title` says True for an off-target title (targeting.TitleFilter)."""
+
+    title: Callable[[str], bool] | None = None
+    region_words: bool = False
+    social_location: bool = False
+
+
+def where_of(posting: Posting, filters: RuleFilters | None = None) -> str:
+    """The location the India rule reads: a social post's text when its field is empty."""
+    if (
+        filters and filters.social_location and not posting.location.strip()
+        and posting.source in SOCIAL_SOURCES
+    ):  # fmt: skip
+        return location_from_text(posting.description)
+    return posting.location
+
+
+def check_hard_rules(
+    posting: Posting, max_years_asked: int = 6, filters: RuleFilters | None = None
+) -> DropReason | None:
     text = f"{posting.title}\n{posting.description}"
     if posting.closed:
         return "closed"
@@ -196,9 +281,13 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason |
         return "spam"
     if any(re.search(p, text, re.IGNORECASE) for p in UNPAID_PATTERNS):
         return "unpaid"
-    if outside_india(posting.location):
+    more = bool(filters and filters.region_words)
+    where = where_of(posting, filters)
+    if outside_india(where, more) or (more and region_in_title(posting.title, where)):
         return "outside_india"
     asked = years_asked(posting, words=HARD_RULES_READ_WORDS)
     if asked and asked[0] >= max_years_asked:
         return "too_senior"
+    if filters and filters.title and filters.title(posting.title):
+        return "off_target_title"
     return None
