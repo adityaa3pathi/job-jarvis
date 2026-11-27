@@ -1,0 +1,2170 @@
+# Frozen full-text postings (stage 2), so ranking and discovery checks don't move as the
+# boards change. Taken 27 Nov 2026 from the stage 2 label pool: its 30 found jobs with
+# 1,200+ characters of text, across 9 sources. Lines with an email were dropped and phone
+# numbers removed. `id` is the production job id: the owner's yes/no labels for these jobs
+# live outside this public repo (~/job-jarvis-labels/label-pool-2026-11-27.csv, joined on
+# job_id). 5 of the 30 are labelled yes, so use the 100-job pool for ranking precision.
+postings:
+- id: 1198
+  source: lever
+  company: AHEAD
+  title: Senior Client Solutions Engineer
+  location: Chicago, Illinois
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-10-13'
+  url: https://jobs.lever.co/thinkahead/5dfd6343-e9f1-4eaf-a633-67f363ee4ff4
+  description: 'AHEAD builds platforms for digital business. By weaving together advances in cloud infrastructure,
+    automation and analytics, and software delivery, we help enterprises deliver on the promise of digital
+    transformation.
+
+     
+
+    At AHEAD, we prioritize creating a culture of belonging, where all perspectives and voices are represented,
+    valued, respected, and heard. We create spaces to empower everyone to speak up, make change, and drive
+    the culture at AHEAD. 
+
+     
+
+    We are an equal opportunity employer, and do not discriminate based on an individual''s race, national
+    origin, color, gender, gender identity, gender expression, sexual orientation, religion, age, disability,
+    marital status, or any other protected characteristic under applicable law, whether actual or perceived. 
+
+     
+
+    We embrace all candidates that will contribute to the diversification and enrichment of ideas and perspectives
+    at AHEAD.
+
+    Roles and Responsibilities
+
+    Possess deep data center expertise (multiple layers of the stack).
+
+    Present at Technical Briefings and Lab Demonstrations with clients and partners to showcase AHEAD''s
+    value.
+
+    Considered a Subject Matter Expert (SME) in one or many technologies for the team to leverage.
+
+    Recognized by the partner community to own technical sales campaigns without their support.
+
+    Qualify and position consulting engagements and services.
+
+    Provide coaching and mentoring to team resources in order to enhance their solution knowledge, technical
+    acumen, and pre-sales skill sets.
+
+    Qualify sales opportunities in the terms of client technical requirements, decision making process
+    and funding and decides if we should move forward with the campaign.
+
+    Understand and articulate AHEAD''s Enterprise Cloud Framework.
+
+    Prioritize opportunities and efforts assigned to the geography based on maximizing total impact on
+    team productivity and profit.
+
+    Drive engagement conversions to additional services / solutions.
+
+    Provide feedback to improve internal efficiencies.
+
+    Work with Practice Directors to provide input and suggestions for new solutions and offerings.
+
+    Present regularly at AHEAD events, user groups, conferences, and forums.
+
+    Lead Solution Verification / BOM Review process for the geography.
+
+    Qualifications
+
+    Bachelors degree in Computer Science, Engineering, or equivalent
+
+    4+ years Pre Sales and Data Center experience is required
+
+    Professional communication, presentation, analytical, and problem-solving skills
+
+    Experience working as a technical lead in a pre-sales sales campaign
+
+    Extensive knowledge of one or more of the following data center solutions: storage, networking, compute,
+    virtualization, data center management / automation, and security
+
+    Ability to work under critical conditions and influence others to achieve results
+
+    Strong interpersonal skills with excellent presentation skills
+
+    Must be independent, self motivated, a self starter and possess a good working attitude
+
+    Able to work well within a team and partner environment
+
+    Customer focused and results driven
+
+    The compensation range indicated in this posting reflects the On-Target Earnings (“OTE”) for this
+    role, which includes a base salary and any applicable target bonus amount. This OTE range may vary
+    based on the candidate’s relevant experience, qualifications, and geographic location.  
+
+     
+
+    Why AHEAD:
+
+     
+
+    Through our daily work and internal groups like Moving Women AHEAD and RISE AHEAD, we value and benefit
+    from diversity of people, ideas, experience, and everything in between.
+
+     
+
+    We fuel growth by stacking our office with top-notch technologies in a multi-million-dollar lab, by
+    encouraging cross department training and development, sponsoring certifications and credentials for
+    continued learning.
+
+     
+
+    USA Employment Benefits include: 
+
+    - Medical, Dental, and Vision Insurance 
+
+    - 401(k) 
+
+    - Paid company holidays 
+
+    - Paid time off 
+
+    - Paid parental and caregiver leave 
+
+    - Plus more! See benefits https://www.aheadbenefits.com/ for additional details. 
+
+     
+
+    Use of AI:
+
+    We may use artificial intelligence (AI) tools to support parts of the hiring process, such as reviewing
+    applications, analyzing resumes, assessing responses, or to capture recordings and create transcriptions
+    or summaries during interviews. These tools assist our recruitment team but do not replace human judgment.
+    Final hiring decisions are ultimately made by humans.
+
+     
+
+     
+
+    You may opt-out of the review or analysis of your application and resume by AI tools by using the General
+    Application. Please include the role you wish to apply for in the Additional Information field. You
+    may also choose to opt-out of recording and transcription at any time, including after joining an
+    interview.  Candidates will not be penalized for choosing to opt-out.'
+- id: 3674
+  source: jobicy
+  company: Binance
+  title: Binance Accelerator Program - Applied AI Application Engineer
+  location: Remote (APAC)
+  experience_text: Entry-Level, Junior
+  stack_words:
+  - Software Engineering
+  posted_date: '2026-11-13'
+  url: https://jobicy.com/jobs/153014-binance-accelerator-program-applied-ai-application-engineer
+  description: "Binance is a leading global blockchain ecosystem behind the world’s largest cryptocurrency\
+    \ exchange by trading volume and registered users. Binance is trusted by more than 320 million people\
+    \ in 100+ countries for its industry-leading security, transparency, trading engine speed, protections\
+    \ for investors, and unmatched portfolio of digital asset products and offerings from trading and\
+    \ finance to education, research, social good, payments, institutional services, and Web3 features.\
+    \ Binance is devoted to building an inclusive crypto ecosystem to increase the freedom of money and\
+    \ financial access for people around the world with crypto as the fundamental means.\nAbout Binance\
+    \ Accelerator Program\nBinance Accelerator Program (BAP) is a 3-6 month internship program designed\
+    \ for Early Career talent to have firsthand experience in the rapidly expanding digital assets space.\
+    \ You will be given the opportunity to develop your skills at Binance and understand what it’s like\
+    \ to work at the world's leading blockchain ecosystem. As part of your internship in the BAP, there\
+    \ will also be opportunities for networking and development, which will expand your professional network\
+    \ and build transferable skills to propel you forward in your career. Learn about the BAP Program\
+    \ \nHERE\n.\nWho may apply\nCurrent university students and recent graduates.\n*Terms of employment\
+    \ / engagement shall be subject to contract and local applicable laws\nAbout the Role\nThis internship\
+    \ is part of Tech Seeds 2026 — our program to identify and develop AI-native young talent. As an Applied\
+    \ AI Agent Engineer intern, you will take on a hands-on builder role at the intersection of LLMs and\
+    \ production systems, working alongside full-time engineers on agent workflows, tool integrations,\
+    \ backend services, and AI system architecture from day one.\nThis is not a shadowing role. You will\
+    \ own deliverables, run experiments, and ship code that matters.\nWhat You'll Do\nSupport the design\
+    \ and development of AI agent workflows and LLM-powered application components\nBuild and test prompt\
+    \ strategies, retrieval flows, tool-use logic, orchestration patterns, and backend integrations\n\
+    Assist in defining evaluation metrics, running benchmarks, and analyzing failure cases\nImprove system\
+    \ performance across quality, latency, reliability, safety, and cost\nUse AI coding tools as a normal\
+    \ part of your workflow to accelerate development and problem-solving\nCollaborate with engineers\
+    \ and cross-functional teams to understand how production AI systems are designed, deployed, and improved\n\
+    Contribute to backend services, APIs, internal tools, or lightweight user interfaces when needed\n\
+    What We're Looking For\nCurrently pursuing a Bachelor’s or Master’s degree in Computer Science, Software\
+    \ Engineering, Data Science, or a related field\nExpected graduation in 2026 or 2027\nSolid programming\
+    \ skills in Python or Java; familiarity with backend engineering is preferred\nGood problem-solving\
+    \ ability and comfort working with APIs, debugging, and data\nStrong curiosity about LLMs, AI agents,\
+    \ automation, and real-world system design\nAbility to break down ambiguous problems and move from\
+    \ idea to working prototype\nComfortable learning quickly and working in a fast-moving environment\n\
+    Available for a 6-month full-time commitment\nBonus Points\nPersonal projects or coursework involving\
+    \ LLM applications, agent systems, automation, or AI-assisted development\nFamiliarity with OpenAI\
+    \ APIs, Anthropic APIs, Hugging Face, LangChain, vector databases, or workflow tools\nExperience with\
+    \ Git, databases, backend services, or cloud platforms\nWhat Makes You a Fit for Tech Seeds 2026\n\
+    You are curious, proactive, and builder-minded. You already experiment with AI tools on your own,\
+    \ learn quickly, and want to turn AI ideas into practical systems that work in the real world.\nCompensation\n\
+    Additional Information\nWhy Binance\n• Shape the future with the world’s leading blockchain ecosystem\n\
+    • Collaborate with world-class talent in a user-centric global organization with a flat structure\n\
+    • Tackle unique, fast-paced projects with autonomy in an innovative environment\n• Thrive in a results-driven\
+    \ workplace with opportunities for career growth and continuous learning\n• Competitive salary and\
+    \ company benefits\n• Work-from-home arrangement (the arrangement may vary depending on the work nature\
+    \ of the business team)\nBinance is committed to being an equal opportunity employer. We believe that\
+    \ having a diverse workforce is fundamental to our success.\nBy submitting a job application, you\
+    \ confirm that you have read and agree to our \nCandidate Privacy Notice\n."
+- id: 5689
+  source: himalayas
+  company: Zoftify — Travel Software Development
+  title: Full Stack Developer (React + Node.js)
+  location: Remote (Australia; Bangladesh; Canada; Germany; India; New Zealand; Pakistan; Philippines;
+    United Kingdom; United States)
+  experience_text: Mid-level
+  stack_words:
+  - Full-Stack-Developer
+  - Full-Stack-Engineer
+  - React-Developer
+  - NodeJS-Developer
+  - Web-Application-Developer
+  - Mid-Level-Full-Stack-Developer-(JavaScript-React-Node.Js)
+  - Node.Js-Full-Stack-Developer
+  - Full-Stack-Developer-React-Node.Js
+  posted_date: '2026-10-27'
+  url: https://himalayas.app/companies/zoftify-travel-software-development/jobs/full-stack-developer-react-node-js
+  description: "We are Zoftify, a product development agency specializing in solutions for travel companies.\
+    \ Unlike outsourcing firms, we concentrate on delivering real business value to our clients and take\
+    \ full responsibility for the solutions we build. Our approach is dynamic: we use modern frameworks\
+    \ and practices to develop cutting-edge digital products.\nOur international team has been working\
+    \ fully remotely since 2019, and we continue in this format because it has proven its efficiency.\n\
+    We are now looking for a Full Stack Developer who will help us build beautiful, complex, and high-performance\
+    \ web and mobile applications. This is an excellent opportunity to become a part of a growing company\
+    \ and work with clients from around the world.\nWhat you will do\nWork on international projects (USA,\
+    \ UK, Germany, Switzerland, Italy, France)\nBuild modern web applications based on Figma designs\n\
+    Develop reliable and scalable backend solutions\nUse modern technologies to achieve excellent results\n\
+    Work in an agile environment\nWhat we expect\n2+ years of commercial experience\nStrong knowledge\
+    \ of React.js and Node.js\nExperience working with TypeScript\nExperience developing and integrating\
+    \ REST APIs\nExperience with SQL databases (e.g., PostgreSQL)\nAbility to create pixel-perfect UI\n\
+    Experience building applications from scratch\nGood spoken English\nNice to have\nExperience with\
+    \ Next.js\nExperience with NestJS\nExperience with Tailwind CSS\nExperience with animated UI components\n\
+    Experience with Docker, Kubernetes\nExperience with cloud platforms (AWS, Azure, GCP, Firebase)\n\
+    Experience with NoSQL databases\nCommercial experience in mobile development (iOS, Android)\nWhat\
+    \ we offer\nCompetitive compensation based on experience and skills\n100% remote work from anywhere\
+    \ in the world\nFlexible schedule\nDay off on your birthday\nPaid national holidays\nPaid vacation\
+    \ and additional corporate days off\nHealth days\nPaid learning and courses\nRegular performance reviews\n\
+    Bonuses\nA friendly team with a great atmosphere\nOriginally posted on \nHimalayas"
+- id: 5979
+  source: himalayas
+  company: KLDiscovery
+  title: Software Engineer II
+  location: Remote (India)
+  experience_text: Mid-level
+  stack_words:
+  - Software-Engineer
+  - Software-Developer
+  - C++-Developer
+  - .NET-Developer
+  - Front-End-Developer
+  - Software-Engineer-II
+  - Software-Engineer-Level-II
+  - Software-Engineer-II-Financial-Systems
+  - Application-Developer-II
+  - Software-Developer-Level-II
+  posted_date: '2026-11-19'
+  url: https://himalayas.app/companies/kldiscovery/jobs/software-engineer-ii-5174365619
+  description: "KLDiscovery\n, a leading global provider of electronic discovery, information governance\
+    \ and data recovery services, is currently seeking a Software Engineer II, the position will assist\
+    \ in review and analysis of applications, product development, and enhancements including documentation,\
+    \ code development, and unit testing of releases while adhering to \nKLDiscovery\n development processes\
+    \ and workflows with supervision and direction from lead developers and superiors. \nResponsibilities\n\
+    Create and maintain software to monitor, maintain, and administrate systems \nDevelop automated solutions\
+    \ for systems upgrades across a variety of platforms \nTest, refine, and document software · Support\
+    \ bug fixes and implement enhancements to applications in Production \nDevelop automated test suites,\
+    \ including unit tests, functional tests, and regression tests\nCreate design and user documentation\
+    \ as needed\n Utilize, communicate and enforce coding standards Seek and participate in personal development\
+    \ opportunities to maintain a detailed knowledge of industry standards, engineering best practices,\
+    \ and business needs\n Provide Technical Support - bug fixes and implement enhancements to applications\
+    \ in Production within defined SLA\n Work in a team or with multiple organizational departments in\
+    \ a dynamic and rapidly changing environment · Adhere to development processes and workflows. \nQualifications\n\
+    \ 3+ years of experience in .NET/C# and front-end experience- Angular preferred \nGood knowledge in\
+    \ unit/integration testing \nSQL databases, preferably MS SQL and PostgreSQL \nAnalytical and problem-solving\
+    \ skills, Focus on continuous improvement \nExcellent communication skills, Being a team player\n\
+    Fluent English communication skills (C1 level or equivalent).\nWho We Are\nKLDiscovery\n provides\
+    \ technology-enabled services and software to help law firms, corporations, government agencies and\
+    \ consumers solve complex data challenges. The company, with offices in 26 locations across 17 countries,\
+    \ is a global leader in delivering best-in-class eDiscovery, information governance and data recovery\
+    \ solutions to support the litigation, regulatory compliance, internal investigation and data recovery\
+    \ and management needs of our clients.\nServing clients for over 30 years, \nKLDiscovery\n offers\
+    \ data collection and forensic investigation, early case assessment, electronic discovery and data\
+    \ processing, application software and data hosting for web-based document reviews, and managed document\
+    \ review services. In addition, through its global Ontrack Data Recovery business, \nKLDiscovery\n\
+    \ delivers world-class data recovery, email extraction and restoration, data destruction and tape\
+    \ management.\nKLDiscovery\n is an Equal Opportunity Employer.\nOriginally posted on \nHimalayas"
+- id: 5983
+  source: himalayas
+  company: Sourcegraph
+  title: Software Engineer - Platform [IC3]
+  location: Remote (Worldwide)
+  experience_text: Mid-level
+  stack_words:
+  - Platform-Engineer
+  - Software-Engineer
+  - Cloud-Engineer
+  - Backend-Engineer
+  - Infrastructure-Engineer
+  - Software-Platform-Engineer
+  - Engineering-Platform
+  - Platform-Software-Engineering
+  - Software-Engineer-Developer
+  - Developer-Platform-Engineer
+  - Software-Engineer-Jobs
+  - Platform-Engineering-Jobs
+  - Developer
+  posted_date: '2026-10-29'
+  url: https://himalayas.app/companies/sourcegraph-com/jobs/software-engineer-platform-ic3
+  description: "Who we are\nOur mission is to bring clarity and control to the world's most complex codebases.\
+    \ AI is accelerating code creation, but the infrastructure to understand, oversee, and evolve that\
+    \ code hasn't kept pace. \nSourcegraph\n gives engineering organizations full visibility across their\
+    \ systems, precise context for their agents, and the ability to execute coordinated code changes at\
+    \ scale. As agentic development becomes the dominant engineering paradigm, we provide the context\
+    \ layer teams need to take control of their codebase.\nWith Code Search, Deep Search, MCP, and Agentic\
+    \ Batch Changes, we deliver on that mission today - giving engineering teams and their AI tools the\
+    \ cross-repo context to navigate massive codebases with confidence, and the ability to make changes\
+    \ across hundreds of repositories at once.\nCompanies like Stripe, Reddit, and Leidos rely on \nSourcegraph\n\
+    \ to ship faster and with higher quality. We're backed by a16z, Sequoia, and Redpoint, and proud to\
+    \ operate as a globally distributed team that values high agency, direct communication, and customer\
+    \ love.\nIf you want to build the infrastructure that lets every engineering team - and every agent\
+    \ they deploy - operate on their codebase with confidence, join us.\nHours & location\n\U0001F30E\
+    \ While we hire almost anywhere in the world, we have a preference for someone to reside in the following\
+    \ locations for this role. However, if you feel qualified, we welcome you to apply regardless of location.\
+    \ No matter what, working hours must overlap with EST for at least 20 hours/week.\nPreferred locations:\n\
+    EST\nEurope\nWhy this job is exciting\nSource code is at the heart of \nSourcegraph\n. We support\
+    \ multiple code hosts and retrieve, store, index, and serve source code - to end users, admins, and\
+    \ other internal services.\nThis role gives you the opportunity to solve complex, challenging, and\
+    \ highly technical problems for our customers, both internally and externally, help unleash the potential\
+    \ and productivity of our Engineering teams, and delight our customers with industry-leading quality\
+    \ software. \nThe Platform team primarily focuses on building a fully managed platform for using \n\
+    Sourcegraph\n, \nSourcegraph\n Cloud, our SaaS offering. As a member of the Platform team, you will\
+    \ work closely with both external customers and internal stakeholders to meet their needs. You will:\n\
+    Develop inter-cloud connectivity solutions to support enterprise customers from highly regulated industries\
+    \ to use \nSourcegraph\n Cloud.\nBuild a control plane to orchestrate a fleet of single-tenant \n\
+    Sourcegraph\n Cloud instances. \nExpose complex infrastructure as API to support internal customers\
+    \ to iterate faster.\nDive into upstream dependencies (e.g., CDK for Terraform, Terraform providers\
+    \ for GCP) to debug and patch non-trivial problems.\nBe an advocate for building reliable services\
+    \ and work with leadership to help product teams achieve operational excellence. \nParticipate in\
+    \ on-call rotation to uphold our contractual SLA commitments.\n\U0001F4C5 Within one month, you will…\n\
+    Onboard onto the \nSourcegraph\n architecture, tooling, and development workflow.\nBuild a solid understanding\
+    \ of the team’s areas of ownership, technical challenges, and problems the team solves for our customers,\
+    \ and know how all of these align with the top-level company goals.\nActively participate in team\
+    \ meetings, sharing ideas and insights to contribute to the overall team goals.\nStart contributing\
+    \ to the team goals and deliverables by shipping new features, debugging issues, and fixing bugs.\n\
+    \U0001F4C5 Within three months, you will…\nDemonstrate a comprehensive understanding of the Cloud\
+    \ infrastructure, its underlying technologies, and its integration within the \nSourcegraph\n ecosystem.\n\
+    Lead initiatives contributing to team goals through both discovery and delivery phases, collaborating\
+    \ directly with product and design partners, other engineering teams, and non-technical stakeholders\
+    \ from different departments.\nContribute to the architectural design and implementation of new features\
+    \ or improvements, actively shaping the future direction of Cloud infrastructure based on customer\
+    \ needs.\nLead initiatives contributing to team goals on the roadmap by going through the entire product\
+    \ development lifecycle discovery, design, implementation, and delivery.\nParticipate in our on-call\
+    \ rotation.\n\U0001F4C5 Within six months, you will…\nBe defining long-term technical vision and strategies\
+    \ for new product development, scaling existing services, and managing technical debt. These plans\
+    \ will consist of multiple smaller milestones that you will deliver iteratively with the team.\nCollaborate\
+    \ with the Engineering Manager on defining the team’s growth strategy based on the long-term product\
+    \ vision, the technical vision, and the team’s needs.\nSeek feedback from customers and stakeholders\
+    \ to identify opportunities for further improvements or new features, actively iterating on the Cloud\
+    \ infrastructure to ensure it continues to meet our high bar.\nAbout you \nYou bring a product mindset\
+    \ in balancing architectural flexibility and philosophy with meeting immediate customer demand. You\
+    \ are an experienced software engineer who seeks to solve problems by writing code rather than through\
+    \ one-off operations. You are passionate about user experience and self-service. You balance maintaining\
+    \ and designing high-impact systems with a pragmatic understanding of how to make appropriate tradeoffs\
+    \ (e.g., cut scope, low-tech vs. custom complex solutions) to ship quickly and iterate when necessary.\
+    \ \nQualifications:\nProficiency in Go, or other strongly typed languages.\nKnowledge in one of the\
+    \ public cloud platform providers (GCP, AWS, Azure)\nExperience with Terraform (or similar IaC solutions)\
+    \ and Kubernetes to build tooling and automation.\nSkilled at debugging distributed systems, followed\
+    \ by designing and implementing solutions to those problems. This means you should know your way around\
+    \ various OS-level primitives, e.g., network, CPU, and memory.\nAbility to communicate clearly and\
+    \ empathetically, especially in writing and documentation.\nPreferred time zone between UTC-8 and\
+    \ UTC+2\nNice to haves:\nBuilt services and exposed them as API for external consumption (e.g., gRPC).\n\
+    Comfortable implementing system-level software (e.g., custom transport protocol) if needed or has\
+    \ contributed to Kubernetes controllers/operators.\nPublished blog posts and/or tech talks about your\
+    \ work.\nExperience working on small high-performing teams, preferably tech startups.\nLevel\n\U0001F4CA\
+    \ This job is an IC3. You can read more about our job leveling philosophy in our Handbook.\nCompensation\n\
+    \U0001F4B8 \nWe pay above-market salaries because we want to hire exceptional people who can focus\
+    \ on building great products, not worrying about paying bills. As an open and transparent company,\
+    \ our compensation philosophy and pay bands are visible to every \nSourcegraph\n teammate, and we\
+    \ strive to make our approach equitable, explainable, and competitive.\nYour base salary is determined\
+    \ by the IC3 pay band for your location zone (1-4). Our pay bands are informed by market data and\
+    \ designed to ensure competitive compensation wherever you live. During the recruiting process, we'll\
+    \ discuss the range applicable to you based on job level, relevant skills, experience, qualifications,\
+    \ and location zone.\n\U0001F4B0The starting salary for the IC3 pay band in each zone is:\nZone 2:\
+    \ $148,000 USD\nZone 3: $111,000 USD\nZone 4: $74,000 USD\n\U0001F4C8 In addition to competitive cash\
+    \ compensation, we offer meaningful equity (because when \nSourcegraph\n succeeds, we want you to\
+    \ succeed, too) and generous perks & benefits.\nInterview process \nBelow is the interview process\
+    \ you can expect for this role (you can read more about \nthe types of interviews\n in our Handbook).\
+    \ It may look like a lot of steps, but rest assured that we move quickly and the steps are designed\
+    \ to help you get the information needed to determine if we’re the right fit for you… Interviewing\
+    \ is a two-way street, after all! \nWe expect the interview process to take 4.75 hours in total.\n\
+    \U0001F44B Introduction Stage\n - we have initial conversations to get to know you better…\n[30m]\
+    \ Recruiter Screen\n[30m] Hiring Manager Screen\n\U0001F9D1‍\U0001F4BB Team Interview Stage\n - we\
+    \ then delve into your experience in more depth and introduce you to members of the team, including\
+    \ cross-functional partners…\n[Async] Take-home exercise\n[60m] Take-home exercise walkthrough + System\
+    \ Design\n[60m] Pairing Exercise\n[60m] Resume Deep Dive\n[60m] Cross-functional Team Collaboration\
+    \ Interview / Values Interview\n\U0001F389 Final Interview Stage \n- we move you to our final round,\
+    \ where you gain a better understanding of our business and values holistically…\n[30m] Leadership\n\
+    We check references and conduct your background check\nPlease note - you are welcome to request additional\
+    \ conversations with anyone you would like to meet, but didn’t get to meet during the interview process.\n\
+    Learn more about us\nYou can learn more about what it is like to work at \nSourcegraph\n by reading\
+    \ our handbook.\nWe are an ambitious team who are collectively working hard to build the most influential\
+    \ company in the world. You can read more about our culture, competitive compensation and benefits\
+    \ here.\nSourcegraph\n is an equal opportunity workplace; we welcome people from all backgrounds.\
+    \ \nSourcegraph\n participates in \nE-Verify\n for U.S. Employees. \nOriginally posted on \nHimalayas"
+- id: 6127
+  source: ashby
+  company: Bureau
+  title: Senior Data Scientist
+  location: Bangalore
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-09-18'
+  url: https://jobs.ashbyhq.com/bureau/0740872c-d308-4691-aaff-0c0d01cba7be
+  description: "[https://app.ashbyhq.com/api/images/user-content/eadb4172-e32d-48aa-b2d2-1be048f84b9c/1c9ccfe8-7946-4ad5-a384-897fea8db295/Bureau%20Careers%20gamechanger.png]\n\
+    \n\nABOUT BUREAU\n\nBureau is a unified risk decisioning platform for Compliance, Fraud, and Transaction\
+    \ risks. Our platform is a single decision-making engine, powered by a 1 billion+ identity knowledge\
+    \ graph. Over 150 Banks, fintechs, retailers, and digital platforms use Bureau to verify identities\
+    \ faster and stop fraud earlier globally.\n\nBureau has raised $50M+ from renowned Silicon Valley\
+    \ and global investors including Sorenson Capital and PayPal Ventures and is expanding rapidly from\
+    \ APAC to Americas, Europe, and beyond.\n\n\nWHY BUREAU?\n\nBureau is building the infrastructure\
+    \ that makes digital identities and transactions safe and trustworthy for billions of people. The\
+    \ mission is big, the problems are complex, and the impact is real.\n\nWe hire people who want that\
+    \ level of responsibility. People who move fast, build systems from scratch, and care deeply about\
+    \ turning strategy into execution. If you want predictability or narrow scope, this won't be your\
+    \ place. If you want to shape how a scaling global company operates—keep reading.\n\nWhat You'll Do\n\
+    \n - Build and extend graph-native models (GNNs, embeddings, and custom graph algorithms) to detect\
+    \ fraud, collusion, and identity risk across banking and e-commerce networks\n\n - Design and deploy\
+    \ statistical, AI/ML, and deep learning models for fraud and risk, including real-time serving\n\n\
+    \ - Run experiments and light data pipeline work to fine-tune model performance\n\n - Ship production-grade\
+    \ software backed by statistics and ML, with ML observability built in\n\nWhat You'll Bring\n\n -\
+    \ BS/MS/PhD in ML, CS, Math, Stats, or related field; 4 to 7 years in DS/AI/ML Engineering roles\n\
+    \n - Strong Python; cloud experience (AWS/Databricks/Azure); SQL, DBT, Athena/BigQuery\n\n - Track\
+    \ record shipping production ML, ideally in fintech fraud, risk, payments, or compliance\n\n - Comfort\
+    \ with ambiguity, unlabelled data, and working autonomously to find business impact\n\n - Prior graph-modeling\
+    \ experience a plus\n\n\nOUR CULTURE\n\n - We hire self-motivated people and get out of their way\n\
+    \n - We value performance, not hours worked\n\n - Speed, ownership, and impact matter most\n\n\nCOMPENSATION\n\
+    \n - Competitive salary + potential equity\n\n - Health benefits, flexible PTO, learning budget\n\
+    \   \n   \n\n[https://app.ashbyhq.com/api/images/user-content/eadb4172-e32d-48aa-b2d2-1be048f84b9c/6fccb083-d8dc-45b1-b1fa-bf1309a7b74b/Bureau%20Careers%20Bottom.png]\n\
+    [https://app.ashbyhq.com/api/images/user-content/eadb4172-e32d-48aa-b2d2-1be048f84b9c/94e1a182-4d[phone\
+    \ removed]c819236e8c9/Bureau%20career%20benefits.png]"
+- id: 9112
+  source: ashby
+  company: SpotDraft
+  title: Chief Of Staff to the CTO
+  location: SpotDraft HQ, Bengaluru
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-09-07'
+  url: https://jobs.ashbyhq.com/spotdraft/98278be5-e686-4dec-b5cc-cc2f08713ebb
+  description: "ABOUT SPOTDRAFT\n\nContracts don’t have to be a headache. At SpotDraft, we’re making contracting\
+    \ fast,\n\neasy, and stress-free for high-growth companies like PhonePe, Chargebee,\n\nUnacademy,\
+    \ Meesho, and Cred. Our platform helps legal teams save 10 hours a\n\nweek and close deals 25% faster—because\
+    \ time is money, and contracts shouldn’t\n\nslow you down.\n\n\n\n\nWHY THIS ROLE EXISTS\n\nWe are\
+    \ looking for a high-leverage partner for the CTO who can operate at the\n\nintersection of strategy\
+    \ and execution. The Chief of Staff will run the operating\n\nsystem of engineering, drive clarity\
+    \ and speed across the SDLC, manage\n\ncross-functional programs, and ensure accountability across\
+    \ initiatives — freeing\n\nthe CTO to focus on architecture, talent, and long-term bets.\n\n\n\n\n\
+    WHAT YOU’LL DO\n\n - Run the engineering operating cadence: Drive QBRs/OKRs, weekly business\n\nreviews,\
+    \ roadmap governance, sprint/quarterly planning, and release\n\nreadiness.\n\n - Cross-functional\
+    \ program management: Partner with Product, Security, SRE,\n\nData, and GTM teams (Sales, CS, Marketing)\
+    \ to deliver outcomes on time and\n\nat quality.\n\n - Define and publish engineering metrics: Own\
+    \ the instrumentation of the\n\nsystem (DORA, quality, reliability, cost), create narratives, and\
+    \ ensure actions.\n\n - Special projects: Program manage high-priority initiatives for the CTO (e.g.,\n\
+    \nAI/LLM initiatives, platform modernization, performance & reliability\n\nprograms, cost optimization,\
+    \ integrations).\n\n - Improve organizational health: Build and scale hiring loops, onboarding\n\n\
+    playbooks, skills matrices, operating docs, postmortems, and decision logs.\n\n - Communications hub:\
+    \ Draft and deliver clear communications for executives\n\nand the company; own incident comms, exec\
+    \ updates, and cross-functional\n\nalignment.\n\n - Have strong technical fluency (comfortable in\
+    \ architecture discussions,\n\nreviewing Eng Specs/PRDs, understanding code, and reasoning about\n\
+    \ntrade-offs).\n\n - Are an elite program operator, structured, proactive, detail-oriented, and\n\n\
+    capable of bringing clarity to ambiguity.\n\n - Communicate exceptionally well, with the ability to\
+    \ write sharp exec\n\nmemos, specs, dashboards, and concise decision logs.\n\n - Can move seamlessly\
+    \ between boardroom and backlog, earning trust with\n\nengineers and GTM leaders alike.\n\n\n\n\n\
+    WHAT WE’RE LOOKING FOR\n\n - 4+ years across TPM, Engineering Management, Staff PM, Consulting, or\n\
+    \nFounder-type roles; startup/scale-up experience strongly preferred.\n\n - Proven track record of\
+    \ delivering multi-team programs (e.g., security,\n\nreliability, AI, or platform initiatives) with\
+    \ measurable outcomes.\n\n - Familiarity with security & compliance standards (SOC 2, ISO 27001, GDPR),\n\
+    \ncloud/SRE concepts, and data/AI fundamentals.\n\n - Hands-on experience with tools such as Jira/Linear,\
+    \ Notion/Confluence,\n\nGitHub, Airflow, Looker/Metabase, SQL, and incident tooling.\n\n\n\n\nWHY\
+    \ SPOTDRAFT?\n\n - Brilliant teammates—Work with some of the sharpest minds in legal tech.\n\n - Expand\
+    \ your network—Interact with top founders, investors, and industry\n\nleaders.\n\n - Real impact—Take\
+    \ ownership of projects and see your work in action.\n\n - Big goals, bold moves—We trust you to deliver,\
+    \ innovate, and push\n\nboundaries.\n\n\n\n\nOUR CORE VALUES\n\n - Our business is to delight Customers\n\
+    \n - Be Transparent. Be Direct\n\n - Be Audacious\n\n - Outcomes over everything else\n\n - Elevate\
+    \ each other\n\n - Be Passionate. Take Ownership.\n\n - Be 1% better every day\n\n\n\nAll candidates’\
+    \ personal data shared during the recruitment process will be\n\nhandled with utmost confidentiality\
+    \ and used solely for hiring purposes, in line\n\nwith applicable data protection regulations.\n\n\
+    *SpotDraft is an equal-opportunity employer. Candidates will not be discriminated\n\nagainst based\
+    \ on race, ethnicity, color, religion, caste, sex, gender identity, sexual\n\norientation, national\
+    \ origin, veteran, or disability status"
+- id: 9642
+  source: wellfound
+  company: Nexera
+  title: Founding Engineer
+  location: Bengaluru
+  experience_text: 1+ years
+  stack_words: []
+  posted_date: '2026-01-10'
+  url: https://wellfound.com/jobs/2833521-founding-engineer
+  description: '**About Nexera AI**
+
+    At Nexera, we are building a natural language powered research platform for professional traders to
+    find answers to their questions, backtest and automate their strategies. We are looking for a strong
+    and talented Software Engineer to join our Founding Team.
+
+    **Summary**
+
+    As our Founding Engineer, you will play a critical role in shaping our technology stack, engineering
+    culture, and product architecture. This role requires a highly capable backend engineer who is comfortable
+    with ambiguity, thrives in a fast-paced environment, and is excited about wearing multiple hats—ranging
+    from writing code to managing the tech team and even attracting talent.
+
+    **What You’ll Do**
+
+    * Own and build resilient, high-performance backend servers and APIs, ensuring scalability and fault
+    tolerance (not necessarily microservices).
+
+    * Work with large tick-by-tick datasets to power our platform, requiring strong architectural decisions
+    and optimizations.
+
+    * Design and optimize both SQL and NoSQL databases, implementing effective caching strategies for
+    performance.
+
+    * Take full ownership of projects with minimal oversight—driving technical decisions and delivering
+    impact quickly.
+
+    * Collaborate across functions, working closely with product, frontend, and devops while also engaging
+    with customers when needed.
+
+    * Set the bar for future engineers, defining best practices and contributing to the company’s engineering
+    culture.
+
+    **What We’re Looking For**
+
+    * Proven experience in backend development, building clean, high-performance, and resilient systems.
+
+    * Strong proficiency in Go, C++, or Rust for backend development.
+
+    * Deep experience with cloud platforms, infrastructure, and deployment strategies.
+
+    * Solid understanding of data structures and algorithms, with the ability to solve complex technical
+    problems efficiently.
+
+    * Quick learner who thrives in an unstructured, high-ownership environment and is comfortable switching
+    between different roles as needed.
+
+    * Passion for startups and entrepreneurship—consider this opportunity strongly if you aspire to be
+    a founder yourself in the future.'
+- id: 9679
+  source: wellfound
+  company: SwitchOn
+  title: Senior Frontend Engineer
+  location: Bangalore Urban
+  experience_text: 4+ years
+  stack_words: []
+  posted_date: '2026-09-03'
+  url: https://wellfound.com/jobs/4670288-senior-frontend-engineer
+  description: "**About Us**: \nSwitchOn, a Bangalore-based Series A deep tech startup, is on a mission\
+    \ to eliminate \nmanufacturing defects through AI-powered vision inspection systems. Innovation through\
+    \ \ntechnology is at the core of what we do, driving us to constantly push boundaries and develop\
+    \ \ncutting-edge solutions. We develop software products and utilize off-the-shelf hardware to \n\
+    transform quality inspections in the manufacturing sector. \nOur clientele includes industry leaders\
+    \ such as Unilever, ITC, P&G, Godrej, SKF, Bajaj, Brakes \nIndia, and many other renowned manufacturing\
+    \ companies. We are seeking exceptional talent \nto join our team and help us shape the future. If\
+    \ you are passionate about problem-solving \nand thrive in a fast-paced, collaborative environment,\
+    \ we encourage you to apply and become \na part of our exciting journey. \nDo visit our website for\
+    \ more information or read more about us in this article by Forbes India\n**About the Role**: \nWe’re\
+    \ looking for a talented Frontend Engineer who’s passionate about solving complex \nscalability challenges\
+    \ and delivering seamless, high-performance web applications. \n**What you'll do**: \n● Build and\
+    \ optimize high-performance, scalable web applications that power our AI-driven \ninspection dashboard.\
+    \ \n● Collaborate with product, and backend teams to deliver smooth, responsive UI \nexperiences.\
+    \ \n● Design modular, reusable UI components & ensure cross-browser compatibility. \n● Support integrations\
+    \ with APIs, cameras, and edge devices.\n**What You’ll Bring**: \n● 2+ years of experience in Frontend\
+    \ with Reactjs and React Query. \n● 1+ years of experience building highly scalable, high-performance,\
+    \ and responsive web \napplications. \n● Solid understanding of component-based architecture, UI patterns,\
+    \ and reusable code \npractices within the React ecosystem. \n● Strong foundation in data structures,\
+    \ algorithms, and design patterns. \n● Follow good reusable code structure practices. \n● Proficiency\
+    \ in HTML, CSS, and writing cross-browser compatible code. \n● Familiarity with RESTful APIs, Git,\
+    \ and Linux. \n**Plus points**:\n● Familiarity with Typescript. \n● Exposure to Canvas APIs. \n● Familiarity\
+    \ with Electron.js. \n● Working experience with Agile teams and tools like GitHub. \n● Knowledge of\
+    \ UI frameworks like Tailwind CSS and Ant Design (Antd). \n**Why SwitchOn**? \nAt SwitchOn, you’ll\
+    \ be part of a dynamic, innovative team that’s shaping the future of \nmanufacturing. We’re committed\
+    \ to creating a culture of collaboration, growth, and impact."
+- id: 9795
+  source: wellfound
+  company: SquareYards
+  title: Generative AI Engineer | Artificial Intelligence | Mumbai
+  location: Mumbai, Andheri East
+  experience_text: 0+ years
+  stack_words: []
+  posted_date: '2026-09-23'
+  url: https://wellfound.com/jobs/3000999-generative-ai-engineer-artificial-intelligence-mumbai
+  description: '## About the team
+
+    We build and run the AI systems that Square Yards'' sales, marketing and operations teams use every
+    day — about 2 billion LLM tokens a day in production. This is not a research lab and it is not a slide
+    deck — everything we ship talks to real customers, real agents, or real listings.
+
+    Today that includes:
+
+    - **A real-time AI voice calling platform** that runs outbound cold-calling, lead qualification and
+    inbound listener campaigns across multiple telephony providers, with per-campaign prompt logic, live
+    audio streaming, barge-in handling and CRM write-back.
+
+    - **A conversational intelligence stack** that transcribes, diarizes and scores every call — utterance-level
+    sentiment, interruption detection, objection mining, QA scorecards, and post-call coaching advice
+    — exposed as a public API product.
+
+    - **Retrieval-grounded assistants** for property discovery, internal HR workflows, and in-product
+    support widgets embedded directly in our dashboards.
+
+    - **A generative media pipeline** that turns property listings, floor plans and locality data into
+    marketing videos and imagery at scale.
+
+    - **Operational tooling** — health-check services, campaign managers, analytics dashboards — that
+    keeps all of the above observable and debuggable.
+
+    We move fast, own our systems end to end, and are small enough that one engineer''s work is visible
+    across the business.
+
+    ## What this role is
+
+    This is a build-and-learn role. You''ll start on well-scoped pieces of live systems, and grow into
+    owning a surface of your own. You will be writing code that runs in production within your first few
+    weeks — **not shadowing, not building sandbox demos that get thrown away.**
+
+    ## What you''ll do
+
+    - **Ship features inside our live AI systems** — a new analysis parameter on the call scorecard, a
+    new campaign configuration, a new endpoint on an existing service. Small, real, reviewed.
+
+    - **Write and iterate on prompts against real data.** Read actual call transcripts and chatbot conversations,
+    find where the system got it wrong, and fix it. A large share of AI engineering is this, and it is
+    genuinely skilled work.
+
+    - **Build evaluation sets and test harnesses.** Assemble golden datasets, run prompt and model comparisons,
+    and report what actually changed. You''ll often be the person who knows whether a change helped.
+
+    - **Build internal tools and dashboards** — Streamlit, Gradio or React — so the rest of the team can
+    inspect what a pipeline is doing without reading logs.
+
+    - **Handle data plumbing**: pull and clean data from MongoDB and our APIs, write pollers and background
+    jobs, wrangle audio and transcript files into shape.
+
+    - **Debug production issues** — trace a bad call outcome back through the transcript, the prompt,
+    the model response and the CRM write, and figure out which of those broke.
+
+    - **Learn the stack in depth** — real-time audio, retrieval, structured extraction, self-hosted inference
+    — with the expectation that you''ll be leading pieces of it within a year.
+
+    ## What we''re looking for
+
+    **Required**
+
+    - Solid Python. You''re comfortable with functions, classes, virtual environments, reading someone
+    else''s code, and using a debugger instead of guessing.
+
+    - You have actually built something with an LLM API — a project, an internship, a hackathon, a side
+    project. We care that you''ve hit the messy parts (bad outputs, rate limits, parsing failures), not
+    that it was at a job.
+
+    - Basic understanding of how modern LLMs work: tokens, context windows, temperature, embeddings, why
+    the same prompt gives different answers.
+
+    - Git — branches, pull requests, reasonable commits.
+
+    - Enough SQL or database familiarity to pull the data you need without asking someone every time.
+
+    - Clear written communication. You can explain what you tried and where you got stuck without being
+    asked three follow-up questions.
+
+    - Genuine curiosity and self-direction. Our stack changes every few months; nobody here has been handed
+    a complete syllabus.
+
+    **Strongly preferred**
+
+    - Coursework, projects or internships in ML, NLP, speech, or computer vision.
+
+    - Exposure to a Python web framework — FastAPI or Flask.
+
+    - Familiarity with any of: LangChain / LangGraph, Docker, Linux command line, pandas, PyTorch.
+
+    - Some front-end ability — React, Streamlit or Gradio — enough to put a UI on your own work.
+
+    - Comfort with audio or video tooling (ffmpeg, librosa, moviepy) & with data labeling and annotation
+    workflows.
+
+    ## Nice to have
+
+    - A portfolio, GitHub profile, or writeups of things you built because you wanted to see if they''d
+    work. This counts for more with us than a certificate list.
+
+    - Open-source contributions, Kaggle work, or published projects.
+
+    - Interest in real estate, sales operations, or the business side of what the technology is for.
+
+    ## Tech you''ll touch
+
+    Python · FastAPI · Flask · MongoDB · Docker · GCP · Google Gemini · OpenAI · Claude · Groq · BAML
+    · LangChain / LangGraph · Pinecone · ElevenLabs · PyTorch · Transformers · OpenCV · MoviePy · React
+    · TypeScript · Streamlit · Gradio
+
+    ## Why this role
+
+    Most junior AI jobs are either data labeling with a nicer title or building demos that never ship.
+    This one isn''t. You''ll work on systems that make thousands of real calls and answer real customer
+    questions, you''ll see the consequences of your changes within days, and you''ll be sitting next to
+    people solving hard problems in real-time voice, retrieval and generative media — with room to grow
+    into owning that work yourself.
+
+    ---
+
+    Along with your resume, please include a short note on something you built with AI — what it did,
+    what broke, and what you''d do differently. A rough side project you can talk about honestly is worth
+    more to us than a polished one you can''t!'
+- id: 11079
+  source: lever
+  company: Veeva
+  title: Principal Software Engineer - Python
+  location: Missouri - Kansas City
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-08-05'
+  url: https://jobs.lever.co/veeva/86321d17-1d3c-4249-9d37-62e31e6b9008
+  description: "Veeva Systems is a mission-driven organization and pioneer in industry cloud, helping\
+    \ life sciences companies bring therapies to patients faster. As one of the fastest-growing SaaS companies\
+    \ in history, we surpassed $3B in revenue in our last fiscal year with extensive growth potential\
+    \ ahead.\n \nAt the heart of Veeva are our values: Do the Right Thing, Customer Success, Employee\
+    \ Success, and Speed. We're not just any public company – we made history in 2021 by becoming a public\
+    \ benefit corporation (PBC), legally bound to balancing the interests of customers, employees, society,\
+    \ and investors.\n \nAs a Work Anywhere company, we support your flexibility to work from home or\
+    \ in the office, so you can thrive in your ideal environment.\n \nJoin us in transforming the life\
+    \ sciences industry, committed to making a positive impact on its customers, employees, and communities.\n\
+    \n\nThe Role\nAs Principal Software Engineer for a new product within Veeva, you will be a founding\
+    \ member of a team building our next major AI-driven platform — one that will transform how Life Sciences\
+    \ companies manage safety, regulatory, and clinical development.\n \nYou will influence and help grow\
+    \ a codebase and engineering organization from the ground up, wearing multiple hats across the engineering\
+    \ organization. The team will be AI-first in two meaningful ways: using AI to drive engineering productivity\
+    \ and strong engineering discipline, and building a product that applies AI in genuinely innovative\
+    \ ways to problems that matter.\n \nWithin your first year, you will have live customers on the platform\
+    \ and a thriving, growing team behind it - directly accelerating how customers bring life-saving products\
+    \ to market.\nWhat You'll Do\nFull Feature Ownership:\n Own all stages of feature implementation,\
+    \ from design and development through deployment, production support, and maintenance. Daily code\
+    \ contribution using AI assistance for productivity\nDrive Solutions:\n Collaborate with Product Management\
+    \ and Development on technical design and problem-solving to deliver great code\nRapid Problem Solving:\n\
+     Quickly analyze complex problems, identifying knowns and unknowns, to accelerate the path to robust\
+    \ solutions\nDevelop Best Practices: \nDefine, promote, and mentor on engineering best practices and\
+    \ coding standards, including the latest approaches to AI assisted engineering\nExpert Code Review:\n\
+     Provide comprehensive code reviews for engineers of all experience levels\nStrategic Mentorship:\n\
+     Develop the skills of engineering talent through structured mentorship\nRequirements\nSeasoned Software\
+    \ Engineer:\n 12+ years of proven software development expertise (Production level Python development\
+    \ required)\nEnterprise SaaS Leader:\n Extensive experience developing high-scale enterprise SaaS\
+    \ cloud applications\nScalability Expert:\n Proven track record of architecting and building high-volume\
+    \ products at scale\nOpen Source Proficiency:\n Hands-on development experience with current open-source\
+    \ tools and technologies, including Python, Git, FastAPI, Pydantic\nFast-Paced Adaptability:\n Highly\
+    \ driven and flexible, enjoys a fast-paced start-up environment, and believes in having fun along\
+    \ the way\nMentorship:\n Proven ability to mentor and elevate team performance, fostering growth and\
+    \ excellence\nHigh work ethic: \nVeeva is a hard-working company\nHigh integrity and honesty:\n Veeva\
+    \ is a PBC and a “do the right thing” company. We expect that from all employees\nExcellent verbal\
+    \ and written English communication skills:\n Engineering is not all about the code, it’s also about\
+    \ communication\nApplicants must have the unrestricted right to work in the United States. Veeva will\
+    \ not provide sponsorship at this time\nInterviewing with Veeva\nWe value your time and believe in\
+    \ a transparent hiring process. Here is the process you can expect.\nFollow the application process\
+    \ and submit your resume.\nWithin 3 days, you will receive a link to a personality assessment administered\
+    \ by a third party.\nOnce you complete the assessment, our team will review your full application\
+    \ package and follow up via email with our decision.\nIf moving to the interview stage, the process\
+    \ is as follows:\nA conversation with the hiring manager\nA technical/coding skills exercise\nA final\
+    \ panel interview with team members and senior leaders\nOnce all interviews are complete, the manager\
+    \ will be in touch with a final decision.\nPerks & Benefits\nMedical, dental, vision, and basic life\
+    \ insurance\nFlexible PTO and company paid holidays\nRetirement programs\n1% charitable giving program\n\
+    Compensation\nBase pay: $150,000 - $300,000\nThe salary range listed here has been provided to comply\
+    \ with local regulations and represents a potential base salary range for this role. Please note that\
+    \ actual salaries may vary within the range above or below, depending on experience and location.\
+    \ We look at compensation for each individual and base our offer on your unique qualifications, experience,\
+    \ and expected contributions. This position may also be eligible for other types of compensation in\
+    \ addition to base salary, such as variable bonus and/or stock bonus.\n#LI-Remote\n#LI-Principal\n\
+    \n\nVeeva’s headquarters is located in the San Francisco Bay Area with offices in more than 15 countries\
+    \ around the world."
+- id: 11792
+  source: cutshort
+  company: Logikality
+  title: Director, AI Engineering (CTO & Co-founder track in 6–9 months)
+  location: Bengaluru (Bangalore)
+  experience_text: 3 - 9 years
+  stack_words:
+  - Artificial Intelligence (AI)
+  - Large Language Models (LLM) tuning
+  - MULTIMODAL AI
+  - Python
+  - Programming
+  posted_date: '2026-07-21'
+  url: https://cutshort.io/job/Director-AI-Engineering-CTO-Co-founder-track-in-6-9-months-Bengaluru-Bangalore-Logikality-RWA38r5g
+  description: "[Please refrain from applying if you have over 10 years of experience. This is a hands-on\
+    \ role that requires building from the ground up.]\nLocation:\n Bengaluru (In-Office)\nEmployment\
+    \ Type:\n Full-Time\nAbout Logikality\nLogikality is building an AI-native mortgage intelligence platform\
+    \ for the U.S. mortgage industry. We are reimagining how mortgage operations are executed by combining\
+    \ AI, workflow automation, and domain expertise to solve one of the most document-intensive and decision-heavy\
+    \ industries in the world.\nOur platform goes beyond document extraction. We are building AI systems\
+    \ that understand mortgage files, reason across multiple sources of information, identify risks and\
+    \ exceptions, support underwriting and quality control decisions, and continuously improve through\
+    \ expert feedback and rigorous evaluation.\nAs we expand our AI capabilities, we are looking for a\
+    \ Director, AI Engineering to define and drive the research direction behind our next generation of\
+    \ intelligent systems.\nAbout the Role\nThis is a hands-on technical leadership role for someone who\
+    \ enjoys solving difficult AI problems and turning research into production impact.\nYou will lead\
+    \ the research agenda across large language models, reasoning systems, agentic AI, multimodal learning,\
+    \ and intelligent decision support while working closely with engineering, product, and mortgage domain\
+    \ experts. You will prototype new ideas, validate them through rigorous experimentation, and help\
+    \ productionize solutions that directly improve customer outcomes.\nThis role is ideal for someone\
+    \ with deep research expertise who enjoys building real-world AI systems rather than research for\
+    \ its own sake.\nWhat You'll Do\nDefine and execute the Applied AI research roadmap aligned with company\
+    \ and product goals.\nDesign novel approaches for document understanding, reasoning, planning, retrieval,\
+    \ and decision support.\nBuild agentic AI systems capable of orchestrating tools, workflows, and domain\
+    \ knowledge to solve complex mortgage use cases.\nDevelop multimodal AI models that combine documents,\
+    \ structured data, images, and operational context.\nLead research on long-context reasoning, knowledge\
+    \ integration, memory, retrieval-augmented generation (RAG), and workflow automation.\nDesign robust\
+    \ evaluation frameworks, benchmarks, and automated testing pipelines to measure model quality, reliability,\
+    \ explainability, and business impact.\nRapidly prototype, experiment, and iterate on new AI techniques,\
+    \ evaluating state-of-the-art research for production adoption.\nWork closely with software engineers\
+    \ to translate research prototypes into scalable, production-ready systems.\nMentor AI engineers and\
+    \ contribute to building a strong research culture within the organisation.\nCollaborate with mortgage\
+    \ domain experts to deeply understand operational workflows, compliance requirements, and decision-making\
+    \ processes.\nStay current with advances in AI research and identify opportunities to leverage emerging\
+    \ techniques within our platform.\nRepresent Logikality in customer interactions, strategic discussions,\
+    \ industry conferences, and business forums, communicating our AI vision, gathering market insights,\
+    \ and helping shape research priorities through direct engagement with customers and ecosystem partners.\n\
+    What We're Looking For\nPhD in Computer Science, Artificial Intelligence, Machine Learning, or a related\
+    \ discipline; or an engineering degree in Computer Science or related disciplines from a premier engineering\
+    \ institution (e.g., IITs, IISc, NITs, BITS Pilani, or top-tier global universities).\n3–8 years of\
+    \ professional experience in Applied AI, Machine Learning, or AI Research, with experience building\
+    \ production-grade AI systems\nStrong expertise in modern AI, including Large Language Models, transformers,\
+    \ agentic AI, reasoning systems, retrieval, multimodal learning, or adjacent areas.\nStrong software\
+    \ engineering skills with Python and modern machine learning frameworks.\nExperience designing and\
+    \ implementing production-grade AI systems that solve complex real-world problems.\nStrong understanding\
+    \ of model evaluation, benchmarking, experimentation, and AI system reliability.\nExperience balancing\
+    \ research innovation with engineering pragmatism and product delivery.\nExcellent problem-solving\
+    \ and communication skills with the ability to collaborate across engineering, product, and business\
+    \ teams.\nWhy Join Logikality?\nAt Logikality, you'll work on problems that require genuine reasoning,\
+    \ not just text generation. You'll help build AI systems that understand complex documents, synthesise\
+    \ information across workflows, explain decisions, identify exceptions, and improve through continuous\
+    \ learning and expert feedback.\nThis is an opportunity to work at the intersection of cutting-edge\
+    \ AI research and real-world impact, where your ideas won't remain as papers or prototypes; they'll\
+    \ power intelligent systems used every day by mortgage professionals. We are looking for someone who\
+    \ can connect AI, platform engineering, product thinking and customer outcomes.\nFor the right person,\
+    \ this could develop into a CTO and co-founder track over the next 6–9 months, based on contribution,\
+    \ technical leadership and mutual fit.\nInterested candidates are requested to apply via the Google\
+    \ Form given: https://forms.gle/jFqKzfLhNCcCFU5t9\nThis will be a full-time in-office role based in\
+    \ Bangalore. Immediate joiners are preferred."
+- id: 11932
+  source: cutshort
+  company: Olx
+  title: Product Manager (CarTrade Tech Mumbai)
+  location: Mumbai
+  experience_text: 3 - 5 years
+  stack_words:
+  - Product Management
+  - Generative AI
+  - Artificial Intelligence (AI)
+  - Large Language Models (LLM)
+  - Analytical Skills
+  posted_date: '2026-05-28'
+  url: https://cutshort.io/job/Product-Manager-CarTrade-Tech-Mumbai-Mumbai-Olx-6tori6IL
+  description: 'The Product Manager will play a pivotal role in shaping and executing strategic initiatives
+    and product innovations and development within the CarTrade Tech Labs . This position requires an
+    entrepreneurial mindset, a passion for emerging technologies, and the ability to drive ideas from
+    conception to implementation by working together with various stakeholders including engineering,
+    marketing, sales and external customers. The role will rely deeply on leveraging Artificial Intelligence
+    (AI) and Generative AI capabilities to unlock new product opportunities and features, improve decision-making,
+    and drive innovation-led growth.
+
+    Job Location- Mumbai
+
+    Mode of work - Work from office
+
+    Key Responsibilities
+
+    ● Be a part of the product development life cycle for certain defined products.
+
+    ● Conduct comprehensive market analysis, competitive benchmarking, and user research to inform product
+    strategy.
+
+    ● Develop and clearly communicate product roadmaps, strategic objectives, and growth opportunities.
+
+    ● Collaborate closely with technical, design, and business teams to build, test, and launch new products
+    and services.
+
+    ● Identify and nurture strategic partnerships and alliances to accelerate innovation and enhance market
+    positioning.
+
+    ● Define and track success metrics, analyze performance data, and adapt strategies based on data-driven
+    insights.
+
+    ● Champion a culture of experimentation, agile execution, and continuous learning within the Lab.
+
+    ● Identify opportunities to integrate AI/ML and Generative AI solutions into products, workflows,
+    and strategic initiatives.
+
+    ● Work with engineering and data teams to conceptualize, evaluate, and scale AI-driven product features
+    and automation use cases.
+
+    ● Stay updated on emerging AI trends, LLM ecosystems, and applied AI innovations to inform product
+    strategy and competitive positioning.
+
+    ● Drive experimentation using AI-enabled tools for user insights, personalization, automation, and
+    operational efficiency.
+
+    Qualifications
+
+    ● Post graduate degree in Business, Engineering, Computer Science, or related fields.
+
+    ● 3+ years of experience either in Product Management .
+
+    ● Strong analytical skills and familiarity with market research methodologies.
+
+    ● Exceptional communication and stakeholder management skills, with the ability to influence cross-functional
+    teams.
+
+    ● Passion for technology trends and familiarity with agile product development methodologies.
+
+    ● Hands-on Experience in product management is required.
+
+    ● Exposure to AI/ML, Generative AI, or data-driven product initiatives, either through product development,
+    strategy projects, or experimentation.
+
+    ● Understanding of AI product lifecycle concepts such as model evaluation, experimentation, data feedback
+    loops, or AI-enabled user experiences is a strong plus.
+
+    ● Familiarity with AI tools, LLM-based applications, analytics platforms, or AI-assisted decision-making
+    frameworks will be advantageous.'
+- id: 12868
+  source: cutshort
+  company: Payment and mobility platform
+  title: Senior Software Developer
+  location: Hyderabad
+  experience_text: 3 - 7 years
+  stack_words:
+  - Android Development
+  - iOS App Development
+  - React Native
+  - User Interface (UI) Development
+  - Frontend developer
+  posted_date: '2021-10-07'
+  url: https://cutshort.io/job/Senior-Software-Developer-Hyderabad-Hyno-Technologies-sLj8Gs6u
+  description: 'We are looking for a smart, collaborative, hard-working Senior Frontend Developer to be
+    part of a team building an amazing multimodal transport experience. You are an accomplished, hands-on
+    engineer. Your mission is to serve as a key UI developer on your squad and expertly craft frontend
+    mobile and web applications. You work closely with Product and Design teams to drive and refine specifications.
+    You develop strategies and design specifications to improve the performance and reliability of our
+    mobile & web applications as we rapidly scale our product and organization.
+
+    Who you are
+
+    Love for coding : An engineer who is a fanatic about writing beautiful and scalable code, in short,
+    a code -artist.
+
+    Dynamic Should be comfortable in dealing with lots of moving pieces. Have exquisite attention to detail,
+    and are comfortable learning new technologies and systems.
+
+    Analytical mindset: Strong analytical and troubleshooting skills from requirements, design to code
+    & validation. Should be resourceful, innovative and inventive.
+
+    Team player Knack for influencing without being authoritative. Pitch in wherever the team needs help,
+    from writing blog posts to supporting customers.
+
+    Accountability High sense of ownership for your code and relentlessness to deliver projects with high
+    business impact.
+
+    Key Qualifications
+
+    Bachelor of Engineering/Bachelor of Technology in Computer Science or related field.
+
+    6+ years of relevant work experience in mobile and/or web application development.
+
+    Minimum 2+ years of leading feature teams through all stages of development.
+
+    Experience with mobile application development in Android and iOS.
+
+    Responsibilities
+
+    Build pixel-perfect, buttery smooth mobile applications on Android & iOS integrating with native APIs
+    and cloud services.
+
+    Design, develop, test, deploy, maintain, and improve mobile application(s).
+
+    Manage individual project priorities, deadlines, and deliverables.
+
+    Build products that can scale for users around the world while meeting & exceeding quality & performance
+    goals.
+
+    Maintain strong service catalog and up to date technical documentation.
+
+    Establish logging, monitoring, analytics and telemetry frameworks for the team.
+
+    Establish & Enforce strong DevOps principles across all stages of development.
+
+    Liaise with Product development team to plan new features.
+
+    Research and suggest new mobile products, applications and protocols.
+
+    Stay up-to-date with new technology trends.
+
+    Requirements
+
+    Strong computer system analysis and design skills in current methodologies and patterns including
+    vanilla JavaScript (and TypeScript or ClojureScript) language and its nuances, including ES6+ syntax
+    with experience on ReactJS, Redux, React Native, Webpack, and similar library/tools.
+
+    Development experience on native and/or cross platform mobile application development for Android
+    & iOS using Xamarin, Cordova or similar frameworks.
+
+    Familiarity with native build tools, like XCode, Gradle (Android Studio, IntelliJ)
+
+    Understanding of REST APIs, the document request model, and offline storage and experience with automated
+    testing suites, like (Jest or Mocha)
+
+    Experienced with web standards and protocols such as HTTP, REST, DNS, TCP/IP, and socket APIs in general.
+
+    Familiar with web security, accessibility and internationalization.
+
+    Experience with agile/scrum methodologies to iterate quickly on product changes, developing user stories
+    and working through backlogs. Familiarity in using tools such as JIRA, Confluence, Git, bitbucket
+    etc.
+
+    Demonstrable portfolio of released applications on the App store or the Android market.
+
+    Experience with Geo-location APIs and Google maps APIs and asset tracking is a plus.
+
+    Previous experience in developing mobility or transportation solutions is a plus.
+
+    Benefits
+
+    Be part of an organisation in hyper-growth mode with plenty of opportunity for personal development
+
+    Flexible and inspiring workplace with a team of competent, motivated and fun co-workers
+
+    Autonomy and ownership of the work you do with flexible hours
+
+    Opportunity to make an impact by being part of a movement that will revolutionise transportation in
+    APAC cities
+
+    Annual Team retreats in Bali and other popular beach destinations
+
+    Private Health Insurance
+
+    Performance Bonus'
+- id: 13025
+  source: greenhouse
+  company: Addepar
+  title: Sr. Manager, Talent Acquisition (APAC)
+  location: Pune, India
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-10-05'
+  url: https://job-boards.greenhouse.io/addepar1/jobs/8855792002
+  description: "Who We Are\nAddepar is a global data and AI platform empowering investment professionals\
+    \ to turn complex financial information into actionable intelligence. Addepar unifies portfolio, market\
+    \ and client data in a total portfolio view and delivers AI-powered insights within investment and\
+    \ client workflows. More than 1,500 firms in 60 countries use Addepar to manage and advise on nearly\
+    \ $10 trillion in assets. Its open platform integrates with 650 software, data and consulting partners\
+    \ to power end-to-end investment operations across firms of all sizes and levels of complexity. Addepar\
+    \ supports clients worldwide with offices in New York City, Salt Lake City, São Paulo, London, Edinburgh,\
+    \ Geneva, Warsaw, Dubai, Pune and Singapore.\nThe Role\nAddepar is looking for a Sr. Manager, Talent\
+    \ Acquisition to lead our APAC recruiting function from our Pune, India office. This is a player-coach\
+    \ role: you will lead and develop a team of recruiters while also owning a portfolio of critical requisitions\
+    \ yourself, across our Go-to-Market (Sales & Services), R&D (Engineering, AI, Data, and Product),\
+    \ and G&A (Finance, Legal, People, IT) organizations.\nYou will act as the senior recruiting voice\
+    \ for the region, setting hiring strategy in partnership with regional and global leaders while staying\
+    \ close enough to the work to know exactly what's happening in the pipeline. You are comfortable operating\
+    \ in a matrix organization, balancing global talent acquisition standards with the realities of local\
+    \ markets, and you know how to translate broad company hiring goals into a concrete regional plan.\n\
+    Applicants must have legal authorization to work in the country where this role is based on the first\
+    \ day of employment. Visa sponsorship is not available for this position.\nWhat You’ll Do\nLead, coach,\
+    \ and develop a team of recruiters across multiple functions, setting clear goals, providing regular\
+    \ feedback, and building a strong bench of recruiting talent in the region\nPersonally own and manage\
+    \ a portfolio of high-priority, senior, or complex requisitions end to end, from intake through offer\
+    \ and close, across GTM, R&D, and G&A\nSet the APAC recruiting strategy in partnership with regional\
+    \ business leaders and global TA leadership, translating company-wide hiring goals into a regional\
+    \ plan that reflects local market realities\nOperate effectively in a matrix organization, balancing\
+    \ global process and standards with the needs of local hiring managers, functional leaders, and business\
+    \ units\nPartner closely with hiring managers and business leaders to understand their staffing needs,\
+    \ advise on hiring strategy, and build durable, trust-based relationships across the region\nDrive\
+    \ workforce planning conversations with business and People leaders, helping them think ahead of open\
+    \ reqs rather than react to them\nBring a strong point of view on how AI and modern recruiting tools\
+    \ (sourcing, screening, scheduling, and candidate engagement) can improve speed, quality, and consistency\
+    \ across the team, and lead adoption of new tools and workflows\nUse recruiting metrics (time to fill,\
+    \ pipeline health, source effectiveness, offer acceptance, and more) to diagnose bottlenecks and drive\
+    \ continuous improvement across the funnel\nEnsure a consistently excellent, high-touch candidate\
+    \ experience, and represent Addepar's employer brand across APAC markets\nStay current on employment\
+    \ law, hiring practices, and market compensation trends across the APAC countries in scope, ensuring\
+    \ recruiting activities remain compliant and competitive\nPartner with University Recruiting and campus\
+    \ programs where relevant to build long-term talent pipelines in the region\nWho You Are\n8-10+ years\
+    \ of progressive talent acquisition experience, including at least 5-7 years directly managing and\
+    \ developing a team of recruiters\nProven experience recruiting across multiple functions (for example:\
+    \ GTM, R&D, and G&A/Corporate), not just a single specialty, with the range to flex between technical,\
+    \ commercial, and operational hiring\nExperience operating in a matrix or global organization, working\
+    \ across functional and geographic reporting lines and building consensus without formal authority\
+    \ over every stakeholder\nA genuine player-coach: equally comfortable setting strategy in the boardroom\
+    \ and getting into the details of a live requisition\nStrong track record using data and recruiting\
+    \ metrics to make decisions, tell a clear story to leadership, and hold the team accountable to outcomes\n\
+    Hands-on experience with AI-enabled recruiting tools and modern sourcing technology (for example:\
+    \ AI sourcing/screening tools, conversational scheduling, or GenAI-assisted workflows), with an eye\
+    \ for what's genuinely useful versus hype\nProficiency with applicant tracking systems (Greenhouse\
+    \ preferred) and the broader recruiting tech stack\nDeep familiarity with APAC talent markets and\
+    \ the employment landscape across the relevant countries in scope; working knowledge of local employment\
+    \ law and compliance considerations\nExcellent stakeholder management and communication skills, with\
+    \ the ability to influence senior business leaders and adjust style across cultures and seniority\
+    \ levels\nBachelor's degree or equivalent experience in Human Resources, Business, or a related field;\
+    \ MBA or relevant certification is a plus\nOur Values \nAct Like an Owner - \nThink and operate with\
+    \ intention, purpose and care. Own outcomes.\nBuild Together - \nCollaborate to unlock the best solutions.\
+    \ Deliver lasting value. \nChampion Our Clients - \nExceed client expectations. Our clients’ success\
+    \ is our success. \nDrive Innovation - \nBe bold and unconstrained in problem solving. Transform the\
+    \ industry. \nEmbrace Learning - \nEngage our community to broaden our perspective. Bring a growth\
+    \ mindset. \nIn addition to our core values, Addepar is proud to be an equal opportunity employer.\
+    \ We seek to bring together diverse ideas, experiences, skill sets, perspectives, backgrounds and\
+    \ identities to drive innovative solutions. We commit to promoting a welcoming environment where inclusion\
+    \ and belonging are held as a shared responsibility.\nWe will ensure that individuals with disabilities\
+    \ are provided reasonable accommodation to participate in the job application or interview process,\
+    \ to perform essential job functions, and to receive other benefits and privileges of employment.\
+    \ Please contact us to request accommodation.\nPHISHING SCAM WARNING: Addepar is among several companies\
+    \ recently made aware of a phishing scam involving con artists posing as hiring managers recruiting\
+    \ via email, text and social media. The imposters are creating misleading email accounts, conducting\
+    \ remote “interviews,” and making fake job offers in order to collect personal and financial information\
+    \ from unsuspecting individuals. Please be aware that no job offers will be made from Addepar without\
+    \ a formal interview process. Additionally, Addepar will not ask you to purchase equipment or supplies\
+    \ as part of your onboarding process. If you have any questions, please reach out to \n."
+- id: 13626
+  source: jobicy
+  company: Supabase
+  title: Postgres Deployment Engineer (Nix)
+  location: Remote (Anywhere)
+  experience_text: Any
+  stack_words:
+  - DevOps & Infrastructure
+  posted_date: '2026-11-18'
+  url: https://jobicy.com/jobs/153446-postgres-deployment-engineer-nix
+  description: "About Supabase\nSupabase is the Postgres development platform, built by developers for\
+    \ developers. We provide a complete backend solution including Database, Auth, Storage, Edge Functions,\
+    \ Realtime, and Vector Search. All services are deeply integrated and designed for growth.\nAbout\
+    \ the Role\nWe’re looking for a \nPostgres Deployment Engineer\n to join our \nPostgreSQL team\n and\
+    \ help elevate our PostgreSQL offerings.\nYou’ll work closely with the PostgreSQL team, playing an\
+    \ instrumental role in technical decision-making and refining internal methodologies. This role is\
+    \ ideal for someone who thrives in async, fast-paced environments and is excited about building developer\
+    \ tools that scale to millions.\nThe focus of this role is owning the \nstability and deployment\n\
+    \ of our products. You will act as a bridge between product and infrastructure teams to improve the\
+    \ reliability of deployments and upgrades. You will have co-responsibility for builds and deployments\
+    \ via our public \nsupabase/postgres\n GitHub repository, which bundles features into Docker images\
+    \ and AWS AMIs for cloud and local use.\nWhat You’ll Be Responsible For\nPackage software into our\
+    \ \nsupabase/postgres\n repo using Nix (with flakes), and help us transition our packaging from traditional\
+    \ to Nix packaging more over time.\nManage PostgreSQL lifecycles, ensuring timely major, minor, and\
+    \ extension upgrades.\nExpand platform release systems to allow developers to increasingly self-service.\n\
+    Optimize CI/CD and tooling, specifically expanding GitHub Actions, team tooling, and testing/release\
+    \ approaches.\nResolve production issues by proactively identifying and fixing problems in customer\
+    \ deployments.\nMaintain best practices and tests to ensure enhanced stability and decreased deployment\
+    \ risks.\nYou Might Be a Good Fit If You\nHave 3+ years of experience\n with PostgreSQL and its ecosystem,\
+    \ including extensions and performance optimization.\nAre an Infrastructure Expert\n with proven experience\
+    \ in management, tooling, and optimization.\nAre proficient in the Nix package management system\n\
+    \ (including flakes) alongside Ansible, Packer, Docker, QEMU/KVM, AWS, and Kubernetes.\nHave experience\
+    \ building for multiple architectures\n, specifically Linux and Darwin/macOS aarch64 targets.\nAre\
+    \ comfortable with polyglot environments\n, including builds for C/C++, Go, JavaScript, and Rust-based\
+    \ projects.\nCommunicate clearly\n across both technical and non-technical audiences, especially when\
+    \ interacting with customers.\nHave experience in async or globally distributed teams\n and value\
+    \ independent, proactive problem-solving.\nAre willing to mentor\n, taking on responsibility for teaching\
+    \ the engineering team to use and contribute to our Nix-based work.\nWhat We Offer\nFully Remote\n\
+    We hire globally. We believe you can do your best work from anywhere. There are no Supabase offices,\
+    \ but we provide a WeWork membership or co-working allowance you can use anywhere in the world.\n\
+    ESOP\nEvery team member receives ESOP (equity ownership) in the company. We want everyone to share\
+    \ in the upside of what we’re building together.\nTech Allowance\nUse this budget to set up your ideal\
+    \ work environment—laptop, monitor, headphones, or whatever helps you do your best work.\nHealth Benefits\n\
+    Supabase covers 100% of health insurance for employees and 80% for dependents, wherever you are. Your\
+    \ wellbeing and your family’s health are important to us.\nAnnual Off-Sites\nOnce a year, the entire\
+    \ company gathers in a new city for a week of connection, collaboration, and fun. It’s a highlight\
+    \ of our year.\nFlexible Work\nWe operate asynchronously and trust you to manage your own time. You\
+    \ know what needs to be done and when.\nProfessional Development\nEvery team member receives an annual\
+    \ education allowance to spend on learning—courses, books, conferences, or anything that supports\
+    \ your growth.\nAbout the Team\nSupabase was born-remote and open-source-first. We believe our globally\
+    \ distributed team is our secret weapon in building tools developers love.\n~400 team members\n60+\
+    \ countries\n20+ languages spoken\nOver $1B raised (including our $500M Series F)\n540,000+ community\
+    \ members\nWe move fast, build in public, and use what we ship. If it’s in your project, we probably\
+    \ use it in ours too. We believe deeply in the open-source ecosystem and strive to support—not replace—existing\
+    \ tools and communities."
+- id: 17173
+  source: jobicy
+  company: Canonical
+  title: Site Reliability Engineer
+  location: Remote (Anywhere)
+  experience_text: Senior
+  stack_words:
+  - DevOps & Infrastructure
+  posted_date: '2026-11-25'
+  url: https://jobicy.com/jobs/149547-site-reliability-engineer
+  description: "Canonical is a leading provider of open source software and operating systems to the global\
+    \ enterprise and technology markets. Our platform, Ubuntu, is widely used in breakthrough enterprise\
+    \ initiatives such as public cloud, data science, AI, engineering innovation, and IoT. Our customers\
+    \ include the world's leading public cloud and silicon providers, and industry leaders in many sectors.\
+    \ The company is a pioneer of globally distributed collaboration, with 1200+ colleagues in 75+ countries\
+    \ and very few office-based roles. Teams meet two to four times yearly in person, in interesting locations\
+    \ around the world, to align on strategy and execution.\nThe company is founder-led, profitable, and\
+    \ growing.\nWe are hiring a Site Reliability Engineer\nOur goal is to perfect enterprise infrastructure\
+    \ DevOps practices, raising the bar on what's possible with automation by embracing a model-driven\
+    \ approach, whether on-premise or on public clouds.\nWe run hundreds of private cloud, Kubernetes\
+    \ clusters, and applications for customers across both physical and public cloud estates. We identify\
+    \ and address incidents, monitor and observe applications, anticipate potential issues, and enable\
+    \ product refinement to ultimately achieve high-quality standards in our open source portfolio.\n\
+    To succeed in this role, you need to have a strong background in Linux, Python, networking, and knowledge\
+    \ of how clouds work. Your work will encompass the entire stack, from bare-metal networking and kernel\
+    \ up to Kubernetes and open source applications. You can expect to be trained in our core technologies\
+    \ like OpenStack, Kubernetes, security standards, open source products like Kubeflow, Kafka, OpenSearch,\
+    \ databases, and many others.\nAutomation for us is a software engineering problem that we approach\
+    \ with a scientific mindset to bring operations at scale, driven by metrics and code.\nLocation: Globally\
+    \ remote role\nThe role\nWe deploy and run OpenStack, Kubernetes, storage solutions, and open source\
+    \ applications, applying DevOps practices.\nTo become a member of our team, you need to be a software\
+    \ engineer fluent in Python, you need a genuine interest in the full open source infrastructure stack\
+    \ from bare metal to containers, and you need the ability to work in operations with mission-critical\
+    \ services for global brand-name customers.\nAs a member of the team, you will gain experience in\
+    \ a broad range of cloud technologies. We evolve our offerings as the state of the art improves, so\
+    \ you get to stay current with the latest capabilities in open source infrastructure.\nWhat we are\
+    \ looking for in you\nDegree in software engineering or computer science\nPython software development\
+    \ experience\nOperational experience in Linux environments\nExperience with Kubernetes deployment\
+    \ or operations\nExcellent interpersonal skills, curiosity, flexibility, and accountability\nAbility\
+    \ to travel internationally twice a year, for company events up to two weeks long\nBonus skills\n\
+    Familiarity with OpenStack deployment or operations\nFamiliarity with public cloud deployment or operations\n\
+    Familiarity with private cloud management\nWhat we offer colleagues\nWe consider geographical location,\
+    \ experience, and performance in shaping compensation worldwide. We adjust compensation every 6 months\
+    \ to ensure we recognize outstanding performance, and in addition to base pay, we offer annual bonuses.\
+    \ We provide all team members with additional benefits, which reflect our values and ideals. We balance\
+    \ our programs to meet local needs and ensure fairness globally.\nDistributed work environment with\
+    \ twice-yearly team sprints in person\nPersonal learning and development budget of USD 2,000 per year\n\
+    Every 6 months compensation review\nRecognition rewards\nAnnual holiday leave\nMaternity and paternity\
+    \ leave\nEmployee Assistance Programs\nOpportunity to travel to new locations to meet your colleagues\n\
+    Priority Pass and travel upgrades for long-haul company events\nAbout Canonical\nCanonical is a pioneering\
+    \ tech firm at the forefront of the global move to open source. As the company that publishes Ubuntu,\
+    \ one of the most important open source projects and the platform for AI, IoT, and the cloud, we are\
+    \ changing the world of software. We recruit on a global basis and set a very high standard for people\
+    \ joining the company. We expect excellence - in order to succeed, we need to be the best at what\
+    \ we do. Most colleagues at Canonical have worked from home since its inception in 2004.​ Working\
+    \ here is a step into the future, and will challenge you to think differently, work smarter, learn\
+    \ new skills, and raise your game.\nCanonical is an equal opportunity employer\nWe are proud to foster\
+    \ a workplace free from discrimination. Diversity of experience, perspectives, and background creates\
+    \ a better work environment and better products. \nWhatever your identity, we will give your application\
+    \ fair consideration.\n #LI-Remote"
+- id: 20499
+  source: lever
+  company: Brillio
+  title: Senior Software Development Engineer - R01573248
+  location: Bangalore, Karnataka, India
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-10-31'
+  url: https://jobs.lever.co/brillio-2/f71a0306-cdba-490e-9588-d10effbef165
+  description: 'Senior Software Development Engineer
+
+    Primary Skills
+
+    AWS Elastic Beanstalk, AWS Lambda, Amazon CloudFront, Amazon API Gateway, AWS Step Function
+
+    Specialization
+
+    AWS Development: Software Development Engineer
+
+    Job requirements
+
+    Job Title AWS Telephony / IVR Application Developer Job Summary We are seeking an experienced AWS
+    Telephony / IVR Application Developer to design, develop, deploy, and support Amazon Connect–based
+    IVR solutions. This role focuses on building and maintaining IVR contact flows and serverless services,
+    implementing secure configuration and secrets management, and ensuring high quality through resilient
+    design and validation of failure scenarios (e.g., timeouts, API failures, dependency degradation).
+    Key Responsibilities Amazon Connect & IVR Development • Design, build, deploy, and version Amazon
+    Connect Contact Flows. • Configure and maintain Amazon Connect resources including: o Queues o Routing
+    profiles o Hours of operation • Develop and integrate Lex bots where applicable. • Validate IVR behavior
+    during failure scenarios such as: o API errors and downstream failures o Timeouts and retries o Partial
+    dependency outages • Implement safe fallback paths and customer-friendly error handling. AWS Serverless
+    Application Development • Develop and maintain AWS Lambda functions (Node.js or Python) supporting
+    IVR workflows. • Build and maintain API endpoints consumed by IVR flows. • Implement robust: o Error
+    handling o Retry strategies o Structured logging for troubleshooting • Design and utilize DynamoDB
+    access patterns supporting IVR use cases (e.g., routing state, transfer points, lookup/stateful interactions).
+    Secure, Configurable Development • Build software that: o Reads configuration externally (not hard-coded)
+    o Uses managed secrets (no embedded credentials) o Supports release promotion without code changes
+    • Ensure no hard-coded: o Endpoints o Credentials o Environment identifiers Deployment & Delivery
+    Practices • Deploy application artifacts using standardized CI/CD pipelines (no manual console deployments).
+    • Contribute to and follow a documented deployment runbook for consistent, repeatable releases across
+    application components. • Participate in defect triage and resolution for issues introduced through
+    delivered changes. • Collaborate with QA and stakeholders to ensure enhancements meet quality standards
+    before promotion. Required Skills & Experience Core Technical Requirements • Hands-on experience with
+    Amazon Connect, including: o Contact Flows o Queues, routing profiles, hours of operation • Strong
+    AWS serverless development experience: o AWS Lambda (Node.js or Python) o API integration patterns
+    supporting IVR flows o DynamoDB • Experience building telephony/IVR experiences, including failure-safe
+    behavior and degraded-mode handling. • Experience with secure secrets and configuration management
+    (e.g., AWS Secrets Manager and/or Parameter Store). • Experience delivering via CI/CD pipelines using
+    standardized deployment patterns.'
+- id: 24220
+  source: remoteio
+  company: Asana
+  title: Software Engineer, Development Infrastructure
+  location: Remote (Anywhere)
+  experience_text: ''
+  stack_words:
+  - Software Engineering
+  - Infrastructure
+  - AWS
+  - Developer Tools
+  - Cloud Computing
+  posted_date: '2026-11-19'
+  url: https://remote.io/remote-jobs/software-development/software-engineer-development-infrastructure-at-asana-2151274
+  description: 'The Development Infrastructure team builds the tooling and systems our Asana engineers
+    use every day to bring their ideas to production quickly and reliably. We build and operate the software
+    that drives Asana’s roadmap. Each day, we combine industry best practices and innovation to support
+    this product-focused company.
+
+    We’re looking for a Software Engineer with a passion for developer infrastructure. You will work with
+    a world-class team of engineers on deploying and operating existing developer tooling, and building
+    new tools to support our global, growing development team. You will have a unique opportunity to design
+    and develop the systems and applications that drive the Asana development experience, lead complex
+    technical projects, and work on cross-functional initiatives to help define the future of software
+    engineering at Asana.
+
+    What you’ll achieve
+
+    Innovate the architecture of our development sandboxes to accelerate development iteration.
+
+    Modernize our build system, tighten iteration loops, and polish frequent cycles in the developer experience.
+
+    Lead complex developer infrastructure projects from technical design through implementation, rollout,
+    and operation.
+
+    Partner with engineering teams to identify opportunities to enable teams to develop faster at Asana
+    and help the company achieve our goals faster.
+
+    Analyze complex developer infrastructure systems to uncover issues, root causes, and areas for improvement.
+
+    Keep Asana up to date on open-source trends and identify new opportunities for improved development
+    infrastructure.
+
+    Champion code quality and solid engineering practices, setting a standard through example, technical
+    guidance, and infrastructure that promotes best practices.
+
+    Write clean, maintainable code, striving to leave systems in a better state than you found them.
+
+    Collaborate with a world-class engineering team to build reliable and intuitive infrastructure for
+    developers across Asana.
+
+    About you
+
+    2+ years of software engineering experience, ideally backend- or infrastructure-focused, working in
+    large, well-maintained codebases and shipping production systems.
+
+    Familiarity with build tooling and automated testing, with an interest in distributed systems.
+
+    Ability to learn quickly and transition seamlessly between different areas of a complex codebase and
+    infrastructure stack.
+
+    Excellent communication skills for collaborating with other teams and driving alignment across technical
+    stakeholders.
+
+    Sound autonomous judgment when balancing moving quickly with eliminating risks and building reliable,
+    scalable, performant, and long-term maintainable systems.
+
+    Experience designing, building, or operating infrastructure on AWS or another major cloud platform
+    is a plus.
+
+    Excited to be part of an inclusive culture where everyone brings their whole selves to work.
+
+    Demonstrated curiosity about AI tools and emerging technologies, with a willingness to learn and leverage
+    them to enhance productivity, collaboration, or decision-making.
+
+    At Asana, we''re committed to building teams that include a variety of backgrounds, perspectives,
+    and skills, as this is critical to helping us achieve our mission. If you''re interested in this role
+    and don''t meet every listed requirement, we still encourage you to .
+
+    What we’ll offer
+
+    For this role, the estimated monthly base salary range is between 1 000 000 ISK - 1 200 000 ISK. The
+    actual base salary will vary based on various factors, including market and individual qualifications
+    objectively assessed during the interview process. The listed range above is a guideline, and the
+    base salary range for this role may be modified.
+
+    In addition to base salary, your compensation package may include additional components such as equity,
+    sales incentive pay (for most sales roles), and benefits. If you''re interviewing for this role, speak
+    with your Talent Acquisition Partner to learn more about the total compensation and benefits for this
+    role.
+
+    We strive to provide equitable and competitive benefits packages that support our employees worldwide
+    and include:
+
+    Mental health, wellness & fitness benefits
+
+    Career coaching & support
+
+    Inclusive family building benefits
+
+    Long-term savings or retirement plans
+
+    In-office culinary options to cater to your dietary preferences 
+
+    These are just some of the benefits we offer, and benefits may vary based on role, country, and local
+    regulations. If you''re interviewing for this role, speak with your Talent Acquisition Partner to
+    learn more about the total compensation and benefits for this role.
+
+    #LI-Hybrid #LI-AZ
+
+    About us
+
+    Asana is a leading platform for human + AI collaboration. Millions of teams around the world rely
+    on Asana to achieve their most important goals, faster. Asana has been named to Fortune''s Best Workplaces
+    for 7+ years and recognized by Fast Company, Forbes, and Gartner for excellence in workplace culture
+    and innovation. We offer an exceptional office-centric culture while adopting the best elements of
+    hybrid models to ensure that every one of our global team members can work together effortlessly.
+    With 13+ offices all over the world, we are always looking for individuals who care about building
+    technology that drives positive change in the world and a culture where everyone feels that they belong.
+
+    We believe in supporting people to do their best work and thrive. Our goal is to ensure that Asana
+    upholds an environment where all people feel that they are respected and valued, whether they are
+    ing for an open position or working at the company. We provide equal employment opportunities to all
+    applicants without regard to race, color, religion, age, sex, national origin, disability status,
+    genetics, protected veteran status, sexual orientation, gender identity or expression, or any other
+    characteristic protected by law.
+
+    Join Asana’s Talent Network
+
+     to stay up to date on job opportunities and life at Asana.'
+- id: 24941
+  source: ashby
+  company: Mistral AI
+  title: Talent Acquisition Specialist - North America (Contractor)
+  location: Palo Alto (Remote)
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-07-10'
+  url: https://jobs.ashbyhq.com/mistral.ai/15a21229-ecf8-41a4-b010-6e95a1210cf2
+  description: "ABOUT MISTRAL\n\nMistral provides full-stack AI solutions: from frontier models to developer\
+    \ tools, applications, and compute. We partner with enterprises tackling the hardest problems across\
+    \ high-stakes industries like finance, manufacturing, defense, healthcare, and the public sector,\
+    \ co-creating customized AI systems that they can run on their terms.\n\nWe are a dynamic, collaborative\
+    \ team passionate about AI and its potential to transform society. Our diverse workforce thrives in\
+    \ competitive environments and is committed to driving innovation. Our teams are distributed between\
+    \ Europe, North America, Asia and the Middle East. We are creative, low-ego and team-spirited.\n\n\
+    \n\n\nTHE ROLE\n\nAs a Talent Acquisition Contractor in our US team, you will play a central role\
+    \ in building high-caliber teams during a period of rapid company expansion. You will work with hiring\
+    \ managers across business and technical functions to source, engage, and hire talent for go-to-market\
+    \ roles and corporate teams. Your work will directly impact our ability to grow, helping shape our\
+    \ culture and future success. This role is ideally based in San Francisco or New York City, but we\
+    \ welcome remote candidates.\n\n\n\n\nWHAT YOU WILL DO\n\n - Manage the end-to-end recruiting process\
+    \ to create a seamless experience for candidates and hiring teams\n\n - Develop and implement search\
+    \ strategies for a range of business, corporate, and technical roles\n\n - Partner closely with stakeholders\
+    \ to define hiring needs and sourcing plans\n\n - Identify, engage, and guide candidates throughout\
+    \ the interview and offer process\n\n - Analyze hiring data and processes to find and address root\
+    \ causes or inefficiencies\n\n - Recommend and drive improvements in recruiting processes, documentation,\
+    \ and tools\n\n - Advise candidates on closing strategies to ensure high acceptance rates\n\n - Contribute\
+    \ to ongoing refinements in hiring systems and approaches\n\n\nWHAT WE'RE LOOKING FOR\n\n - Experience\
+    \ recruiting for both business and technical positions, ideally within the enterprise software sector\n\
+    \n - Strong ability to operate independently, quickly learning new roles, markets, and processes\n\
+    \n - A track record of hiring in highly competitive talent markets\n\n - At least four years of experience\
+    \ in recruiting, including outbound search\n\n - Effective communication skills with the credibility\
+    \ to influence hiring managers and senior stakeholders\n\n - Attention to detail, accountability,\
+    \ and a drive to deliver on hiring targets\n\n - Comfort moving between strategic planning and hands-on\
+    \ recruiting tasks\n\n - Experience with Ashby or similar recruiting tools\n\n\n\n\nWHAT WE OFFER\n\
+    \nWe offer a comprehensive benefits package designed to support your well-being, growth, and work-life\
+    \ balance. Benefits vary by country and may include healthcare coverage, parental leave, retirement\
+    \ plans, relocation support, wellness programs, meal and transportation allowances, and other location-specific\
+    \ perks.\n\nFor the most up-to-date details on benefits available in your location, please refer to\
+    \ our Benefits page https://app.notion.com/p/mistralai/Benefits-at-Mistral-36e6ba59a7fe836b93dd01737fcc27ef?source=copy_link.\n\
+    \n\n\n\nPRIVACY POLICY\n\nYour privacy matters to us. You can learn more about how we handle your\
+    \ personal data in our Applicant Privacy Policy https://legal.mistral.ai/terms/applicant-privacy-policy."
+- id: 26350
+  source: jobicy
+  company: Nebius
+  title: Engineering Manager/Network Team Lead
+  location: Remote (APAC)
+  experience_text: Senior
+  stack_words:
+  - DevOps & Infrastructure
+  posted_date: '2026-11-11'
+  url: https://jobicy.com/jobs/161303-engineering-manager-network-team-lead-2
+  description: "About \nNebius\n:\nNebius is leading a new era in cloud infrastructure for the global\
+    \ AI economy. We are building a full-stack AI cloud platform that supports developers and enterprises\
+    \ from data and model training through to production deployment, without the cost and complexity of\
+    \ building large in-house AI/ML infrastructure.\nBuilt by engineers, for engineers. From large-scale\
+    \ GPU orchestration to inference optimization, we own the hard problems across compute, storage, networking\
+    \ and applied AI.\nListed on Nasdaq (NBIS) and headquartered in Amsterdam, we have a global footprint\
+    \ with R&D hubs across Europe, the UK, North America and Israel. Our team of 1,500+ includes hundreds\
+    \ of engineers with deep expertise across hardware, software and AI R&D.\nThe role: Network \nEngineering\
+    \ Manager APAC / Network Team Lead APAC\nWe are looking for a \nStaff Network Engineer / Player-Coach\
+    \ Team Lead\n to lead the growth, deployment, and operational execution of our \nAPAC Network Infrastructure\
+    \ emerging team\n. In this role, you will combine direct people leadership with high-end technical\
+    \ expertise. You will lead a growing regional team of \n2–5 jun/mid-to-senior network engineers\n\
+    , driving their professional development, cross-project prioritization across our \nGlobal Network\n\
+    , and overall execution aligned with global business objectives, with a priority on the \nAPAC Region\n\
+    \ and backbone network development across EU and the US for APAC.\nAs a hands-on technical manager,\
+    \ you will remain deeply embedded in engineering execution, dedicating approximately \n50–70% of your\
+    \ time to hands-on engineering\n during your first year, with the role evolving naturally alongside\
+    \ organizational scale and regional team expansion.\nCrucially, this position demands a high degree\
+    \ of \noperational autonomy\n. Due to the timezone differences, you will serve as the primary regional\
+    \ networking authority, bridging global network architecture defined with our EU/EMEA/the US engineering\
+    \ headquarters and regional execution across APAC colocation sites, cable landings, and data centers.\n\
+    This position is remote within the APAC region (with preferred hubs in India, Singapore), with regular\
+    \ visits to regional DC facilities and our European headquarters in Amsterdam.\nYour responsibilities\
+    \ will include:\nTeam Leadership & People Management\nDeploy APAC network part and BackBone. Lead,\
+    \ mentor, and structurally develop a regional engineering team of 2–5 jun/mid-to-senior network engineers\
+    \ across the APAC.\nOwn regional task planning, backlog prioritization, change review governance,\
+    \ and end-to-end execution within the team.\nDrive and owning the Launch and Deploy process of New\
+    \ DataCentre and Customer in it\nDrive technical coaching, and personalized career roadmaps for team\
+    \ members.\nFoster a disciplined culture of radical ownership, engineering excellence, comprehensive\
+    \ runbook documentation, and Git-driven automation.\nAct as the regional net escalation point for\
+    \ production network incidents\nGlobal Follow-the-Sun Alignment:\n Co-own operational hand-off workflows\
+    \ and shared incident coverage with \nEMEA (HQ in Amsterdam)\n and the \nUS\n network teams to guarantee\
+    \ seamless, round-the-clock global production network stability and customer workability.\nCross-Functional\
+    \ Alignment & Strategic Autonomy\nServe as the primary regional network owner for the next teams in\
+    \ APAC: datacenter operations team, site expansion teams.\nEU/EMEA Coordination:\n Actively partner\
+    \ with the Global Network Architecture and R&D to adapt core architectural standards (Clos fabrics,\
+    \ SRv6, backbone routing policies) to APAC market realities and carrier ecosystems.\nAutonomously\
+    \ drive regional connectivity delivery: partner closely with Technical Program Managers (TPMs) on\
+    \ submarine cable systems, cross-border DCI circuits, local Internet Exchanges (IXs), and regional\
+    \ transit providers.\nCoordinate with HWaaS, Compute, and Cloud Platform engineering teams to guarantee\
+    \ timely site bring-up, Day-0 Out-of-Band (OOB) readiness, and high-throughput fabric availability\
+    \ for production workloads.\nBridge the gap between global strategic roadmaps and autonomous local\
+    \ incident resolution, ensuring APAC operations execute reliably during EMEA off-hours.\nTechnical\
+    \ Leadership & Hands-on Work (50–60%)\nFull Regional Network Ownership:\n Own and guarantee overall\
+    \ network infrastructure readiness, capacity, and availability across emerging APAC network infrastructure,\
+    \ ensuring alignment with HQ blueprints and processes\nActively contribute to the design, deployment,\
+    \ and operation of massive data center fabrics and backbone infrastructure.\nSupport and participate\
+    \ in the evolution high-performance Ethernet-based GPU cluster interconnects.\nParticipate in complex,\
+    \ high-severity troubleshooting and root-cause analysis (RCA) for critical infrastructure incidents.\n\
+    Oversee and contribute to network automation pipelines, tooling, and telemetry/observability development.\
+    \ \nWe expect you to have:\nExpert-Level Technical Background:\nService Provider or/and Data Center\
+    \ Clos networks.\nBGP, IS-IS, Segment Routing (SR-MPLS / SRv6), and advanced traffic balancing\nEthernet\
+    \ switching, EVPN-VXLAN architectures, and L3 VPNs.\nLeadership Experience: Proven track record as\
+    \ a Tech Lead, Lead/Staff Engineer, or People Manager leading mid-to-senior engineering teams.\nVendor\
+    \ Ecosystem: Juniper, Arista, Cisco, NVIDIA\nIt will be an added bonus if you have:\nHands-on experience\
+    \ with GPU cluster, RoCEv2/ECN or InfiniBand networks\nSolid understanding of Public Cloud networking\
+    \ models and Software-Defined Networking (SDN) overlays.\nProficiency in Python or Go for infrastructure\
+    \ automation and production tooling within Linux environments.\nBenefits & Perks:\nCompetitive compensation\n\
+    Career growth and learning opportunities\nFlexibility and ownership\nCollaborative and innovative\
+    \ culture\nOpportunity to work on impactful AI projects\nInternational environment and talented teams\n\
+    What's it like to work at Nebius:\nFast moving - Bold thinking - Constant growth - Meaningful impact\
+    \ - Trust and real ownership - Opportunity to shape the future of AI \nEqual Opportunity Statement:\n\
+    Nebius is an equal opportunity employer. We are committed to fostering an inclusive and diverse workplace\
+    \ and to providing equal employment opportunities in all aspects of employment. We do not discriminate\
+    \ on the basis of race, color, religion, sex (including pregnancy), national origin, ancestry, age,\
+    \ disability, genetic information, marital status, veteran status, sexual orientation, gender identity\
+    \ or expression, or any other characteristic protected by applicable law.\nApplicants must be authorized\
+    \ to work in the country in which they apply and will be required to provide proof of employment eligibility\
+    \ as a condition of hire. \nIf you need accommodations during the application process, please let\
+    \ us know."
+- id: 27067
+  source: ashby
+  company: Tekion
+  title: Salesforce Developer
+  location: Bangalore HQ
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-11-13'
+  url: https://jobs.ashbyhq.com/Tekion/73d38f67-13bc-431e-b142-db93870a3822
+  description: "ABOUT TEKION:\n\nPositively disrupting an industry that has not seen any innovation in\
+    \ over 50 years, Tekion has challenged the paradigm with the first and fastest cloud-native automotive\
+    \ platform that includes the revolutionary Automotive Retail Cloud (ARC) for retailers, Automotive\
+    \ Enterprise Cloud (AEC) for manufacturers and other large automotive enterprises and Automotive Partner\
+    \ Cloud (APC) for technology and industry partners. Tekion connects the entire spectrum of the automotive\
+    \ retail ecosystem through one seamless platform. The transformative platform uses cutting-edge technology,\
+    \ big data, machine learning, and AI to seamlessly bring together OEMs, retailers/dealers and consumers.\
+    \ With its highly configurable integration and greater customer engagement capabilities, Tekion is\
+    \ enabling the best automotive retail experiences ever. Tekion employs close to 3,000 people across\
+    \ North America, Asia and Europe.\n\n \n\nRequired\n\n - 3+ years of hands-on Salesforce development\
+    \ experience.\n\n - Strong programming skills: Apex (classes, triggers, batch, queueable), SOQL/SOSL,\
+    \ JavaScript, and Lightning Web Components (LWC).\n\n - Strong Salesforce platform knowledge: data\
+    \ model, security model, governor limits, and bulk-safe design.\n\n - Solid experience building Flows\
+    \ and automation, and knowing when to use Flow versus code.\n\n - Experience with APIs and integrations\
+    \ (REST/SOAP).\n\n - Familiarity with Git, Salesforce DX, and deployment tools.\n\n - Ability to understand\
+    \ requirements, ask clarifying questions, and deliver working, tested solutions on time.\n\n - Strong\
+    \ problem-solving, attention to detail, and clear communication.\n\nPlus\n\n - Prior experience with\
+    \ Salesforce CPQ or billing platforms (pricing, product bundles, quotes, amendments, renewals).\n\n\
+    \ - Salesforce certifications (Platform Developer I/II, Platform App Builder, Administrator).\n\n\
+    \ - Experience with Agile delivery and Jira.\n\n - Experience using AI coding assistants (Claude Code,\
+    \ Copilot, Cursor or similar) for Apex and LWC development, test class generation, and code review,\
+    \ with human review of all output.\n\n - Familiarity with Salesforce AI capabilities such as Agentforce,\
+    \ Einstein, and Prompt Builder.\n\n\nJOB DESCRIPTION\n\n - Develop and maintain Salesforce solutions\
+    \ using Apex, Flows, and Lightning Web Components.\n\n - Work with the technical lead and business\
+    \ partners to understand requirements and agree on the approach.\n\n - Build and support integrations\
+    \ between Salesforce and other systems.\n\n - Write clean, bulk-safe, well-tested code with strong\
+    \ test coverage, and take part in peer code reviews.\n\n - Estimate and deliver work within agile\
+    \ sprints, and communicate progress and blockers early.\n\n - Troubleshoot and resolve production\
+    \ issues, data problems, and automation failures.\n\n - Support deployments and releases through sandboxes\
+    \ and CI/CD.\n\n - Maintain technical documentation and follow platform security and governance standards.\n\
+    \nCurrent Tekion Employees: Please apply via the Internal Job Board in Ashby.\n\nNote: Tekion recently\
+    \ transitioned to a new recruiting tool and we appreciate your patience and feedback as we adjust\
+    \ to our new system!\n\n\n\nTekion is proud to be an Equal Employment Opportunity employer. We do\
+    \ not discriminate based upon race, religion, color, national origin, gender (including pregnancy,\
+    \ childbirth, or related medical conditions), sexual orientation, gender identity, gender expression,\
+    \ age, status as a protected veteran, status as an individual with a disability, victim of violence\
+    \ or having a family member who is a victim of violence, the intersectionality of two or more protected\
+    \ categories, or other applicable legally protected characteristics.\n\n\n\nFor more information on\
+    \ our privacy practices, please refer to our Applicant Privacy Notice here https://tekion.com/legal/privacy/applicant-and-candidate-privacy-notice."
+- id: 27718
+  source: greenhouse
+  company: Capco
+  title: Temenos Configuration Specialist - Securities
+  location: Switzerland - Zurich
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-09-21'
+  url: https://job-boards.greenhouse.io/capco/jobs/8219995
+  description: 'Joining Capco means becoming part of an innovative and dynamic consultancy firm, committed
+    to fostering an inclusive environment where you are encouraged to #BeYourselfAtWork. We embrace individuality
+    as a key factor in promoting diversity and inclusion, values that sit at the core of our success.
+    We aim to attract a wide variety of talented professionals with different skills and experiences.
+    If you require any adjustments to support your application process, please feel free to inform us
+    at any stage.
+
+    ABOUT CAPCO
+
+    Capco is a global technology and business consultancy that is passionate about supporting clients
+    in the financial services sector to grow and succeed in today''s ever-changing world. We are:
+
+    Experts in banking, capital markets, payments and asset and wealth management.
+
+    Trusted advisors in core banking, securities and wealth management transformation, regulatory change,
+    risk management and technology modernization.
+
+    A company dedicated to continuous development and excited to welcome top talent to help us drive innovation
+    and deliver lasting results.
+
+    A business built on agility, collaboration, and entrepreneurial spirit.
+
+    THE ROLE
+
+    As a Temenos Configuration Specialist - Securities, you will play a key role in delivering a complex
+    core banking and securities transformation for a leading Swiss financial institution. You will focus
+    on the functional configuration, integration, testing, and deployment of Temenos Securities and related
+    Temenos Core / Transact capabilities. Working across securities operations, business analysis, architecture,
+    and technology, you will translate business requirements into robust configuration solutions supporting
+    highly automated front-to-back trade processing, settlement, position management, custody, and asset
+    servicing.
+
+    YOUR CAPCO DAY
+
+    Configure securities products, instrument and processing parameters, transaction rules, settlement
+    instructions, fees and commissions, custody and position settings, exception handling, and asset-servicing
+    parameters within Temenos Securities.
+
+    Translate business and operational requirements into functional designs, configuration workbooks,
+    parameter specifications, and implementation-ready solutions aligned with the target architecture
+    and Temenos standards.
+
+    Perform fit-gap and impact analyses, promoting configuration-first solutions and identifying where
+    controlled extensions, interfaces, or data changes are required.
+
+    Support end-to-end securities processing across order and trade capture, confirmation, settlement,
+    position maintenance, custody, income events, corporate actions, and related cash movements for multiple
+    asset classes.
+
+    Apply strong knowledge of equities, fixed income, funds, ETFs, and structured products, together with
+    post-trade standards and market practices including SWIFT, ISO 20022, settlement status handling,
+    and straight-through processing.
+
+    Collaborate with architects and integration teams on interfaces between Temenos and front-office platforms,
+    brokers and trading venues, custodians and CSDs, market and reference data providers, payments, compliance
+    controls, general ledger, and reconciliation platforms
+
+    Define and review functional test scenarios and acceptance criteria, and provide hands-on support
+    during system integration testing, user acceptance testing, regression testing, and end-to-end securities
+    lifecycle validation.
+
+    Analyse defects and production-like issues, trace configuration, reference-data, position, and transaction-flow
+    root causes, coordinate remediation with functional and technical teams, and validate fixes through
+    structured retesting.
+
+    Support configuration promotion, release preparation, migration and cutover activities, go-live readiness,
+    hypercare, and the creation of operational runbooks and support documentation.
+
+    Facilitate workshops with securities operations, product owners, portfolio and investment teams, business
+    analysts, architects, developers, testers, finance, and control functions to clarify requirements
+    and resolve design decisions.
+
+    Coordinate closely with Temenos, implementation partners, custodians, market-data providers, and internal
+    delivery teams, managing configuration dependencies and ensuring consistency across environments and
+    related workstreams.
+
+    Contribute to configuration governance, documentation standards, knowledge transfer, and capability
+    building so that securities solutions remain maintainable after implementation.
+
+    YOUR CAPCO FIT
+
+    At least 7 years of experience in banking technology, securities operations, wealth management, or
+    core banking transformation, including substantial hands-on responsibility for configuration and implementation
+    activities.
+
+    At least 4 years of practical experience with Temenos, ideally including Temenos Securities and Temenos
+    Core / Transact, with participation in at least two implementation, upgrade, or major transformation
+    programmes.
+
+    Strong functional knowledge of the securities lifecycle, including trade processing, settlement, positions,
+    custody, and asset servicing, preferably in private-banking, wealth-management, or securities-services
+    environments.
+
+    Proven ability to configure and troubleshoot Temenos Securities products and parameters across transaction
+    processing, settlement, positions, custody, fees and commissions, exceptions, and asset-servicing
+    processes.
+
+    Strong understanding of multi-asset securities processing, corporate actions, income events, settlement
+    and custody concepts, SWIFT and ISO 20022 messaging, static and reference data, and straight-through
+    processing.
+
+    Working knowledge of APIs, message and file interfaces, market and reference data integration, reconciliation,
+    accounting integration, and batch processing; SQL or comparable data-analysis skills are an advantage.
+
+    Demonstrated experience working in complex banking or wealth-management programmes with multiple business,
+    technology, vendor, custodian, and implementation-partner stakeholders.
+
+    Structured problem-solving skills and the ability to translate complex securities requirements into
+    practical, testable, and maintainable Temenos configurations.
+
+    Comfortable working in agile or hybrid delivery environments, taking ownership of deliverables from
+    requirements and design through testing, release, and post-go-live stabilization.
+
+    Professional fluency in English (C1 level or equivalent), including the ability to produce clear functional
+    and technical documentation.
+
+    German proficiency at B2 level or higher is strongly preferred for client-facing collaboration in
+    Switzerland.
+
+    Ready to take the Next Step 
+
+    If this sounds like you, we would love to hear from you. This is an opportunity to make a difference
+    and contribute to a highly successful company with a significant growth trajectory.'
+- id: 28385
+  source: smartrecruiters
+  company: Bosch
+  title: STIBO STEP Jr Developer
+  location: bengaluru, , India
+  experience_text: Associate
+  stack_words: []
+  posted_date: '2026-11-16'
+  url: https://jobs.smartrecruiters.com/BoschGroup/744000161763598
+  description: 'Roles & Responsibilities :
+
+    Role Overview
+
+    The STIBO STEP Developer designs, configures, develops, tests and supports MDM/PIM capabilities on
+    the STEP platform. The role combines hands-on application development with requirement analysis, integration
+    delivery, troubleshooting, performance analysis and collaboration with global application stakeholders.
+
+    Key Responsibilities
+
+    •Analyze customer requirements with functional consultants, architects and product owners, and translate
+    them into technical designs.
+
+    •Configure and enhance STEP data models, attributes, references, classifications, hierarchies, workflows,
+    Web UIs and search experiences.
+
+    •Develop global business rules, business actions and business conditions using JavaScript/Rhino scripting.
+
+    •Build and maintain inbound, outbound and gateway integrations using REST, SOAP, IDOC, XML/JSON, SFTP
+    or messaging patterns.
+
+    •Configure import/export processes, bulk updates, data transformations, XSLT and STEP XML structures.
+
+    •Implement matching, linking, golden-record and data-quality logic according to approved designs.
+
+    •Import and process structured or partly structured data while ensuring validation, traceability and
+    error handling.
+
+    •Diagnose root causes of application, interface and data-processing errors and implement sustainable
+    corrective actions.
+
+    •Perform application and performance analyses to support availability, scalability and reliability.
+
+    •Write unit tests, support integration testing and UAT, manage defects and maintain technical documentation.
+
+    •Use version-control, packaging and deployment practices to promote changes safely across environments.
+
+    Core STIBO STEP and Technical Skills
+
+    •System setup, user groups, privileges and security configuration.
+
+    •STEP data modelling, attributes, attribute groups, data containers, references and complex object
+    interactions.
+
+    •Web UI configuration, screens, sub-screens, pop-ups and workflow configuration.
+
+    •JavaScript/Rhino scripting, Java fundamentals, REST APIs, SOAP, XML, JSON and XSLT.
+
+    •Inbound, outbound and gateway integration endpoints; STEP API and Extension API concepts.
+
+    •Packaging hierarchies, change packaging, import/export configuration and bulk data updates.
+
+    •Matching and linking, golden records, data cleansing and maintenance.
+
+    •Linux fundamentals, Git and common file-transfer or messaging technologies.
+
+    Preferred / Additional Skills
+
+    • Experience with STIBO STEP PIM and integration with media/digital-asset platforms.
+
+    • Knowledge of SAP interfaces, IDOC, Solace/JMS, SFTP or ETL tools.
+
+    • Experience developing STEP custom components or extensions.
+
+    • Understanding of cloud deployment, monitoring, secure coding and automated testing practices.
+
+    Qualifications and Competencies
+
+    • Bachelor’s degree in Computer Science, Engineering or a related field.
+
+    • Strong problem-solving, debugging and structured-thinking skills.
+
+    • Ability to work independently while collaborating in a distributed agile team.
+
+    • Good written and verbal communication, with an affinity for master data and digital content.
+
+    Experience Developer: 3-5 years
+
+    Platform STIBO STEP
+
+    Domain MDM / Product Master(Material Master)'
+- id: 28883
+  source: smartrecruiters
+  company: Bosch
+  title: IN_Bosch Rexroth India_Engineer / Executive_Project Management
+  location: Sanand, GJ, India
+  experience_text: Executive
+  stack_words: []
+  posted_date: '2026-11-16'
+  url: https://jobs.smartrecruiters.com/BoschGroup/744000161787824
+  description: '1.End-to-End Customer Order Management (Monitoring & Execution):
+
+    o Take ownership of customer orders from the point of acquisition (purchase order) through
+
+    to successful delivery and customer satisfaction.
+
+    o Develop and maintain comprehensive project plans & schedules for each customer order.
+
+    o Monitor project progress diligently, identifying potential roadblocks and proactively
+
+    implementing solutions to keep projects on track.
+
+    o Ensure all project activities align with customer requirements, internal specifications, and
+
+    company standards.
+
+    2. Milestone Monitoring & Interface with Cross-Functional Teams (CFT):
+
+    o Define, track, and report on key project milestones and deliverables.
+
+    o Act as the primary interface and central point of contact between all involved cross-
+
+    functional teams (e.g., Sales, Engineering, Production, Supply Chain, Quality, Logistics,
+
+    Finance).
+
+    o Facilitate regular CFT meetings to review progress, address challenges, align on next
+
+    steps, and ensure synchronized efforts.
+
+    o Drive accountability across teams to meet established targets and deadlines.
+
+    3. Proactive Escalation & Risk Management:
+
+    o Identify potential project risks, issues, and deviations from the plan early.
+
+    o Develop and implement mitigation strategies to prevent or minimize project impact.
+
+    o Proactively escalate critical issues to relevant stakeholders and senior management in a
+
+    timely and structured manner, providing clear information, potential solutions, and recommendation
+
+    o Maintain an escalation matrix and ensure appropriate communication channels are
+
+    utilized.
+
+    4. Kick-off Meetings with Internal and External Customers:
+
+    o Lead and facilitate comprehensive project kick-off meetings with both internal teams and
+
+    external customers.
+
+    o Clearly define project scope, objectives, deliverables, timelines, roles, and responsibilities
+
+    during kick-off.
+
+    o Establish effective communication protocols and expectations with all project stakeholders
+
+    from the outset.
+
+    o Ensure a shared understanding of project goals and success criteria.
+
+    5. Design Loading Review and Prioritization:
+
+    o Collaborate with engineering, design, and production teams to review design workload,
+
+    resource availability, and project interdependencies.
+
+    o Participate in the prioritization of design tasks to align with overall project timelines and
+
+    customer commitments.
+
+    o Identify and address any potential bottlenecks in the design phase that could impact
+
+    downstream activities.
+
+    6. Adherence to Compliance & Quality Standards:
+
+    o Ensure all project activities and deliverables strictly adhere to relevant industry
+
+    regulations, company policies, quality standards (e.g., ISO, specific certifications), and
+
+    customer contractual obligations.
+
+    o Work closely with the Quality Assurance team to embed quality checks throughout the
+
+    project lifecycle.
+
+    o Maintain meticulous project documentation for audit and compliance purposes.
+
+    B.E. / B.Tech – Mechanical Engineering with 1 to 6 years of experience'
+- id: 32759
+  source: himalayas
+  company: Twilio
+  title: Staff Software Engineer (L4)
+  location: Remote (India)
+  experience_text: Senior
+  stack_words:
+  - Software-Engineer
+  - Backend-Engineer
+  - Cloud-Engineer
+  - Site-Reliability-Engineer
+  posted_date: '2026-11-26'
+  url: https://himalayas.app/companies/twilio/jobs/staff-software-engineer-l4-7579390549
+  description: "Who we are \nAt \nTwilio\n, we’re shaping the future of communications, all from the comfort\
+    \ of our homes. We deliver innovative solutions to hundreds of thousands of businesses and empower\
+    \ millions of developers worldwide to craft personalized customer experiences.\nOur dedication to\
+    \ remote-first work, and strong culture of connection and global inclusion means that no matter your\
+    \ location, you’re part of a vibrant team with diverse experiences making a global impact each day.\
+    \ As we continue to revolutionize how the world interacts, we’re acquiring new skills and experiences\
+    \ that make work feel truly rewarding. Your career at \nTwilio\n is in your hands.\n.\nHiring and\
+    \ how we work\nWe use Artificial Intelligence (AI) to help make our hiring process efficient. That\
+    \ said, every hiring decision is made by real \nTwilio\nns! \nAlso, while we are a remote-first company,\
+    \ you may be asked to report in person on an ad-hoc basis for team gatherings, functional off-sites\
+    \ or customer meetings.\n.\nSee yourself at \nTwilio\nJoin the team as \nTwilio\n’s next Software\
+    \ Engineer (L3)\nAbout the job\nThis position is needed to scope, design, and deploy machine learning\
+    \ systems into the real world to ensure that communication across \nTwilio\n platforms remains legal,\
+    \ safe and wanted. \nAs a Staff Software oftware Engineer, you will work in the design and implementation\
+    \ phases of Cloud-based distributed systems built to seamlessly scale to several million transactions\
+    \ per day and automating processes. You will partner with Architects, Product Managers and Operational\
+    \ Leaders for developing anti-fraud/ anti-abuse systems for our customers.\nResponsibilities\nIn this\
+    \ role, you’ll:\nWrite clean, efficient, and maintainable code for our distributed systems and microservices,\
+    \ utilizing asynchronous communication patterns for optimal performance. Contribute to the design\
+    \ and implementation of highly scalable architectures, prioritizing reliability, performance, and\
+    \ future-proof growth.\nCollaborate in defining and monitoring key Service Level Objectives (SLOs)\
+    \ and Service Level Indicators (SLIs) to ensure our systems deliver exceptional user experiences.\n\
+    Learn and grow with your colleagues, actively participating in code reviews, knowledge-sharing initiatives.\n\
+    Partner effectively with cross-functional teams, bridging the gap between technical vision and business\
+    \ goals. Excellent communication and collaboration skills, able to articulate complex technical concepts\
+    \ to both technical and non-technical audiences. Create clear and concise technical documentation,\
+    \ including design decisions, architecture diagrams, and best practices, for future reference and\
+    \ knowledge sharing.\nParticipate in an on-call rotation and ensure timely response to production\
+    \ incidents and system outages.\nQualifications \nTwilio\n values diverse experiences from all kinds\
+    \ of industries, and we encourage everyone who meets the required qualifications to apply. If your\
+    \ career is just starting or hasn't followed a traditional path, don't let that stop you from considering\
+    \ \nTwilio\n. We are always looking for people who will bring something new to the table!\n*Required:\n\
+    5+ years experience in designing, building and operating high-scale, mission critical cloud based\
+    \ production systems\n5+ years of experience with at least two programming languages such as Java,\
+    \ Scala, Python, Ruby or Go\n2+ years of experience leading teams of engineers in an agile environment.\n\
+    2+ years of Experience with distributed caching systems such as Redis or Memcached understanding common\
+    \ use cases and performance pitfalls\nProficient in concepts such as DDD, SOLID, Cloud Native Patterns,\
+    \ distributed systems and architecture. Capable of understanding pitfalls and anticipating common\
+    \ failure modes of a microservice environment\nStrong communication skills: able to communicate effectively\
+    \ with technical and non technical stakeholders in english\nPassion for new technologies and proven\
+    \ capability in analysis and problem-solving\nDesired:\nTrack record as a full-stack engineer\nExperience\
+    \ with AWS related technologies\nLocation\nThis role will be remote, and based in India (only in Karnataka,\
+    \ Tamil nadu, Telangana, Maharashtra, Delhi).\nTravel \nWe prioritize connection and opportunities\
+    \ to build relationships with our customers and each other. For this role, you may be required to\
+    \ travel occasionally to participate in project or team in-person meetings.\nWhat We Offer\nWorking\
+    \ at \nTwilio\n offers many benefits, including competitive pay, generous time off, ample parental\
+    \ and wellness leave, healthcare, a retirement savings program, and much more. Offerings vary by location.\n\
+    .\nTwilio\n thinks big. Do you?\nWe like to solve problems, take initiative, pitch in when needed,\
+    \ and are always up for trying new things. That's why we seek out colleagues who embody our values\
+    \ — something we call \nTwilio\n Magic. Additionally, we empower employees to build positive change\
+    \ in their communities by supporting their volunteering and donation efforts.\nSo, if you're ready\
+    \ to unleash your full potential, do your best work, and be the best version of yourself, apply now!\
+    \ If this role isn't what you're looking for, please consider other open positions.\n.\nStay alert\
+    \ to recruitment fraud\nWe care about your safety. Scammers sometimes impersonate \nTwilio\n recruiters\
+    \ through fake job postings, emails, websites, or messages. Please ensure you are engaging with an\
+    \ official @ email address. We will never ask for payment, gift cards, cryptocurrency, or banking\
+    \ information during the recruiting process. We do not make job offers without a formal interview\
+    \ process or conduct interviews exclusively through text-based messaging apps.\n.\nTwilio\n is proud\
+    \ to be an equal opportunity employer.\n We do not discriminate based upon race, religion, color,\
+    \ national origin, sex (including pregnancy, childbirth, reproductive health decisions, or related\
+    \ medical conditions), sexual orientation, gender identity, gender expression, age, status as a protected\
+    \ veteran, status as an individual with a disability, genetic information, political views or activity,\
+    \ or other applicable legally protected characteristics. We also consider qualified applicants with\
+    \ criminal histories, consistent with applicable federal, state and local law. Qualified applicants\
+    \ with arrest or conviction records will be considered for employment in accordance with the Los Angeles\
+    \ County Fair Chance Ordinance for Employers and the California Fair Chance Act. Additionally, \n\
+    Twilio\n participates in the E-Verify program in certain locations, as required by law.\nOriginally\
+    \ posted on \nHimalayas"
+- id: 32785
+  source: ashby
+  company: Mistral AI
+  title: Applied Scientist - Cybersecurity
+  location: Palo Alto (Remote)
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-11-26'
+  url: https://jobs.ashbyhq.com/mistral.ai/5be6a9c6-f7d7-45d4-8951-0dbf58be222f
+  description: "ABOUT MISTRAL\n\nMistral provides full-stack AI solutions: from frontier models to developer\
+    \ tools, applications, and compute. We partner with enterprises tackling the hardest problems across\
+    \ high-stakes industries like finance, manufacturing, defense, healthcare, and the public sector,\
+    \ co-creating customized AI systems that they can run on their terms.\n\nWe are a dynamic, collaborative\
+    \ team passionate about AI and its potential to transform society. Our diverse workforce thrives in\
+    \ competitive environments and is committed to driving innovation. Our teams are distributed between\
+    \ Europe, North America, Asia and the Middle East. We are creative, low-ego and team-spirited.\n\n\
+    \n\n\nABOUT THE JOB\n\nMistral AI is seeking Applied Scientists to build frontier cybersecurity models.\
+    \ You will develop SOTA models across different domains of cybersecurity, from vulnerability analysis\
+    \ to incident response and remediation. You’ll build the environments, training-data pipelines, and\
+    \ evaluations that make these capabilities real and measurable. You'll work closely with cybersecurity\
+    \ actors and real production data, as well as cross-functionally with science, engineering, and product\
+    \ teams teams to deliver high-impact, trustworthy AI for security.\n\nWe are made of researchers,\
+    \ engineers, product builders, ex-founders who love tackling the most complex real world problems\
+    \ in the industry. You might come from security with a genuine interest in AI science, or from AI\
+    \ science with a genuine interest in security, both paths fit. What matters is curiosity for the side\
+    \ you know less well, and the drive to go deep on it.\n\n\n\n\nWHAT YOU WILL DO\n\n - Develop, pre-train\
+    \ and post-train domain-specialized foundation models for agentic defensive security.\n\n - Work across\
+    \ a diverse set of complex real world problems to build the future of AI for cybersecurity.\n\n -\
+    \ Design evaluations and benchmarks that measure realistic security capability on customer-representative\
+    \ tasks.\n\n - Build sandboxed execution environments, RL tasks, and verifiers grounded in real customer\
+    \ workflows, and generate and curate the training data for training frontier models.\n\n - Develop\
+    \ the necessary tools and frameworks to facilitate data generation, model training, evaluation and\
+    \ deployment.\n\n - Own technical delivery across project sprints and manage research communications\
+    \ with customer teams.\n\n\n\n\nABOUT YOU\n\n - Fluent in English with excellent communication skills:\
+    \ at ease explaining complex technical to both technical and non-technical audiences.\n\n - Experience\
+    \ building harnesses, benchmarks or RL environments for code, agentic or security tasks.\n\n - Hands-on\
+    \ security background in one or more of: vulnerability research, exploit development, red teaming,\
+    \ or detection and incident response.\n\n - Not afraid of contributing to a big codebase; finds their\
+    \ way around independently with little guidance.\n\n - Writes clean, readable, high-performance, fault-tolerant\
+    \ Python code.\n\n - Doesn’t need roadmaps: moves independently and navigates uncertainty with confidence.\n\
+    \n - Low-ego, collaborative and eager to learn.\n\n - Track record of success through personal projects,\
+    \ professional projects or academia.\n\n\n\n\nNICE TO HAVE\n\n - PhD / Master in a relevant field\
+    \ (Mathematics, Security, Machine Learning). Exceptional candidates from other backgrounds welcome\n\
+    \n - Contributions to a large open-source or industry codebase.\n\n - Publications in top ML/security\
+    \ venues and/or contributions to open-source security or observability tools.\n\n - Experience working\
+    \ on large code bases or large machine learning models at scale.\n\n - Enjoys improving existing code:\
+    \ typing, tests, CI pipelines.\n\n\n\n\nWHAT WE OFFER\n\nWe offer a comprehensive benefits package\
+    \ designed to support your well-being, growth, and work-life balance. Benefits vary by country and\
+    \ may include healthcare coverage, parental leave, retirement plans, relocation support, wellness\
+    \ programs, meal and transportation allowances, and other location-specific perks.\n\nFor the most\
+    \ up-to-date details on benefits available in your location, please refer to our Benefits page https://app.notion.com/p/mistralai/Benefits-at-Mistral-36e6ba59a7fe836b93dd01737fcc27ef?source=copy_link.\n\
+    \n\n\n\nPRIVACY POLICY\n\nYour privacy matters to us. You can learn more about how we handle your\
+    \ personal data in our Applicant Privacy Policy https://legal.mistral.ai/terms/applicant-privacy-policy."
+- id: 32808
+  source: lever
+  company: Paytm
+  title: Talent  Acquisition Internship
+  location: Gurugram, Haryana
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-11-26'
+  url: https://jobs.lever.co/paytm/c6b86cd8-7f07-4469-992b-8968ed92739e
+  description: "About Us: \nPaytm is India's leading financial services company that offers full-stack\
+    \ payments &amp; financial\nsolutions to consumers, offline merchants and online platforms. The company\
+    \ is on a mission to bring half a\nbillion Indians into the mainstream economy through payments, commerce,\
+    \ banking, investments, and\nfinancial services. One97 Communications Limited that owns the brand\
+    \ Paytm is founded by Vijay Shekhar\nSharma.\n \nAbout the role:\nA Talent Acquisition (TA) Intern\
+    \ supports the recruitment team by sourcing and screening candidates, coordinating interviews, and\
+    \ maintaining recruitment trackers. They assist with job postings, initial candidate communication,\
+    \ and documentation like offer letters and onboarding forms. The role also involves helping with employer\
+    \ branding activities and ensuring smooth coordination between candidates and hiring managers.\n \n\
+    Skills Required\n-Strong communication and interpersonal skills\n-Basic understanding of recruitment\
+    \ and hiring processes, candidate sourcing and screening skills\n-Good stakeholder and candidate coordination\
+    \ abilities\n-Proficiency in MS Excel, Google Sheets, and Microsoft Office\n-Strong organizational\
+    \ and time-management skills\n-Attention to detail and accuracy in documentation\n-Ability to maintain\
+    \ recruitment trackers and reports\n-Professional email writing and verbal communication skills\n\
+    -Ability to work in a fast-paced environment and manage multiple tasks\n-Positive attitude, willingness\
+    \ to learn, and adaptability\n-Knowledge of LinkedIn and job portals is an added advantage\n \nDuration:\
+    \ 3 Months (Internship)\nWork Schedule: 5 Days a Week (Monday–Friday)\nLocation: Gurgaon"
+- id: 32859
+  source: smartrecruiters
+  company: Bosch
+  title: Senior System Architect and Product owner – Interior Sensing Solutions (ISS)
+  location: bangalore, , India
+  experience_text: Executive
+  stack_words: []
+  posted_date: '2026-11-26'
+  url: https://jobs.smartrecruiters.com/BoschGroup/744000163804468
+  description: 'Target to establish ISS Data & Tooling and SoL complete responsibilities in BGSW and drive
+    the topics independently.1. System & Validation Architecture (MBSE)Model-Based Systems Engineering
+    (MBSE): Concept, document, and maintain the system-level validation and test architecture.Requirements
+    Traceability: Ensure tight, bi-directional traceability of system requirements, safety goals, and
+    validation test cases within DOORS Classic / DOORS Next / SysEng 2.0 Variant & Product Line Engineering:
+    Model, configure, and maintain validation variant mappings across diverse reference architectures
+    using pure::variants.2. Key Performance Indicators (KPIs) & AnalyticsPerception Metric Frameworks:
+    Define and implement statistical metrics to evaluate ML-based classification performance on massive
+    validation sets, tracking Precision, Recall, ROC curves, and Expected Calibration Error (ECE).Dynamic
+    & Comfort KPIs: Define comfort and vehicle dynamics KPIs to evaluate driver comfort, validating features.Online
+    KPI Reporting: Architect and maintain an automated Online KPI Evaluation Platform that ingests multi-source
+    test data (simulation, vehicle test drives, field-logged data) to calculate KPIs and auto-generate
+    compliance reports.3. Data Tooling & Machine Learning PipelinesMulti-Format Ingestion Pipelines: Architect
+    scalable ingestion frameworks to process diverse, high-volume sensor recording formats (such as MDF/MF4,
+    DAT, bytesoup, and PCAP) and handle runtime extraction using custom metadata parsing tools (e.g.,
+    .cls to .json conversion via cls2any).4. Workflow Orchestration & Automated CI/CTCloud Workflow Orchestration:
+    Architect, scale, and maintain massive hybrid test orchestration platforms utilizing Apache Airflow
+    (e.g., via AWS MWAA environments) to automate data mining and batch simulation pipelines at scale.Continuous
+    Testing (CI/CD) Integration: Design, deploy, and maintain robust CI/CT pipelines using Jenkins Master/Agent
+    architectures (Docker, JMaaS) and GitLab CI.Simulation & Replay Automation: Develop scripted automation
+    concepts (such as Jenkins JobDSL and "seed job" setups) to manage parallelized HIL and SIL replay
+    chains, automating restbus updates, A2L configurations, and vTestStudio builds
+
+    B.E
+
+    10+'
+- id: 32899
+  source: greenhouse
+  company: Commvault
+  title: Senior AI Engineer
+  location: Bangalore, India; Pune, India
+  experience_text: ''
+  stack_words: []
+  posted_date: '2026-11-26'
+  url: https://job-boards.greenhouse.io/commvault/jobs/5493541008
+  description: "Recruitment Fraud Alert\nWe’ve learned that scammers are impersonating Commvault team\
+    \ members—including HR and leadership—via email or text. These bad actors may conduct fake interviews\
+    \ and ask for personal information, such as your social security number.  \nWhat to know:\nCommvault\
+    \ does \nnot\n conduct interviews by email or text.\nWe will never ask you to submit sensitive documents\
+    \ (including banking information, SSN, etc) before your first day.\nCommvault recruiters may contact\
+    \ prospective candidates through LinkedIn and other professional networking platforms regarding career\
+    \ opportunities. If you are unsure whether a recruiting communication is legitimate, review the profile\
+    \ to ensure they have a badge verifying them as a Commvault employee.\nIf you suspect a recruiting\
+    \ scam, please contact us at \nAbout Commvault\nCommvault (NASDAQ: CVLT) delivers continuous recovery\
+    \ for the AI era. We help organizations stay ready for constant disruption by returning critical data,\
+    \ applications, identities, and AI systems to a clean, trusted state. Our purpose-built recovery solutions\
+    \ span cloud-native and hybrid environments, leveraging AI to enable resilience at enterprise scale.\n\
+    The Opportunity\nWe have an outstanding career opportunity for a Senior AI Engineer in Bengaluru,\
+    \ Hyderabad, and Pune. As a senior AI Engineer, you will play a pivotal role in developing and implementing\
+    \ innovative AI solutions to enhance customer interactions, streamline processes, and drive overall\
+    \ business growth.\nWe are an extra ordinary engineering team that thrives on innovative ideas! We\
+    \ believe in having a dynamic engineering process but at the same time believe that processes can\
+    \ evolve to enhance Developer efficiencies and capabilities. We take pride in our ability to complete\
+    \ complex projects while delivering exceptional results to our customers. It takes great people to\
+    \ build great software and that’s where you come in! We thrive upon collaboration and focus our efforts\
+    \ on maintaining a strong diverse workforce. We hire individuals from all different backgrounds and\
+    \ experiences and are passionate about equality and integrity.\n What you'll do\nAI Model Development:\
+    \ Design, develop, and deploy advanced AI models, including machine learning algorithms, natural language\
+    \ processing, and computer vision, to address specific customer experience challenges.\nData Analysis:\
+    \ Collect, clean, and analyze large datasets to identify patterns, trends, and insights that inform\
+    \ AI model development and optimization.\nCustomer Experience Integration: Integrate AI solutions\
+    \ seamlessly into our existing customer experience systems and platforms, ensuring a cohesive and\
+    \ personalized customer journey.\nAlgorithm Optimization: Continuously refine and improve AI models\
+    \ to enhance their accuracy, efficiency, and effectiveness in delivering exceptional customer experiences.\n\
+    Proof of Concept (POC) Development: Develop and test AI-powered prototypes and POCs to demonstrate\
+    \ the feasibility and value of proposed solutions.\nCollaboration: Work closely with cross-functional\
+    \ teams, including product managers, designers, and customer success representatives, to align AI\
+    \ initiatives with business objectives and customer needs.\nStay Updated: Keep abreast of the latest\
+    \ advancements in AI technology and industry best practices to ensure our solutions remain cutting-edge\n\
+    Who you are\nBachelor's degree required.\n3+ years strong programming skills in Python or other relevant\
+    \ programming languages.\nExperience with popular AI frameworks and libraries, such as TensorFlow,\
+    \ PyTorch, Scikit-learn.\nIn-depth knowledge of machine learning algorithms, including supervised,\
+    \ unsupervised, and reinforcement learning.\nExperience with natural language processing (NLP) techniques,\
+    \ such as text classification, sentiment analysis, and language generation.\nKnowledge of cloud platforms\
+    \ (AWS, GCP, Azure) and their AI services.\nA passion for delivering exceptional customer experiences\
+    \ through innovative AI solutions.\nKnowledge of customer relationship management (CRM) systems and\
+    \ customer data platforms.\nExperience with AI-powered chatbots or virtual assistants.\nKnowledge\
+    \ of ethical AI practices and data privacy regulations.\nSecurity and SaaS experience strongly preferred.\n\
+    Commvault is an equal opportunity workplace and is an affirmative action employer. We are always committed\
+    \ to equal employment opportunity regardless of race, color, ancestry, religion, sex, national origin,\
+    \ sexual orientation, age, citizenship, marital status, disability, gender identity or Veteran status\
+    \ and we will not discriminate against on the basis of such characteristics or any other status protected\
+    \ by the laws or regulations in the locations where we work.\nCommvault’s goal is to make interviewing\
+    \ inclusive and accessible to all candidates and employees. If you have a disability or special need\
+    \ that requires accommodation to participate in the interview process or apply for a position at Commvault,\
+    \ please email \n For any inquiries not related to an accommodation please reach out to \n.\nCommvault's\
+    \ Privacy Policy"
