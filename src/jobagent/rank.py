@@ -222,10 +222,53 @@ def embed_text(row: Mapping[str, Any]) -> str:
     return f"{row['title']}\n{row['head']}"
 
 
+# Tool names that are also plain English ("go live", "react quickly", "spring 2026"): one
+# counts only next to another tool name or on a skills line.
+AMBIGUOUS = frozenset(("go", "spring", "express", "react", "prompt", "vector", "git"))
+NEIGHBOUR_TOKENS = 6  # how many words either side may hold the other tool name
+_SKILLS_LINE = re.compile(
+    r"^\W*(?:key |core |required |technical |preferred )?(?:skills?|tech(?:nology|nical)?"
+    r"(?: stack)?|stack|tools?|technologies|languages?|frameworks?|tech you(?:'|’)ll use)"
+    r"\b[^:\n]{0,30}:"
+)
+_SURE = STACK_TERMS - AMBIGUOUS
+# Words that mark the next or previous word as a tool name ("React developer", "Git repos").
+TECH_NEIGHBOURS = frozenset((
+    "developer", "developers", "engineer", "engineers", "engineering", "programming",
+    "programmer", "language", "languages", "framework", "frameworks", "library", "libraries",
+    "sdk", "backend", "back-end", "frontend", "front-end", "microservices", "codebase", "boot",
+    "native", "repository", "repositories", "repo", "repos", "version", "lang", "js",
+    "database", "databases", "db", "embeddings", "templates", "hooks", "search", "retrieval",
+    "branches", "commits", "typed",
+))  # fmt: skip
+
+
+def _ambiguous_in_context(line: str) -> set[str]:
+    """The AMBIGUOUS words in one lowered line that are used as tool names."""
+    tokens = [t.strip(".-") for t in _TOKEN.findall(line)]
+    sure = {t[:-3] for t in tokens if t.endswith(".js") and t[:-3] in AMBIGUOUS}  # react.js
+    tokens = [t[:-3] if t[:-3] in sure else t for t in tokens]
+    hits = {t for t in tokens if t in AMBIGUOUS}
+    if not hits or _SKILLS_LINE.search(line):
+        return hits
+    near_phrase = any(p in line for p in _PHRASES)
+    out = set(sure)
+    for i, t in enumerate(tokens):
+        if t not in AMBIGUOUS or t in out:
+            continue
+        window = tokens[max(0, i - NEIGHBOUR_TOKENS) : i] + tokens[i + 1 : i + 1 + NEIGHBOUR_TOKENS]
+        if near_phrase or any(w in _SURE or w in TECH_NEIGHBOURS for w in window):
+            out.add(t)
+    return out
+
+
 def stack_terms(text: str) -> set[str]:
     lowered = text.lower()
     tokens = {t.strip(".-") for t in _TOKEN.findall(lowered)}
-    found = (tokens | {f".{t}" for t in tokens if t == "net"}) & STACK_TERMS
+    found = (tokens | {f".{t}" for t in tokens if t == "net"}) & _SURE
+    if any(t.removesuffix(".js") in AMBIGUOUS for t in tokens):
+        for line in lowered.splitlines():
+            found |= _ambiguous_in_context(line)
     return found | {p for p in _PHRASES if p in lowered}
 
 

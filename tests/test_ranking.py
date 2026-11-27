@@ -415,3 +415,14 @@ def test_skill_words_past_the_embedded_head_still_count(settings: Settings) -> N
     assert "stack 0 of 0" not in scores(db)[1][1] and "no stack words" not in scores(db)[1][1]
     [row] = db.rank_rows()
     assert len(row["head"]) == 1500 and "LangGraph" in row["description"]
+
+
+def test_ambiguous_words_count_only_as_tool_names() -> None:
+    from jobagent.rank import stack_terms
+
+    assert stack_terms("We go live in spring and react quickly to feedback.") == set()
+    assert {"go", "spring"} <= stack_terms("Skills: Go, Spring")
+    assert "go" in stack_terms("Backend services in Go and Postgres")
+    assert "react" in stack_terms("React Developer")
+    assert "express" in stack_terms("Express.js APIs")
+    assert "git" in stack_terms("Git - branches, pull requests, reasonable commits")
