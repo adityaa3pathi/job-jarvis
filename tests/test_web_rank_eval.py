@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -83,3 +84,16 @@ def test_refuses_to_run_against_turso(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setenv("TURSO_DATABASE_URL", "libsql://example.invalid")
     with pytest.raises(SystemExit, match="Turso"):
         run(_pool(tmp_path), embedder="hashing")
+
+
+def test_frozen_posting_fixture_loads_as_postings() -> None:
+    import yaml
+
+    from jobagent.models import Posting
+
+    path = Path(__file__).resolve().parents[1] / "evals/fixtures/postings-2026-11-27.yaml"
+    rows = yaml.safe_load(path.read_text())["postings"]
+    postings = [Posting(**{k: v for k, v in r.items() if k != "id"}) for r in rows]
+    assert len(postings) == 30
+    email = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+    assert all(len(p.description) >= 1000 and not email.search(p.description) for p in postings)
