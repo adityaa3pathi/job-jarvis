@@ -406,3 +406,12 @@ def test_the_judge_takes_jobs_in_the_webs_order(settings: Settings) -> None:
     picked = [r["id"] for r in db.judge_candidates(4, PROFILE)]
     assert picked == [3, 2, 1, 4]  # same score: newest day first, then the higher id
     assert [r["id"] for r in shown] == picked
+
+
+def test_skill_words_past_the_embedded_head_still_count(settings: Settings) -> None:
+    blurb = "We are a friendly company with great culture and benefits. " * 40  # > 1,500 chars
+    db = db_with(settings, [job(1, f"{blurb} Build LangGraph agents with RAG, pgvector, FastAPI.")])
+    score_found(db, None)
+    assert "stack 0 of 0" not in scores(db)[1][1] and "no stack words" not in scores(db)[1][1]
+    [row] = db.rank_rows()
+    assert len(row["head"]) == 1500 and "LangGraph" in row["description"]

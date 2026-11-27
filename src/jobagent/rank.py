@@ -404,7 +404,7 @@ def score_found(
             final.append(row["score"])
             kept += 1
             continue
-        text = f"{row['title']}\n{row['head']}\n{' '.join(json.loads(row['stack_words']))}"
+        text = f"{row['title']}\n{row['description']}\n{' '.join(json.loads(row['stack_words']))}"
         ceiling, why = profile_ceiling(mine, text, row["min_years"], owner_years)
         pref, liked = prefs.predict(row)
         if scaled is not None:

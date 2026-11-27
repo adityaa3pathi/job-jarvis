@@ -82,7 +82,7 @@ LAST_EVENT = (
 )
 LAST_NOTE, LAST_AT = LAST_EVENT.format("note"), LAST_EVENT.format("at")
 POSITIVE = frozenset({"applied", "replied", "interview", "offer"})  # marks that label a yes
-RANK_TEXT_CHARS = 1500  # the embedded head of a posting (U14)
+RANK_TEXT_CHARS = 1500  # the embedded head of a posting (U14); skill words use all of it
 JUDGE_TEXT_CHARS = 4000
 PRUNE_AFTER_DAYS = 30  # owner, 15-10-2026: dropped jobs keep their text this long (R4)
 RULES_FLAG = "lists_rules_version"  # the rules the stored list validators were read under
@@ -1056,13 +1056,14 @@ class Database:
         return [dict(r) for r in rows]
 
     def rank_rows(self) -> list[dict[str, Any]]:
-        """Every found job with the head of its text: all the cheap score reads."""
+        """Every found job: all the cheap score reads. `description` is the full text (skill
+        words are matched on all of it); `head` is its first RANK_TEXT_CHARS, embedded."""
         rows = self.conn.execute(
             "SELECT id, title, company, source, role, work_mode, min_years, desc_hash, score,"
             " rank_reason, judge_score, judge_reason, judge_key, stack_words,"
-            f" substr(description, 1, {RANK_TEXT_CHARS}) AS head FROM jobs WHERE status='found'"
+            " coalesce(description, '') AS description FROM jobs WHERE status='found'"
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [dict(r) | {"head": r["description"][:RANK_TEXT_CHARS]} for r in rows]
 
     def save_ranks(self, rows: Sequence[tuple[int | None, str, int]]) -> None:
         """(score, reason, id) rows; one version bump for the whole batch."""
