@@ -217,6 +217,11 @@ PROFILE_CHARS = 3000  # profile text the embedder and the judge see
 EMBED_CHUNK = 500
 
 
+def embed_text(row: Mapping[str, Any]) -> str:
+    """The posting text the match model embeds (a `rank_rows` row)."""
+    return f"{row['title']}\n{row['head']}"
+
+
 def stack_terms(text: str) -> set[str]:
     lowered = text.lower()
     tokens = {t.strip(".-") for t in _TOKEN.findall(lowered)}
@@ -344,7 +349,7 @@ def score_found(
     sims: list[float | None] = [None] * len(rows)
     left = 0
     if embedder is not None and profile and rows:
-        heads = [f"{r['title']}\n{r['head']}" for r in rows]
+        heads = [embed_text(r) for r in rows]
         budget = max_new_embeddings
         try:
             [me] = embed_cached(embedder, [profile[:PROFILE_CHARS]], db)

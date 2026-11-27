@@ -25,6 +25,8 @@ Usage (no model; rules plus the local embedding model):
   uv run python -m evals.run_web_rank_eval --pool ~/job-jarvis-labels/label-pool-2026-11-27
   ... --judge live     the AI judge on the top `judge_top_n` (spends quota; owner only)
   ... --scores served  score the stored live scores from the export instead of re-ranking
+  ... --backlog served only the pool jobs that had a vector in production at export time
+                       get one (the rest wait, as in the daily run); default: all embedded
 """
 
 from __future__ import annotations
@@ -44,10 +46,10 @@ from typing import Any
 
 from jobagent.config import load_settings
 from jobagent.db import Database
-from jobagent.index import Embedder, FastEmbedEmbedder, HashingEmbedder
+from jobagent.index import Embedder, FastEmbedEmbedder, HashingEmbedder, embed_cached
 from jobagent.llm import LLM
 from jobagent.models import Posting
-from jobagent.rank import JudgeSummary, judge_top, score_found
+from jobagent.rank import JudgeSummary, embed_text, judge_top, score_found
 from jobagent.web.store import Store
 
 STRATA = ("top", "band80", "band60", "low")
@@ -247,9 +249,27 @@ def load_embedder(name: str) -> Embedder | None:
     return FastEmbedEmbedder()
 
 
+def had_vector(job: dict[str, Any]) -> bool:
+    """The export's rank reason names the profile match only when the job had a vector."""
+    return "profile match" in str(job.get("rank_reason") or "")
+
+
+def embed_like_served(db: Database, model: Embedder, by_url: dict[str, dict[str, Any]]) -> int:
+    """Embed only the pool jobs that had a vector in production; returns how many wait."""
+    keep = {
+        r[0]
+        for r in db.conn.execute("SELECT job_id, url FROM job_links").fetchall()
+        if r[1] in by_url and had_vector(by_url[r[1]])
+    }
+    rows = [r for r in db.rank_rows() if r["id"] in keep]
+    embed_cached(model, [embed_text(r) for r in rows], db)
+    return len(db.rank_rows()) - len(rows)
+
+
 def run(
     stem: Path, *, scores: str = "pipeline", embedder: str = "fastembed",
     llm: LLM | None = None, cache: Path | None = None, top_n: int | None = None,
+    backlog: str = "none",
 ) -> RankEvalResult:  # fmt: skip
     if os.environ.get("TURSO_DATABASE_URL"):
         raise SystemExit("TURSO_DATABASE_URL is set: this eval must never touch Turso")
@@ -262,9 +282,13 @@ def run(
     with tempfile.TemporaryDirectory() as tmp:
         db, by_url = build_db(Path(tmp) / "eval.sqlite3", snap, settings.max_years_asked)
         model = load_embedder(embedder)
-        score_found(db, model, owner_years=settings.ranking.owner_years)
-        summary = None
         mode = f"pipeline ({embedder}"
+        cap = None
+        if backlog == "served" and model is not None:
+            mode += f", {embed_like_served(db, model, by_url)} wait for a vector"
+            cap = 0
+        score_found(db, model, owner_years=settings.ranking.owner_years, max_new_embeddings=cap)
+        summary = None
         if llm is not None:
             st = Store(cache or Path(tmp) / "judge-cache.sqlite3")
             n = settings.ranking.judge_top_n if top_n is None else top_n
@@ -307,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--judge", choices=("none", "live"), default="none")
     ap.add_argument("--cache", type=Path, help="judge cache DB, kept between runs")
     ap.add_argument("--top-n", type=int)
+    ap.add_argument("--backlog", choices=("none", "served"), default="none")
     args = ap.parse_args(argv)
     llm = None
     if args.judge == "live":
@@ -315,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         llm = GeminiLLM.from_settings(load_settings().llm, 0.0)
     stem = args.pool.expanduser()
     result = run(stem, scores=args.scores, embedder=args.embedder, llm=llm,
-                 cache=args.cache, top_n=args.top_n)  # fmt: skip
+                 cache=args.cache, top_n=args.top_n, backlog=args.backlog)  # fmt: skip
     print(describe(result))
     return 0
 
