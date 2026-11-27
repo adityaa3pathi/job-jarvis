@@ -57,3 +57,43 @@ def test_run_all_appends_one_history_row(tmp_path: Path) -> None:
 
 def test_cli_without_history_prints_a_table(capsys: object) -> None:
     assert main(["--no-history"]) == 0
+
+
+def test_capped_llm_aborts_at_the_cap_and_on_a_429() -> None:
+    import pytest
+
+    from evals.run_all import CallCapReached, CappedLLM
+    from jobagent.llm import LLMError
+
+    capped = CappedLLM(stub_llm(), 1)
+    capped.complete_json(system="s", user="u")
+    with pytest.raises(CallCapReached, match="cap of 1"):
+        capped.complete_json(system="s", user="u")
+
+    class Busy:
+        model = "m"
+
+        def complete_json(self, *, system: str, user: str) -> str:
+            raise LLMError("Gemini HTTP 429: daily quota used up")
+
+    with pytest.raises(CallCapReached, match="quota"):
+        CappedLLM(Busy(), 5).complete_json(system="s", user="u")
+
+
+def test_a_row_with_new_columns_keeps_old_rows(tmp_path: Path) -> None:
+    from evals.run_all import _append
+
+    history = tmp_path / "history.csv"
+    _append(history, {"date_ist": "a", "jd_recall": 1.0})
+    _append(history, {"date_ist": "b", "jd_recall": 0.5, "rank_auc": 0.6})
+    rows = list(csv.DictReader(history.open()))
+    assert [r["date_ist"] for r in rows] == ["a", "b"]
+    assert rows[0]["rank_auc"] == "" and rows[1]["rank_auc"] == "0.6"
+
+
+def test_rescoring_on_the_same_golden_matches_the_eval() -> None:
+    from evals.run_all import jd_rescore
+
+    result = jd_eval(stub_llm())
+    recall, precision = jd_rescore(result, _load("jd_golden.yaml"))
+    assert (recall, precision) == (result.recall, result.precision)

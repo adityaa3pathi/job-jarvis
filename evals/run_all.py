@@ -1,6 +1,10 @@
-"""AI-step evals (U16): JD extraction, rewrite refusals, prompt injection.
-Usage: uv run python -m evals.run_all [--live] [--no-history]
---live calls the real model and spends quota: owner only, before a prompt or model change."""
+"""AI-step evals (U16): JD extraction, rewrite refusals, prompt injection, and (with
+--rank-pool) the web ranking eval from evals/run_web_rank_eval.py.
+Usage: uv run python -m evals.run_all [--live] [--no-history] [--max-calls N]
+       [--rank-pool PATH --rank-top-n N] [--also-golden PATH]
+--live calls the real model and spends quota: owner only, before a prompt or model change.
+--max-calls stops the whole run (no history row) at the cap or at the first 429, so a
+quota hit can't pass as a model failure in the scores."""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from jobagent.llm import LLM, StubLLM, model_id
+from jobagent.llm import LLM, LLMError, StubLLM, model_id
 from jobagent.resume import coach, jd_agent
 from jobagent.resume.coach import build_report
 from jobagent.resume.jd_agent import analyze_jd
@@ -64,6 +68,30 @@ def stub_responder(system: str, user: str) -> dict[str, Any]:
 
 def stub_llm() -> StubLLM:
     return StubLLM(stub_responder)
+
+
+class CallCapReached(RuntimeError):
+    """The live run hit its call cap or a quota limit; nothing is recorded."""
+
+
+class CappedLLM:
+    """Passes calls through until `cap`; a 429 or the cap aborts the run instead of
+    surfacing as an LLMError the evals would score as a bad answer."""
+
+    def __init__(self, inner: LLM, cap: int) -> None:
+        self.inner, self.cap, self.calls = inner, cap, 0
+        self.model = model_id(inner)
+
+    def complete_json(self, *, system: str, user: str) -> str:
+        if self.calls >= self.cap:
+            raise CallCapReached(f"stopped at the cap of {self.cap} model calls")
+        self.calls += 1
+        try:
+            return self.inner.complete_json(system=system, user=user)
+        except LLMError as exc:
+            if "429" in str(exc):
+                raise CallCapReached(f"quota or rate limit hit after {self.calls} calls") from exc
+            raise
 
 
 def _load(name: str) -> list[dict[str, Any]]:
@@ -158,8 +186,51 @@ def injection_eval(llm: LLM, cases: list[dict[str, Any]] | None = None) -> Injec
 # --- runner ---
 
 
-def run_all(llm: LLM, history: Path | None = HISTORY) -> dict[str, Any]:
+def jd_rescore(jd: JDResult, cases: list[dict[str, Any]]) -> tuple[float, float]:
+    """The same extractions scored against another golden list (no new model calls)."""
+    by_id = {c["id"]: c for c in _load("jd_golden.yaml")}
+    hits = expected_n = got_n = 0
+    for row in jd.cases:
+        old = {canonical(s).lower() for s in by_id[row["id"]]["expected"]}
+        got = (old - set(row["missed"])) | set(row["extra"])
+        case = next(c for c in cases if c["id"] == row["id"])
+        new = {canonical(s).lower() for s in case["expected"]}
+        hits, expected_n, got_n = hits + len(new & got), expected_n + len(new), got_n + len(got)
+    return hits / max(expected_n, 1), hits / max(got_n, 1)
+
+
+def _append(history: Path, row: dict[str, Any]) -> None:
+    """Append a row; a row with new columns rewrites the header, old rows left blank."""
+    old: list[dict[str, str]] = []
+    fields = list(row)
+    if history.exists():
+        with history.open(newline="") as fh:
+            reader = csv.DictReader(fh)
+            old = list(reader)
+            have = list(reader.fieldnames or [])
+        fields = have + [k for k in row if k not in have]
+        if fields == have:
+            with history.open("a", newline="") as fh:
+                csv.DictWriter(fh, fieldnames=fields).writerow(row)
+            return
+    with history.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields, restval="")
+        writer.writeheader()
+        writer.writerows([*old, row])
+
+
+def run_all(
+    llm: LLM, history: Path | None = HISTORY, *, rank_pool: Path | None = None,
+    rank_top_n: int | None = None,
+) -> dict[str, Any]:  # fmt: skip
     jd, rw, inj = jd_eval(llm), rewrite_eval(), injection_eval(llm)
+    rank = None
+    if rank_pool is not None:
+        from evals.run_web_rank_eval import run as rank_run
+
+        live = None if isinstance(llm, StubLLM) else llm
+        rank = rank_run(rank_pool, llm=live, cache=rank_pool.parent / "judge-cache.sqlite3",
+                        top_n=rank_top_n)  # fmt: skip
     row = {
         "date_ist": datetime.now(UTC).astimezone(IST).strftime("%d-%m-%Y %H:%M IST"),
         "model": model_id(llm),
@@ -172,14 +243,19 @@ def run_all(llm: LLM, history: Path | None = HISTORY) -> dict[str, Any]:
         "injection_passed": round(inj.passed, 3),
         "injection_known_gaps": len(inj.known_gaps),
     }
+    if rank is not None:
+        row |= {
+            "rank_mode": rank.mode,
+            "rank_labels": f"{rank.labels} ({rank.yes} yes, {rank.unsure} unsure)",
+            "rank_p_at_20": round(rank.p_at_20, 3),
+            "rank_p_at_50": round(rank.p_at_50, 3),
+            "rank_recall_bar": round(rank.recall_bar, 3),
+            "rank_precision_bar": round(rank.precision_bar, 3),
+            "rank_auc": round(rank.auc, 3),
+        }
     if history is not None:
-        new = not history.exists()
-        with history.open("a", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=list(row))
-            if new:
-                writer.writeheader()
-            writer.writerow(row)
-    return {"row": row, "jd": jd, "rewrite": rw, "injection": inj}
+        _append(history, row)
+    return {"row": row, "jd": jd, "rewrite": rw, "injection": inj, "rank": rank}
 
 
 def _print(result: dict[str, Any]) -> None:
@@ -195,14 +271,38 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true", help="real model; spends quota")
     parser.add_argument("--no-history", action="store_true")
+    parser.add_argument("--max-calls", type=int, help="live only: abort at this many calls")
+    parser.add_argument("--rank-pool", type=Path, help="label pool path, without .csv/.json")
+    parser.add_argument("--rank-top-n", type=int, help="jobs the AI judge sees (default: config)")
+    parser.add_argument("--also-golden", type=Path, help="also score JD against this list")
     args = parser.parse_args(argv)
     llm: LLM = stub_llm()
+    capped = None
     if args.live:
         from jobagent.config import load_settings
         from jobagent.llm import GeminiLLM
 
         llm = GeminiLLM.from_settings(load_settings().llm, 0.0)
-    _print(run_all(llm, None if args.no_history else HISTORY))
+        if args.max_calls:
+            llm = capped = CappedLLM(llm, args.max_calls)
+    pool = args.rank_pool.expanduser() if args.rank_pool else None
+    try:
+        result = run_all(llm, None if args.no_history else HISTORY, rank_pool=pool,
+                         rank_top_n=args.rank_top_n)  # fmt: skip
+    except CallCapReached as exc:
+        print(f"aborted, nothing recorded: {exc}")
+        return 2
+    _print(result)
+    if result["rank"] is not None:
+        from evals.run_web_rank_eval import describe
+
+        print("\n" + describe(result["rank"]))
+    if args.also_golden:
+        cases = list(yaml.safe_load(args.also_golden.read_text())["cases"])
+        recall, precision = jd_rescore(result["jd"], cases)
+        print(f"\njd on {args.also_golden.name}: recall {recall:.3f} precision {precision:.3f}")
+    if capped is not None:
+        print(f"model calls: {capped.calls} of {capped.cap}")
     return 0
 
 
