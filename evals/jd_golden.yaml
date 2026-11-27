@@ -4,6 +4,9 @@
 # 2026-11-19: removed old-scan false hits (Go from "go-to", REST from "the rest of",
 # JavaScript from "Node.js") and added skills each text names (Amazon Web Services, Spring
 # Boot, Hadoop, NoSQL, LlamaIndex, RESTful).
+# 2026-11-27 (approved by the owner): hand-checked every case against its text.
+# Added skills the scan missed (NestJS, Angular, React Native, Redux and more);
+# cutshort-115 names GitHub Actions, not GitHub. Names follow the posting's spelling.
 cases:
 - id: lever-22425
   source: lever
@@ -73,6 +76,10 @@ cases:
   - REST
   - Node.js
   - LlamaIndex
+  - Redux
+  - Zustand
+  - WebGL
+  - Vector Databases
   text: "Role \n: Senior Full Stack Engineer (Frontend Focus)\nLocation \n: Hyderabad/Bangalore/Gurgaon/Mumbai\n\
     Role Summary\nWe're looking for a **Senior Full Stack Engineer (Frontend Focus)** to build modern,\
     \ AI-powered enterprise applications. You'll primarily focus on creating scalable, high-performance\
@@ -109,6 +116,9 @@ cases:
   - REST
   - Celery
   - Agile
+  - jQuery
+  - Django REST Framework
+  - Selenium
   text: "Sr Backend Developer (Full Stack – Python / Django)\nPreference: Please apply only if you are\
     \ an IIT/NIT graduate and have strong hands-on experience in full-stack development with Python &\
     \ Django.\nInsurance/InsurTech experience is preferred. Strong engineering fundamentals and a willingness\
@@ -223,6 +233,8 @@ cases:
   - React
   - GraphQL
   - REST
+  - Redux
+  - WebSockets
   text: "About Agoda\nAt Agoda, we bridge the world through travel. Our story began in 2005, when two\
     \ lifelong friends and entrepreneurs, driven by their passion for travel, launched Agoda to make it\
     \ easier for everyone to explore the world. \nToday, we are part of Booking Holdings [NASDAQ: BKNG],\
@@ -304,6 +316,10 @@ cases:
   - Python
   - RAG
   - LLM
+  - AI Agents
+  - Tool Calling
+  - Reranking
+  - Guardrails
   text: "**About Us**\nBusinessonbot is a fast-growing B2B SaaS platform doing $1.5M ARR, serving D2C\
     \ brands across India for WhatsApp-first marketing, support automation, and AI-powered customer journeys.\
     \ Our stack connects WhatsApp, Instagram, Messenger, Email, and Voice channels to e-commerce platforms\
@@ -345,6 +361,7 @@ cases:
   - SQL
   - NoSQL
   - Spring Boot
+  - Quarkus
   text: "Who We Are\nAddepar is a global data and AI platform empowering investment professionals to turn\
     \ complex financial information into actionable intelligence. Addepar unifies portfolio, market and\
     \ client data in a total portfolio view and delivers AI-powered insights within investment and client\
@@ -394,6 +411,11 @@ cases:
   - Microservices
   - NoSQL
   - REST
+  - Vue.js
+  - Angular
+  - WebSockets
+  - MariaDB
+  - Bootstrap
   text: "Role: Full Stack Developer - Mid-Level \nLocation: Bengaluru (MG Road), Karnataka\nNote: We are\
     \ looking for candidates who are currently based in Bengaluru\nWork Model\n - Hybrid (3 days in office,\
     \ 2 days remote)\n - Monday to Friday\n - Indian holidays observed\nWork Hours: 12:30 PM – 9:30 PM\
@@ -435,6 +457,10 @@ cases:
   - Kubernetes
   - Spark
   - Node.js
+  - Angular
+  - Material UI
+  - Jasmine
+  - Karma
   text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
     \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
     \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
@@ -480,6 +506,11 @@ cases:
   - REST
   - Node.js
   - NoSQL
+  - React Native
+  - .NET
+  - Elasticsearch
+  - Cassandra
+  - Microservices
   text: "Ebullient Gaming India\n is India’s biggest network of gaming generating 250 Million+ Views per\
     \ month for gaming content. It is powered by a Talent management agency, an Online Publication, an\
     \ Event arm and a creative agency that works with the best brands and gaming talent of the country.\n\
@@ -517,6 +548,8 @@ cases:
   - Kafka
   - Spark
   - SQL
+  - Scala
+  - Elasticsearch
   text: "Acceldata is reimagining the way companies observe their Data!\nAcceldata is the pioneer and\
     \ leader in data observability, revolutionizing how enterprises manage and observe data by offering\
     \ comprehensive insights into various key aspects of data, data pipelines and data infrastructure\
@@ -564,6 +597,7 @@ cases:
   - Agile
   - Microservices
   - Spring Boot
+  - Angular
   text: "Job Summary\nWe are looking for an experienced \nJava Full Stack Developer\n with strong hands-on\
     \ experience in \nJava, Spring Boot, and Angular\n. The candidate will be responsible for developing\
     \ scalable applications, building responsive user interfaces, developing REST APIs, and collaborating\
@@ -604,6 +638,12 @@ cases:
   - React
   - Jest
   - Git
+  - Redux
+  - Figma
+  - Webpack
+  - Babel
+  - Cypress
+  - Enzyme
   text: "We are seeking an experienced Frontend Engineer to join our dynamic team. You will be responsible\
     \ for developing and maintaining our cutting-edge web applications using modern front-end technologies\
     \ like React, Next.js, TypeScript, and JavaScript.\n**Responsibilities:**\n1. Develop high-quality,\
@@ -649,6 +689,16 @@ cases:
   - GraphQL
   - REST
   - Node.js
+  - NestJS
+  - Tailwind CSS
+  - Drizzle
+  - Fastify
+  - WebSockets
+  - SSE
+  - OpenAI
+  - Anthropic
+  - Gemini
+  - Tool Calling
   text: "Full-Stack Engineer (AI-Native) | 2-4 Years Experience\nAbout the Role\nWe're hiring a Full-Stack\
     \ Engineer who is equally comfortable building a polished Next.js interface and a reliable NestJS\
     \ API behind it. You'll build customer-facing products, including AI-powered features like chat interfaces,\
@@ -689,6 +739,10 @@ cases:
   - REST
   - RabbitMQ
   - Node.js
+  - NestJS
+  - TypeORM
+  - Knex
+  - BullMQ
   text: '**About the company :**
 
     **ToolJet** is an AI platform that empowers teams to build and deploy internal tools in minutes -
@@ -752,6 +806,8 @@ cases:
   - JavaScript
   - Python
   - React
+  - React Native
+  - Flutter
   text: "ABOUT AIPRISE\nAiPrise is a global compliance orchestration platform helping fintechs, marketplaces,\
     \ and payment companies verify and onboard customers worldwide. We integrate with 80+ identity and\
     \ compliance vendors to deliver a holistic view of risk. We're now building AI-powered compliance\
@@ -792,6 +848,9 @@ cases:
   - GraphQL
   - CI/CD
   - REST
+  - Vue.js
+  - AI Agents
+  - Guardrails
   text: "AHEAD builds platforms for digital business. By weaving together advances in cloud infrastructure,\
     \ automation and analytics, and software delivery, we help enterprises deliver on the promise of digital\
     \ transformation.\nAt AHEAD, we prioritize creating a culture of belonging, where all perspectives\
@@ -832,6 +891,10 @@ cases:
   - SQL
   - Git
   - REST
+  - Angular
+  - Oracle
+  - SQL Server
+  - SVN
   text: "Job Overview :\nWe are seeking a passionate and experienced Full Stack Developer with a strong\
     \ background in Java and modern front-end technologies. The ideal candidate should possess a keen\
     \ analytical mindset, be comfortable working in a cross-functional, fast-paced environment, and demonstrate\
@@ -858,7 +921,6 @@ cases:
   company: CareValidate
   title: Backend Fullstack
   expected:
-  - GitHub
   - TypeScript
   - PostgreSQL
   - Express.js
@@ -868,6 +930,19 @@ cases:
   - CI/CD
   - REST
   - Node.js
+  - GitHub Actions
+  - Vue.js
+  - Apollo GraphQL
+  - Firebase
+  - JWT
+  - BigQuery
+  - Stripe
+  - Twilio
+  - SendGrid
+  - Vitest
+  - Google Cloud Pub/Sub
+  - Cloud Functions
+  - App Engine
   text: 'Senior Full-Stack Engineer — Backend-Focused
 
     Remote · Platform Engineering · Full-time · 4–5 years experience
