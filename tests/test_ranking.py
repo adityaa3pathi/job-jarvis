@@ -11,7 +11,14 @@ from jobagent.db import Database, today_ist
 from jobagent.index import HashingEmbedder
 from jobagent.llm import FailingLLM, StubLLM
 from jobagent.models import Posting
-from jobagent.rank import Preferences, cheap_score, judge_top, profile_ceiling, score_found
+from jobagent.rank import (
+    Preferences,
+    cheap_score,
+    judge_top,
+    median_sim,
+    profile_ceiling,
+    score_found,
+)
 from jobagent.web.store import Store
 
 PROFILE = "AI engineer. I build LangGraph agents, RAG with pgvector, FastAPI and Python APIs."
@@ -60,6 +67,22 @@ def test_profile_ceiling_follows_stack_overlap() -> None:
     assert high > low and "of" in why[0]
     capped, why = profile_ceiling(PROFILE, GOOD, 6, 2)
     assert capped < high and "years" in why[-1]
+
+
+def test_jobs_without_a_vector_share_the_embedded_scale() -> None:
+    # Before: no vector meant 0.75 x rule + 0.25 x pref = 88, above any embedded job.
+    assert cheap_score(5, None, 0.5) == cheap_score(5, 0.5, 0.5) < 80
+    assert median_sim([None, 0.1, 0.9, 0.3]) == 0.3 and median_sim([0.2, 0.4]) == pytest.approx(0.3)
+    assert median_sim([None, None]) is None
+
+
+def test_a_job_waiting_for_a_vector_gets_the_runs_median_match(settings: Settings) -> None:
+    db = db_with(settings, [job(i, GOOD) for i in range(3)])
+    score_found(db, FixedEmbedder(), max_new_embeddings=2)  # type: ignore[arg-type]
+    got = sorted(scores(db).values(), key=lambda s: "profile match" in s[1])
+    waiting, embedded = got[0], got[1:]
+    assert "profile match" not in waiting[1]
+    assert {s for s, _ in embedded} == {waiting[0]}  # the median of 20% and 20%
 
 
 def test_cheap_score_never_passes_the_rule_ceiling() -> None:

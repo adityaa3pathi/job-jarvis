@@ -293,12 +293,27 @@ class Preferences:
         return 1 / (1 + math.exp(-logit)), why if abs(top) >= 0.3 else ""
 
 
+# Scaled profile similarity a job without a vector gets when no job in the run has one
+# (no model installed). With vectors, the run's median is used instead.
+NO_VECTOR_SIM = 0.5
+
+
 def cheap_score(ceiling: int, sim: float | None, pref: float) -> int:
-    """0-100 from the rule ceiling, profile similarity (0-1, None without a model) and the
-    preference term; never above the ceiling's share of 100."""
+    """0-100 from the rule ceiling, profile similarity (0-1) and the preference term; never
+    above the ceiling's share of 100. One formula for every job: a job with no vector
+    (None) gets `NO_VECTOR_SIM`, so it can't outrank embedded jobs on the formula alone."""
     rule = ceiling / 5
-    raw = 0.75 * rule + 0.25 * pref if sim is None else 0.45 * rule + 0.35 * sim + 0.2 * pref
-    return round(100 * min(raw, rule))
+    sim = NO_VECTOR_SIM if sim is None else sim
+    return round(100 * min(0.45 * rule + 0.35 * sim + 0.2 * pref, rule))
+
+
+def median_sim(scaled: Sequence[float | None]) -> float | None:
+    """The middle scaled similarity of the jobs that have a vector, or None if none do."""
+    known = sorted(s for s in scaled if s is not None)
+    if not known:
+        return None
+    mid = len(known) // 2
+    return known[mid] if len(known) % 2 else (known[mid - 1] + known[mid]) / 2
 
 
 def _scaled(embedder: Embedder, sim: float) -> float:
@@ -375,14 +390,18 @@ def score_found(
     mine = frozenset(stack_terms(profile)) if profile else ""
     changed: list[tuple[int | None, str, int]] = []
     final: list[int] = []
-    for row, sim in zip(rows, sims, strict=True):
+    scaled_all = [
+        _scaled(embedder, s) if s is not None and embedder is not None else None for s in sims
+    ]
+    fill = median_sim(scaled_all)  # a job still waiting for a vector counts as typical
+    for row, scaled in zip(rows, scaled_all, strict=True):
         text = f"{row['title']}\n{row['head']}\n{' '.join(json.loads(row['stack_words']))}"
         ceiling, why = profile_ceiling(mine, text, row["min_years"], owner_years)
         pref, liked = prefs.predict(row)
-        scaled = None
-        if sim is not None and embedder is not None:
-            scaled = _scaled(embedder, sim)
+        if scaled is not None:
             why.append(f"profile match {round(100 * scaled)}%")
+        else:
+            scaled = fill
         # A verdict on other posting text or another profile no longer counts.
         current = row["judge_key"] == judge_key(row["desc_hash"], profile)
         score, reason = with_judge(
