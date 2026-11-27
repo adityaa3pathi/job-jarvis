@@ -58,6 +58,7 @@ _ASKED_FOR = re.compile(
     r"|developing|writing|programming|coding|of)\b",
     re.IGNORECASE,
 )
+_UNIT = re.compile(r"y(?:ea)?rs?", re.IGNORECASE)
 _AT_LEAST = re.compile(r"(?:at least|minimum(?: of)?|min\.?|over|more than)\s*$", re.I)
 _NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
@@ -113,7 +114,10 @@ def _digits(sentence: str) -> str:
 def _asked_for(sentence: str, m: re.Match[str]) -> bool:
     """'5+ years with X', 'at least 3 years in Y': a requirement on its own."""
     plus = "+" in m.group(0) or bool(_AT_LEAST.search(sentence[: m.start()]))
-    return plus and bool(_ASKED_FOR.match(sentence[m.end(1) if not m.group(2) else m.end(2) :]))
+    unit = _UNIT.search(m.group(0))
+    return (
+        plus and unit is not None and bool(_ASKED_FOR.match(sentence[m.start() + unit.start() :]))
+    )
 
 
 def _years_in(sentence: str, words: bool = False) -> list[tuple[int, int | None, int]]:

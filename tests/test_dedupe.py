@@ -191,6 +191,7 @@ def test_years_parse() -> None:
         ("5+ years with Python", (5, None)),
         ("3+ years working with React", (3, None)),
         ("minimum 4 years in fintech", (4, None)),
+        ("at least 3 to 5 years in backend development", (3, 5)),
         ("five-plus years building APIs", (5, None)),
         ("8-10+ years of TA experience, including at least 5-7 years managing a team", (8, 10)),
         ("We have served customers for 20 years", None),
