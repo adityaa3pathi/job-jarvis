@@ -180,6 +180,35 @@ def test_years_parse() -> None:
     assert parse_years(history) == (1, 2)
 
 
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("Three years of experience building APIs", (3, None)),
+        ("at least five years of experience", (5, None)),
+        ("three (3) years experience", (3, None)),
+        ("a decade of experience in payments", (10, None)),
+        ("two to four years of experience", (2, 4)),
+        ("5+ years with Python", (5, None)),
+        ("3+ years working with React", (3, None)),
+        ("minimum 4 years in fintech", (4, None)),
+        ("five-plus years building APIs", (5, None)),
+        ("8-10+ years of TA experience, including at least 5-7 years managing a team", (8, 10)),
+        ("We have served customers for 20 years", None),
+        ("after 5 years with us you get a sabbatical", None),
+        ("10+ years in business", None),
+    ],
+)
+def test_years_from_words_and_years_with(text: str, want: tuple[int, int | None] | None) -> None:
+    assert parse_years(text, need_experience=True) == want
+
+
+def test_hard_rules_still_read_years_the_old_way() -> None:
+    # Owner approval pending: "seven years" is parsed for ranking but doesn't drop the job yet.
+    p = posting(description="Seven years of experience with distributed systems.")
+    assert check_hard_rules(p) is None
+    assert parse_years(p.description, need_experience=True) == (7, None)
+
+
 def test_rules_version() -> None:
     assert RULES_VERSION == 4
 
