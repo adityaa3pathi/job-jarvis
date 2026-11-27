@@ -12,6 +12,7 @@ from jobagent.index import HashingEmbedder
 from jobagent.llm import FailingLLM, StubLLM
 from jobagent.models import Posting
 from jobagent.rank import (
+    NO_VECTOR_SIM,
     Preferences,
     cheap_score,
     judge_top,
@@ -71,7 +72,7 @@ def test_profile_ceiling_follows_stack_overlap() -> None:
 
 def test_jobs_without_a_vector_share_the_embedded_scale() -> None:
     # Before: no vector meant 0.75 x rule + 0.25 x pref = 88, above any embedded job.
-    assert cheap_score(5, None, 0.5) == cheap_score(5, 0.5, 0.5) < 80
+    assert cheap_score(5, None, 0.5) == cheap_score(5, NO_VECTOR_SIM, 0.5) < 80
     assert median_sim([None, 0.1, 0.9, 0.3]) == 0.3 and median_sim([0.2, 0.4]) == pytest.approx(0.3)
     assert median_sim([None, None]) is None
 
@@ -347,3 +348,45 @@ def test_run_note_shows_the_score_spread_and_why_scores_are_flat(settings: Setti
     assert summary.describe().startswith("; scores ")
     flat = score_found(db_with(settings, [job(3, GOOD), job(4, BAD)], profile=""), None)
     assert "no career summary" in flat.describe()
+
+
+def test_a_flaky_vector_store_is_retried(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.index._sleep", lambda _s: None)
+    db = db_with(settings, [job(1, GOOD)])
+    fails = {"vectors": 2, "save_vectors": 2}
+    for name in fails:
+        real = getattr(db, name)
+
+        def flaky(*a: Any, _name: str = name, _real: Any = real) -> Any:
+            if fails[_name]:
+                fails[_name] -= 1
+                raise ValueError("Hrana: stream error")
+            return _real(*a)
+
+        monkeypatch.setattr(db, name, flaky)
+    summary = score_found(db, CountingEmbedder())
+    assert (
+        summary.embedded and not summary.embed_error and fails == {"vectors": 0, "save_vectors": 0}
+    )
+
+
+def test_a_turso_failure_keeps_the_previous_scores(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.index._sleep", lambda _s: None)
+    db = db_with(settings, [job(1, GOOD), job(2, BAD)])
+    score_found(db, CountingEmbedder())
+    before = scores(db)
+    db.upsert_many([job(3, GOOD)])  # new today: it still needs a score
+
+    def down(*_a: Any) -> Any:
+        raise ValueError("Hrana: stream error")
+
+    monkeypatch.setattr(db, "vectors", down)
+    summary = score_found(db, CountingEmbedder())
+    after = scores(db)
+    assert summary.embed_error == "ValueError" and summary.kept == 2
+    assert {i: after[i] for i in before} == before
+    assert after[3][0] is not None

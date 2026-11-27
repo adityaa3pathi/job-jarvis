@@ -294,8 +294,9 @@ class Preferences:
 
 
 # Scaled profile similarity a job without a vector gets when no job in the run has one
-# (no model installed). With vectors, the run's median is used instead.
-NO_VECTOR_SIM = 0.5
+# (no model installed). With vectors, the run's median is used instead. 0.2 is about the
+# median for bge-small on the 27 Nov 2026 label pool.
+NO_VECTOR_SIM = 0.2
 
 
 def cheap_score(ceiling: int, sim: float | None, pref: float) -> int:
@@ -337,6 +338,8 @@ class RankSummary:
     left_to_embed: int = 0  # found jobs still waiting for a vector (filled on later runs)
     spread: tuple[int, int, int] | None = None  # lowest, median and highest score this run
     has_profile: bool = True
+    embed_error: str = ""  # set when the match model or its store failed this run
+    kept: int = 0  # jobs whose previous score was kept because embedding failed
 
     def describe(self) -> str:
         """Run-note text that shows when scores cannot tell jobs apart."""
@@ -362,7 +365,7 @@ def score_found(
     rows, profile = db.rank_rows(), db.profile_text()
     prefs = Preferences.fit(db.labels())
     sims: list[float | None] = [None] * len(rows)
-    left = 0
+    left, error = 0, ""
     if embedder is not None and profile and rows:
         heads = [embed_text(r) for r in rows]
         budget = max_new_embeddings
@@ -384,8 +387,9 @@ def score_found(
                     budget = max(0, budget - done[0])
                 sims += [cosine(me, v) if v is not None else None for v in part]
             left = sum(1 for s in sims if s is None)
-        except Exception as exc:  # a model failure must not stop the run
-            log.warning("embedding failed, ranking on rules only: %s", type(exc).__name__)
+        except Exception as exc:  # a model or store failure must not stop the run
+            error = type(exc).__name__
+            log.warning("embedding failed, keeping the previous scores: %s", error)
             sims = [None] * len(rows)
     mine = frozenset(stack_terms(profile)) if profile else ""
     changed: list[tuple[int | None, str, int]] = []
@@ -394,7 +398,12 @@ def score_found(
         _scaled(embedder, s) if s is not None and embedder is not None else None for s in sims
     ]
     fill = median_sim(scaled_all)  # a job still waiting for a vector counts as typical
+    kept = 0
     for row, scaled in zip(rows, scaled_all, strict=True):
+        if error and row["score"] is not None:  # don't swap a good score for a rules guess
+            final.append(row["score"])
+            kept += 1
+            continue
         text = f"{row['title']}\n{row['head']}\n{' '.join(json.loads(row['stack_words']))}"
         ceiling, why = profile_ceiling(mine, text, row["min_years"], owner_years)
         pref, liked = prefs.predict(row)
@@ -416,8 +425,9 @@ def score_found(
     final.sort()
     spread = (final[0], final[len(final) // 2], final[-1]) if final else None
     return RankSummary(
-        len(rows), len(changed), any(s is not None for s in sims), left, spread, bool(profile)
-    )
+        len(rows), len(changed), any(s is not None for s in sims), left, spread, bool(profile),
+        error, kept,
+    )  # fmt: skip
 
 
 class JudgeStore(LLMCache, Protocol):
@@ -498,6 +508,8 @@ def rank_jobs(
         max_new_embeddings=settings.ranking.embed_new_per_run,
     )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
+    if cheap.embed_error:
+        note += f"; match model failed ({cheap.embed_error}), kept {cheap.kept} previous scores"
     note += cheap.describe()
     if cheap.left_to_embed:
         note += f"; {cheap.left_to_embed} wait for the match model on later runs"
