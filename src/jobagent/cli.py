@@ -31,6 +31,7 @@ from jobagent.runs import (
     save_portal,
     sweep_context,
 )
+from jobagent.targeting import rule_filters
 from jobagent.web.store import Store
 
 
@@ -44,7 +45,9 @@ def discover(settings: Settings) -> int:
         return 1
     try:
         ensure_data_dir(settings)
-        db, st = Database(settings.db_path, settings.max_years_asked), Store(settings.db_path)
+        filters = rule_filters(settings.discovery, shared_embedder)
+        db = Database(settings.db_path, settings.max_years_asked, filters=filters)
+        st = Store(settings.db_path)
         policy = Policy.load(
             REPO_ROOT / "policy.yaml", settings.stop_file,
             stop_check=kill_switch_check(settings.db_path),
@@ -168,7 +171,8 @@ def recheck(settings: Settings) -> int:
         return 1
     try:
         ensure_data_dir(settings)
-        db = Database(settings.db_path, settings.max_years_asked)
+        filters = rule_filters(settings.discovery, shared_embedder)
+        db = Database(settings.db_path, settings.max_years_asked, filters=filters)
         try:
             s = db.recheck()
         finally:

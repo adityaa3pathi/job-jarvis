@@ -18,6 +18,13 @@ llm:
 ranking:
   fit_score: 62  # 0-100 score at which a found job counts as a fit (web shows it green)
   owner_years: 2  # DocNow since 06-2024; jobs asking 4+ years score 40 at most, 6+ are dropped
+discovery:
+  # Stage 4 filters on new jobs, each off until the owner approves it after seeing what it
+  # drops (evals/run_discovery_eval.py). Drop reasons: off_target_title, outside_india.
+  title_filter: false  # keywords + embedding similarity to the target roles
+  title_margin: 0.05
+  region_words: false  # "US Remote"/"EMEA" in the title; Seoul, Taipei, "americas", "eu"
+  social_location: false  # Bluesky/Mastodon/Telegram/Reddit: place read from the post text
 outreach:
   jobs_per_day: 10
   first_emails_per_day: 20

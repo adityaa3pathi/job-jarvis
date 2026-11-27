@@ -1,0 +1,8 @@
+date_ist,snapshot,labels,filters,margin,jobs,on_target,off_target,kept,off_kept,off_rate,on_dropped,heldout_on_dropped,heldout_off_dropped
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",baseline (rules v5),,100,26,74,100,74,0.74,0,0,0
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",region_words,,100,26,74,71,45,0.634,0,0,4
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",social_location,,100,26,74,99,73,0.737,0,0,2
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",title_filter: keywords,,100,26,74,41,15,0.366,0,0,26
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",title_filter: keywords + embedding (margin 0.05),0.05,100,26,74,41,15,0.366,0,0,27
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",all three,0.05,100,26,74,36,10,0.278,0,0,30
+27-11-2026 17:35 IST,new-jobs-run53.json,"100 (26 on-target, Claude)",info: all three + years 4+ (stage 3 decision),0.05,100,26,74,31,5,0.161,0,0,32

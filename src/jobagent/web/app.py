@@ -90,6 +90,7 @@ from jobagent.runs import (
     save_portal,
     sweep_context,
 )
+from jobagent.targeting import rule_filters
 from jobagent.web import mcp_key
 from jobagent.web.auth import COOKIE, SESSION_TTL_S, make_token, token_valid, verify_password
 from jobagent.web.deps import DB, ST, Ext
@@ -428,9 +429,10 @@ def create_app(cfg: WebConfig) -> FastAPI:
     settings = cfg.settings
     ensure_data_dir(settings)
     # Schema setup runs once here; later handles skip it.
+    filters = rule_filters(settings.discovery, shared_embedder)
     jobs_db = _Handles(
-        lambda: Database(settings.db_path, settings.max_years_asked, schema=False),
-        Database(settings.db_path, settings.max_years_asked),
+        lambda: Database(settings.db_path, settings.max_years_asked, schema=False, filters=filters),
+        Database(settings.db_path, settings.max_years_asked, filters=filters),
     )
     stores = _Handles(lambda: Store(settings.db_path, schema=False), Store(settings.db_path))
     app.state.jobs_db, app.state.stores = jobs_db, stores

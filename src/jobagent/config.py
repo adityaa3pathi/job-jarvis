@@ -61,6 +61,25 @@ class RankingSettings(BaseModel):
     embed_text: Literal["head", "title_requirements"] = "head"
 
 
+class DiscoverySettings(BaseModel):
+    """Stage 4 filters on new jobs before they are saved. Each drops jobs, so each stays
+    off until the owner approves it after seeing the jobs it would drop
+    (`evals/run_discovery_eval.py`). Turning one on applies to new jobs only; stored jobs
+    change only after a RULES_VERSION bump or `job-agent recheck`."""
+
+    # Keywords plus embedding similarity to the target roles (targeting.py); drop reason
+    # off_target_title.
+    title_filter: bool = False
+    # Embedding step: drop only when an off-target role is closer by more than this.
+    title_margin: float = Field(default=0.05, ge=0.0, le=1.0)
+    # Region words in the title ("US Remote", "EMEA") and more non-India places (Seoul,
+    # Taipei, "americas", "eu") in the location; drop reason outside_india.
+    region_words: bool = False
+    # Bluesky, Mastodon, Telegram and Reddit posts with no "Location:" line: read the place
+    # from the post text; drop reason outside_india.
+    social_location: bool = False
+
+
 class OutreachSettings(BaseModel):
     jobs_per_day: int = Field(default=10, ge=1)  # jobs that get a first message per IST day
     first_emails_per_day: int = Field(default=20, ge=1)
@@ -82,6 +101,7 @@ class Settings(BaseModel):
     freetext_questions: Literal["pause_all", "owner_approved_drafts"] = "pause_all"
     llm: LLMSettings = LLMSettings()
     ranking: RankingSettings = RankingSettings()
+    discovery: DiscoverySettings = DiscoverySettings()
     outreach: OutreachSettings = OutreachSettings()
     repo_root: Path = REPO_ROOT
     config_dir: Path = Path.home() / ".config" / "jobagent"

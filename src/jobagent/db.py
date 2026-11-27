@@ -20,7 +20,7 @@ from jobagent.dedupe import (
     normalize_url,
 )
 from jobagent.models import TRACKED, DropReason, JobFilters, JobStatus, Posting
-from jobagent.rules import RULES_VERSION, check_hard_rules, years_asked
+from jobagent.rules import RULES_VERSION, RuleFilters, check_hard_rules, years_asked
 from jobagent.sqlconn import chunks, connect, marks
 
 SCHEMA = """
@@ -468,12 +468,16 @@ def _may_need_text(row: Mapping[str, Any], posting: Posting) -> bool:
 
 
 class Database:
-    def __init__(self, path: Path | str, max_years_asked: int = 6, *, schema: bool = True) -> None:
+    def __init__(
+        self, path: Path | str, max_years_asked: int = 6, *, schema: bool = True,
+        filters: RuleFilters | None = None,
+    ) -> None:  # fmt: skip
         self.conn = connect(path)
         if schema:
             self.conn.executescript(SCHEMA)
             migrate(self.conn)
         self.max_years_asked = max_years_asked
+        self.filters = filters  # stage 4 discovery filters; None keeps the rules as they were
 
     def close(self) -> None:
         self.conn.close()
@@ -633,7 +637,7 @@ class Database:
             w.links.append((row["id"], posting.source, posting.url, norm))
             by_url[norm] = row
             return replace(self._refresh(row, posting, seen, w), outcome="merged")
-        reason = check_hard_rules(posting, self.max_years_asked)
+        reason = check_hard_rules(posting, self.max_years_asked, self.filters)
         status = "dropped" if reason else "found"
         posted = posting.posted_date.isoformat() if posting.posted_date else None
         row = {
@@ -661,7 +665,7 @@ class Database:
             Posting(source=job["source"], url="", company=job["company"], title=job["title"],
                     location=job["location"], experience_text=job["experience_text"],
                     description=job["description"]),
-            self.max_years_asked,
+            self.max_years_asked, self.filters,
         )  # fmt: skip
         status = "dropped" if reason else "found"
         changes: dict[str, object] = {}
