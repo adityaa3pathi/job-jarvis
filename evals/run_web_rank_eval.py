@@ -28,6 +28,7 @@ Usage (no model; rules plus the local embedding model):
   ... --backlog served only the pool jobs that had a vector in production at export time
                        get one (the rest wait, as in the daily run); default: all embedded
   ... --embed-text title_requirements   the embedding text planned for the re-embed
+  ... --bar 62         recall and precision at another fit bar
 """
 
 from __future__ import annotations
@@ -85,6 +86,7 @@ class RankEvalResult:
     unsure_in_top20: int
     judge: JudgeSummary | None = None
     top: list[Item] = field(default_factory=list)
+    bar: int = 80
 
 
 def load_pool(stem: Path) -> tuple[dict[str, Any], dict[int, dict[str, str]]]:
@@ -239,6 +241,7 @@ def score_items(
         labels=len(items), yes=len(yes), unsure=sum(not i.sure for i in items),
         dropped=sum(i.score < 0 for i in items),
         unsure_in_top20=sum(not i.sure for i in ranked[:20]), judge=judge, top=ranked[:20],
+        bar=bar,
     )  # fmt: skip
 
 
@@ -272,12 +275,12 @@ def embed_like_served(
 def run(
     stem: Path, *, scores: str = "pipeline", embedder: str = "fastembed",
     llm: LLM | None = None, cache: Path | None = None, top_n: int | None = None,
-    backlog: str = "none", embed_mode: EmbedText | None = None,
+    backlog: str = "none", embed_mode: EmbedText | None = None, bar: int | None = None,
 ) -> RankEvalResult:  # fmt: skip
     if os.environ.get("TURSO_DATABASE_URL"):
         raise SystemExit("TURSO_DATABASE_URL is set: this eval must never touch Turso")
     settings = load_settings()
-    bar = settings.fit_bar * 20
+    bar = settings.fit_bar * 20 if bar is None else bar
     snap, labels = load_pool(stem)
     if scores == "served":
         served = {j["id"]: int(j["score"]) for j in snap["jobs"]}
@@ -306,7 +309,7 @@ def run(
 
 def describe(r: RankEvalResult) -> str:
     lines = [
-        f"mode            {r.mode}",
+        f"mode            {r.mode}; fit bar {r.bar}",
         f"labels          {r.labels} ({r.yes} yes, {r.unsure} unsure; labelled by Claude)",
         f"p_at_20         {r.p_at_20:.3f}  ({r.unsure_in_top20} of the top 20 are unsure labels)",
         f"p_at_50         {r.p_at_50:.3f}",
@@ -337,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, help="judge cache DB, kept between runs")
     ap.add_argument("--top-n", type=int)
     ap.add_argument("--backlog", choices=("none", "served"), default="none")
+    ap.add_argument("--bar", type=int, help="fit bar on the 0-100 scale (default fit_bar x 20)")
     ap.add_argument("--embed-text", choices=("head", "title_requirements"),
                     help="override ranking.embed_text from config.yaml")  # fmt: skip
     args = ap.parse_args(argv)
@@ -348,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
     stem = args.pool.expanduser()
     result = run(stem, scores=args.scores, embedder=args.embedder, llm=llm,
                  cache=args.cache, top_n=args.top_n, backlog=args.backlog,
-                 embed_mode=args.embed_text)  # fmt: skip
+                 embed_mode=args.embed_text, bar=args.bar)  # fmt: skip
     print(describe(result))
     return 0
 
