@@ -217,8 +217,31 @@ PROFILE_CHARS = 3000  # profile text the embedder and the judge see
 EMBED_CHUNK = 500
 
 
-def embed_text(row: Mapping[str, Any]) -> str:
-    """The posting text the match model embeds (a `rank_rows` row)."""
+EmbedText = Literal["head", "title_requirements"]
+# Where the part about the job itself starts, after the company blurb.
+_JOB_PART = re.compile(
+    r"(?im)^\W*(?:key |core |minimum |basic |preferred )?(?:requirements|qualifications"
+    r"|what you(?:'|’)?ll (?:bring|need|do)|what we(?:'|’)?re looking for"
+    r"|what you will (?:bring|do)|must[- ]haves?|skills(?: required| and experience)?"
+    r"|responsibilities|about the role|the role|your role|role overview|job description"
+    r"|who you are|you will|you have|tech stack)\b"
+)
+JOB_PART_CHARS = 600
+
+
+def job_part(description: str) -> str:
+    """The posting from its first requirements-like heading on, or all of it."""
+    m = _JOB_PART.search(description)
+    return description[m.start() :] if m else description
+
+
+def embed_text(row: Mapping[str, Any], mode: EmbedText = "head") -> str:
+    """The posting text the match model embeds (a `rank_rows` row). On the 27 Nov label
+    pool the title says more than the blurb at the top, so "title_requirements" weights it
+    twice (sim AUC 0.54 for "head")."""
+    if mode == "title_requirements":
+        part = job_part(row["description"])[:JOB_PART_CHARS]
+        return f"{row['title']}\n{row['title']}\n{part}"
     return f"{row['title']}\n{row['head']}"
 
 
@@ -364,6 +387,7 @@ def score_found(
     *,
     owner_years: int | None = None,
     max_new_embeddings: int | None = None,
+    embed_mode: EmbedText = "head",
 ) -> RankSummary:
     """Tier 2: a cheap score for every found job; writes only rows whose score moved."""
     rows, profile = db.rank_rows(), db.profile_text()
@@ -371,7 +395,7 @@ def score_found(
     sims: list[float | None] = [None] * len(rows)
     left, error = 0, ""
     if embedder is not None and profile and rows:
-        heads = [embed_text(r) for r in rows]
+        heads = [embed_text(r, embed_mode) for r in rows]
         budget = max_new_embeddings
         try:
             [me] = embed_cached(embedder, [profile[:PROFILE_CHARS]], db)
@@ -510,6 +534,7 @@ def rank_jobs(
     cheap = score_found(
         db, embedder, owner_years=settings.ranking.owner_years,
         max_new_embeddings=settings.ranking.embed_new_per_run,
+        embed_mode=settings.ranking.embed_text,
     )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
     if cheap.embed_error:

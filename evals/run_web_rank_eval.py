@@ -27,6 +27,7 @@ Usage (no model; rules plus the local embedding model):
   ... --scores served  score the stored live scores from the export instead of re-ranking
   ... --backlog served only the pool jobs that had a vector in production at export time
                        get one (the rest wait, as in the daily run); default: all embedded
+  ... --embed-text title_requirements   the embedding text planned for the re-embed
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ from jobagent.db import Database
 from jobagent.index import Embedder, FastEmbedEmbedder, HashingEmbedder, embed_cached
 from jobagent.llm import LLM
 from jobagent.models import Posting
-from jobagent.rank import JudgeSummary, embed_text, judge_top, score_found
+from jobagent.rank import EmbedText, JudgeSummary, embed_text, judge_top, score_found
 from jobagent.web.store import Store
 
 STRATA = ("top", "band80", "band60", "low")
@@ -254,7 +255,9 @@ def had_vector(job: dict[str, Any]) -> bool:
     return "profile match" in str(job.get("rank_reason") or "")
 
 
-def embed_like_served(db: Database, model: Embedder, by_url: dict[str, dict[str, Any]]) -> int:
+def embed_like_served(
+    db: Database, model: Embedder, by_url: dict[str, dict[str, Any]], mode: EmbedText = "head"
+) -> int:
     """Embed only the pool jobs that had a vector in production; returns how many wait."""
     keep = {
         r[0]
@@ -262,14 +265,14 @@ def embed_like_served(db: Database, model: Embedder, by_url: dict[str, dict[str,
         if r[1] in by_url and had_vector(by_url[r[1]])
     }
     rows = [r for r in db.rank_rows() if r["id"] in keep]
-    embed_cached(model, [embed_text(r) for r in rows], db)
+    embed_cached(model, [embed_text(r, mode) for r in rows], db)
     return len(db.rank_rows()) - len(rows)
 
 
 def run(
     stem: Path, *, scores: str = "pipeline", embedder: str = "fastembed",
     llm: LLM | None = None, cache: Path | None = None, top_n: int | None = None,
-    backlog: str = "none",
+    backlog: str = "none", embed_mode: EmbedText | None = None,
 ) -> RankEvalResult:  # fmt: skip
     if os.environ.get("TURSO_DATABASE_URL"):
         raise SystemExit("TURSO_DATABASE_URL is set: this eval must never touch Turso")
@@ -282,12 +285,14 @@ def run(
     with tempfile.TemporaryDirectory() as tmp:
         db, by_url = build_db(Path(tmp) / "eval.sqlite3", snap, settings.max_years_asked)
         model = load_embedder(embedder)
-        mode = f"pipeline ({embedder}"
+        text = embed_mode or settings.ranking.embed_text
+        mode = f"pipeline ({embedder}" + ("" if text == "head" else f", embeds {text}")
         cap = None
         if backlog == "served" and model is not None:
-            mode += f", {embed_like_served(db, model, by_url)} wait for a vector"
+            mode += f", {embed_like_served(db, model, by_url, text)} wait for a vector"
             cap = 0
-        score_found(db, model, owner_years=settings.ranking.owner_years, max_new_embeddings=cap)
+        score_found(db, model, owner_years=settings.ranking.owner_years,
+                    max_new_embeddings=cap, embed_mode=text)  # fmt: skip
         summary = None
         if llm is not None:
             st = Store(cache or Path(tmp) / "judge-cache.sqlite3")
@@ -332,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, help="judge cache DB, kept between runs")
     ap.add_argument("--top-n", type=int)
     ap.add_argument("--backlog", choices=("none", "served"), default="none")
+    ap.add_argument("--embed-text", choices=("head", "title_requirements"),
+                    help="override ranking.embed_text from config.yaml")  # fmt: skip
     args = ap.parse_args(argv)
     llm = None
     if args.judge == "live":
@@ -340,7 +347,8 @@ def main(argv: list[str] | None = None) -> int:
         llm = GeminiLLM.from_settings(load_settings().llm, 0.0)
     stem = args.pool.expanduser()
     result = run(stem, scores=args.scores, embedder=args.embedder, llm=llm,
-                 cache=args.cache, top_n=args.top_n, backlog=args.backlog)  # fmt: skip
+                 cache=args.cache, top_n=args.top_n, backlog=args.backlog,
+                 embed_mode=args.embed_text)  # fmt: skip
     print(describe(result))
     return 0
 

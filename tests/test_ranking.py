@@ -418,3 +418,18 @@ def test_skill_words_past_the_embedded_head_still_count(settings: Settings) -> N
     assert "stack 0 of 0" not in scores(db)[1][1] and "no stack words" not in scores(db)[1][1]
     [row] = db.rank_rows()
     assert len(row["head"]) == 1500 and "LangGraph" in row["description"]
+
+
+def test_the_planned_embedding_text_skips_the_company_blurb() -> None:
+    from jobagent.rank import embed_text
+
+    blurb = "Acme is a leader in widgets with offices in 12 countries.\n" * 5
+    row = {"title": "AI Engineer", "head": blurb[:1500],
+           "description": f"{blurb}Requirements\nPython, LangGraph and RAG."}  # fmt: skip
+    assert embed_text(row) == f"AI Engineer\n{blurb[:1500]}"  # the stored vectors' text
+    planned = embed_text(row, "title_requirements")
+    assert planned.startswith("AI Engineer\nAI Engineer\nRequirements") and "Acme" not in planned
+
+
+def test_score_found_defaults_to_the_stored_vector_text(settings: Settings) -> None:
+    assert settings.ranking.embed_text == "head"  # switching re-keys every vector

@@ -51,6 +51,10 @@ class RankingSettings(BaseModel):
     digest_top_n: int = Field(default=10, ge=1, le=50)
     owner_years: int | None = Field(default=None, ge=0)  # unset: no years term in the ceiling
     embed_new_per_run: int = Field(default=300, ge=0)  # model vectors per run; rest wait a run
+    # What the match model embeds per job. "head": title + first 1,500 chars (the stored
+    # vectors). "title_requirements": title twice + 600 chars from the requirements heading.
+    # Changing it re-keys every vector: switch only with the one-off re-embed (stage 3 plan).
+    embed_text: Literal["head", "title_requirements"] = "head"
 
 
 class OutreachSettings(BaseModel):
