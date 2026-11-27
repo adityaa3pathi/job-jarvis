@@ -35,13 +35,14 @@ TECH = re.compile(
     r"software (?:engineer|developer)|developer|engineer|sde|programmer)\b",
     re.I,
 )
-# Telegram job channels in India carry a known scam wave (task jobs, fees, WhatsApp hand-offs).
+# Telegram job channels in India carry a known scam wave (task jobs, fees). A WhatsApp
+# contact alone is fine (owner, 27 Nov 2026).
 SCAM = re.compile(
     r"\bregistration fee\b|\bsecurity deposit\b|\bpay (?:rs\.?|₹|inr)\s?\d|"
     r"\b(?:earn|income)\b[^.\n]{0,40}\b(?:daily|per day|a day|per hour|weekly)\b|"
     r"\b(?:task|typing|data entry|like and subscribe|youtube like)s? (?:job|work|based)\b|"
-    r"\bwork from (?:home|mobile)\b[^.\n]{0,40}\bearn\b|\b(?:whatsapp|wa\.me)\b[^.\n]{0,30}"
-    r"\b(?:message|text|contact|dm)\b|\bno (?:experience|interview) (?:needed|required)\b|"
+    r"\bwork from (?:home|mobile)\b[^.\n]{0,40}\bearn\b|"
+    r"\bno (?:experience|interview) (?:needed|required)\b|"
     r"\binvest(?:ment)?\b|\bcrypto (?:trading|signals?)\b|\bpart[- ]time\b[^.\n]{0,30}\bearn\b",
     re.I,
 )

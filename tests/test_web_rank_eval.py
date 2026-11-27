@@ -97,3 +97,9 @@ def test_frozen_posting_fixture_loads_as_postings() -> None:
     assert len(postings) == 30
     email = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
     assert all(len(p.description) >= 1000 and not email.search(p.description) for p in postings)
+
+
+def test_the_fit_bar_is_the_configured_fit_score() -> None:
+    from jobagent.config import load_settings
+
+    assert load_settings().ranking.fit_score == 62  # owner, 27 Nov 2026

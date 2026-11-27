@@ -6,7 +6,8 @@ import re
 
 from jobagent.models import DropReason, Posting
 
-RULES_VERSION = 4  # bump when a rule change could undrop or drop stored rows
+RULES_VERSION = 5  # bump when a rule change could undrop or drop stored rows
+# v5 (27 Nov 2026, owner): a WhatsApp contact no longer drops a job.
 
 INDIA_MARKERS = (
     "india", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "delhi",
@@ -38,18 +39,31 @@ UNPAID_PATTERNS = (
     r"(?<!leave )without (?:any )?(?:pay|stipend)",
     r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
-_CONTACT_VERBS = re.compile(
-    r"\b(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)\b", re.I
-)
-# A real scam asks you to reach a number; a WhatsApp product JD names no contact.
-_CONTACT_OBJECT = re.compile(
-    r"\+\d{2}|\bwa\.me\b|\b\d{2}[\dx*]{6,}\b|\b\d{5}[\s-]\d{5}\b", re.IGNORECASE
-)
-_WHATSAPP = re.compile(r"whats\s?app", re.IGNORECASE)
 _YEARS = re.compile(
     r"(\d{1,2})\s*(?:\+|[-–—]\s*(\d{1,2})|to\s*(\d{1,2}))?\s*\+?\s*(?:years?|yrs?)\b", re.I
 )
 _EXPERIENCE = re.compile(r"experience|\bexp\b", re.IGNORECASE)
+# "5+ years with Python", "at least 3 years in backend": a requirement even without the
+# word "experience" nearby.
+_ASKED_FOR = re.compile(
+    r"^\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:professional\s+|hands-on\s+|commercial\s+"
+    r"|industry\s+|relevant\s+|proven\s+)?(?:working\s+(?:with|in|on)|with|in|building|using"
+    r"|developing|writing|programming|coding|of)\b",
+    re.IGNORECASE,
+)
+_UNIT = re.compile(r"y(?:ea)?rs?", re.IGNORECASE)
+_AT_LEAST = re.compile(r"(?:at least|minimum(?: of)?|min\.?|over|more than)\s*$", re.I)
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+    "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20,
+}  # fmt: skip
+_NUMBER_WORD = re.compile(
+    r"\b(" + "|".join(_NUMBER_WORDS) + r")\b(?:\s*\(\d{1,2}\))?(?:-plus|\s+plus)?(?=[\s+-])", re.I
+)
+_DECADE = re.compile(r"\b(?:a|one) decade\b", re.IGNORECASE)
+# The hard rules still read years the old way (digits next to "experience") until the
+# owner approves dropping on the wider parse; ranking and filters use the wider one.
+HARD_RULES_READ_WORDS = False
 _COMPANY_HISTORY = re.compile(
     r"\b(?:we have|we've|our (?:company|firm|founders?)|serving|in business|founded|since"
     r"|track record|legacy)\b",
@@ -78,48 +92,71 @@ _INDIANA_CITIES = frozenset(
 )  # fmt: skip
 
 
-def _years_in(sentence: str) -> list[tuple[int, int | None, bool]]:
+def _digits(sentence: str) -> str:
+    """Number words as digits: "three years" -> "3 years", "five-plus" -> "5+",
+    "a decade" -> "10 years"."""
+    sentence = _DECADE.sub("10 years", sentence)
+
+    def number(m: re.Match[str]) -> str:
+        plus = "+" if "plus" in m.group(0).lower() else ""
+        return f"{_NUMBER_WORDS[m.group(1).lower()]}{plus}"
+
+    return _NUMBER_WORD.sub(number, sentence)
+
+
+def _asked_for(sentence: str, m: re.Match[str]) -> bool:
+    """'5+ years with X', 'at least 3 years in Y': a requirement on its own."""
+    plus = "+" in m.group(0) or bool(_AT_LEAST.search(sentence[: m.start()]))
+    unit = _UNIT.search(m.group(0))
+    return (
+        plus and unit is not None and bool(_ASKED_FOR.match(sentence[m.start() + unit.start() :]))
+    )
+
+
+def _years_in(sentence: str, words: bool = False) -> list[tuple[int, int | None, int]]:
+    """(low, high, link) per years phrase. link 2: 'experience' is near; 1: worded as a
+    requirement ('5+ years with X', only with `words`); 0: neither."""
     found = []
     for m in _YEARS.finditer(sentence):
         high = m.group(2) or m.group(3)
         near = sentence[max(0, m.start() - 25) : m.end() + 25]
-        found.append((int(m.group(1)), int(high) if high else None, bool(_EXPERIENCE.search(near))))
+        link = 2 if _EXPERIENCE.search(near) else 1 if words and _asked_for(sentence, m) else 0
+        found.append((int(m.group(1)), int(high) if high else None, link))
     return found
 
 
-def parse_years(text: str, need_experience: bool = False) -> tuple[int, int | None] | None:
+def parse_years(
+    text: str, need_experience: bool = False, words: bool = True
+) -> tuple[int, int | None] | None:
     """Lowest years asked, from phrases like '3-6 yrs' or '5+ years'.
 
-    Prefers numbers next to 'experience' and skips company-history sentences.
+    Prefers numbers next to 'experience' and skips company-history sentences. With
+    `words`, also reads number words ("three years", "a decade") and counts "5+ years
+    with X" or "at least 3 years in Y" as asked even without the word "experience".
     """
     found = []
     for sentence in re.split(r"[.;\n]", text):
         if _COMPANY_HISTORY.search(sentence):
             continue
+        if words:
+            sentence = _digits(sentence)
+        hits = _years_in(sentence, words)
         if need_experience and not _EXPERIENCE.search(sentence):
-            continue
-        found += _years_in(sentence)
-    linked = [f for f in found if f[2]] or found
+            hits = [h for h in hits if h[2]] if words else []
+        found += hits
+    # "5+ years of experience ... with 2+ years in closing": the experience number wins.
+    best = max((f[2] for f in found), default=0)
+    linked = [f for f in found if f[2] == best]
     if not linked:
         return None
     low, high, _ = min(linked, key=lambda f: f[0])
     return low, high
 
 
-def years_asked(posting: Posting) -> tuple[int, int | None] | None:
-    return parse_years(posting.experience_text) or parse_years(
-        posting.description, need_experience=True
+def years_asked(posting: Posting, words: bool = True) -> tuple[int, int | None] | None:
+    return parse_years(posting.experience_text, words=words) or parse_years(
+        posting.description, need_experience=True, words=words
     )
-
-
-def has_whatsapp_contact(text: str) -> bool:
-    if re.search(r"\bwa\.me/", text, re.IGNORECASE):
-        return True
-    for m in _WHATSAPP.finditer(text):
-        window = text[max(0, m.start() - 60) : m.end() + 60]
-        if _CONTACT_VERBS.search(window) and _CONTACT_OBJECT.search(window):
-            return True
-    return False
 
 
 def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
@@ -155,15 +192,13 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason |
     text = f"{posting.title}\n{posting.description}"
     if posting.closed:
         return "closed"
-    if has_whatsapp_contact(text):
-        return "whatsapp_contact"
     if any(re.search(p, text, re.IGNORECASE) for p in SPAM_PATTERNS):
         return "spam"
     if any(re.search(p, text, re.IGNORECASE) for p in UNPAID_PATTERNS):
         return "unpaid"
     if outside_india(posting.location):
         return "outside_india"
-    asked = years_asked(posting)
+    asked = years_asked(posting, words=HARD_RULES_READ_WORDS)
     if asked and asked[0] >= max_years_asked:
         return "too_senior"
     return None

@@ -7,9 +7,11 @@ import logging
 import math
 import re
 import threading
+import time
 from array import array
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Protocol
 
 from jobagent.facts import FactSheet
@@ -225,6 +227,26 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=True))
 
 
+STORE_TRIES = 3  # a Turso read or write that fails is tried this many times in all
+STORE_WAIT = 2.0  # seconds before the 2nd try; doubles after each failure
+_sleep = time.sleep
+
+
+def with_retry[T](what: str, call: Callable[[], T]) -> T:
+    """`call()`, tried again after a short wait when it raises. Only for idempotent store
+    calls: the vector read, and the insert that ignores keys already saved."""
+    for attempt in range(1, STORE_TRIES + 1):
+        try:
+            return call()
+        except Exception as exc:
+            if attempt == STORE_TRIES:
+                raise
+            log.warning("%s failed (try %d of %d): %s", what, attempt, STORE_TRIES,
+                        type(exc).__name__)  # fmt: skip
+            _sleep(STORE_WAIT * 2 ** (attempt - 1))
+    raise AssertionError("unreachable")
+
+
 def embed_cached(
     embedder: Embedder,
     texts: Sequence[str],
@@ -235,16 +257,17 @@ def embed_cached(
 ) -> list[array[float] | None]:
     """Vectors for `texts`; each distinct text is embedded once, ever, per model.
     With `max_new`, at most that many new texts are embedded; the rest come back None.
-    `embedded`, when given, gets the count of texts embedded by this call appended."""
+    `embedded`, when given, gets the count of texts embedded by this call appended.
+    Store reads and writes are retried (`with_retry`); a model error is not."""
     keys = [vector_key(embedder, t) for t in texts]
-    stored = store.vectors(keys)
+    stored = with_retry("vector read", lambda: store.vectors(keys))
     missing = list(dict.fromkeys(k for k in keys if k not in stored))[:max_new]
     text_of = dict(zip(keys, texts, strict=True))
     for start in range(0, len(missing), batch):
         part = missing[start : start + batch]
         fresh = {k: pack(v) for k, v in zip(part, embedder.embed([text_of[k] for k in part]),
                                             strict=True)}  # fmt: skip
-        store.save_vectors(embedder.name, fresh)
+        with_retry("vector write", partial(store.save_vectors, embedder.name, fresh))
         stored |= fresh
     if embedded is not None:
         embedded.append(len(missing))

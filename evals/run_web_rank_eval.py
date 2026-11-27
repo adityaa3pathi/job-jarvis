@@ -10,7 +10,7 @@ hard rules and derived fields (years, role, work mode) come from the current cod
 the hard rules drop counts as not recommended. Nothing is read from or written to Turso:
 the run refuses to start while TURSO_DATABASE_URL is set.
 
-Metrics (fit bar = `fit_bar` x 20 = 80 on the web's 0-100 scale, the judge's cap scale):
+Metrics (fit bar = `ranking.fit_score`, 62 since 27 Nov 2026; it was fit_bar x 20 = 80):
   p_at_20, p_at_50  share of yes among the pool's top k by final score. Ties are counted
                     fairly: a tie group cut by k adds its own yes rate for the slots left.
                     Pooled: only the 100 labelled jobs are ranked, not all found jobs.
@@ -25,6 +25,10 @@ Usage (no model; rules plus the local embedding model):
   uv run python -m evals.run_web_rank_eval --pool ~/job-jarvis-labels/label-pool-2026-11-27
   ... --judge live     the AI judge on the top `judge_top_n` (spends quota; owner only)
   ... --scores served  score the stored live scores from the export instead of re-ranking
+  ... --backlog served only the pool jobs that had a vector in production at export time
+                       get one (the rest wait, as in the daily run); default: all embedded
+  ... --embed-text title_requirements   the embedding text planned for the re-embed
+  ... --bar 62         recall and precision at another fit bar
 """
 
 from __future__ import annotations
@@ -44,10 +48,10 @@ from typing import Any
 
 from jobagent.config import load_settings
 from jobagent.db import Database
-from jobagent.index import Embedder, FastEmbedEmbedder, HashingEmbedder
+from jobagent.index import Embedder, FastEmbedEmbedder, HashingEmbedder, embed_cached
 from jobagent.llm import LLM
 from jobagent.models import Posting
-from jobagent.rank import JudgeSummary, judge_top, score_found
+from jobagent.rank import EmbedText, JudgeSummary, embed_text, judge_top, score_found
 from jobagent.web.store import Store
 
 STRATA = ("top", "band80", "band60", "low")
@@ -82,6 +86,7 @@ class RankEvalResult:
     unsure_in_top20: int
     judge: JudgeSummary | None = None
     top: list[Item] = field(default_factory=list)
+    bar: int = 80
 
 
 def load_pool(stem: Path) -> tuple[dict[str, Any], dict[int, dict[str, str]]]:
@@ -236,6 +241,7 @@ def score_items(
         labels=len(items), yes=len(yes), unsure=sum(not i.sure for i in items),
         dropped=sum(i.score < 0 for i in items),
         unsure_in_top20=sum(not i.sure for i in ranked[:20]), judge=judge, top=ranked[:20],
+        bar=bar,
     )  # fmt: skip
 
 
@@ -247,37 +253,64 @@ def load_embedder(name: str) -> Embedder | None:
     return FastEmbedEmbedder()
 
 
+def had_vector(job: dict[str, Any]) -> bool:
+    """The export's rank reason names the profile match only when the job had a vector."""
+    return "profile match" in str(job.get("rank_reason") or "")
+
+
+def embed_like_served(
+    db: Database, model: Embedder, by_url: dict[str, dict[str, Any]], mode: EmbedText = "head"
+) -> int:
+    """Embed only the pool jobs that had a vector in production; returns how many wait."""
+    keep = {
+        r[0]
+        for r in db.conn.execute("SELECT job_id, url FROM job_links").fetchall()
+        if r[1] in by_url and had_vector(by_url[r[1]])
+    }
+    rows = [r for r in db.rank_rows() if r["id"] in keep]
+    embed_cached(model, [embed_text(r, mode) for r in rows], db)
+    return len(db.rank_rows()) - len(rows)
+
+
 def run(
     stem: Path, *, scores: str = "pipeline", embedder: str = "fastembed",
     llm: LLM | None = None, cache: Path | None = None, top_n: int | None = None,
+    backlog: str = "none", embed_mode: EmbedText | None = None, bar: int | None = None,
 ) -> RankEvalResult:  # fmt: skip
     if os.environ.get("TURSO_DATABASE_URL"):
         raise SystemExit("TURSO_DATABASE_URL is set: this eval must never touch Turso")
     settings = load_settings()
-    bar = settings.fit_bar * 20
+    bar = settings.ranking.fit_score if bar is None else bar
     snap, labels = load_pool(stem)
     if scores == "served":
         served = {j["id"]: int(j["score"]) for j in snap["jobs"]}
-        return score_items(snap, labels, served, bar, "served at export")
+        return score_items(snap, labels, served, bar, f"served at export, bar {bar}")
     with tempfile.TemporaryDirectory() as tmp:
         db, by_url = build_db(Path(tmp) / "eval.sqlite3", snap, settings.max_years_asked)
         model = load_embedder(embedder)
-        score_found(db, model, owner_years=settings.ranking.owner_years)
+        text = embed_mode or settings.ranking.embed_text
+        mode = f"pipeline ({embedder}" + ("" if text == "head" else f", embeds {text}")
+        cap = None
+        if backlog == "served" and model is not None:
+            mode += f", {embed_like_served(db, model, by_url, text)} wait for a vector"
+            cap = 0
+        score_found(db, model, owner_years=settings.ranking.owner_years,
+                    max_new_embeddings=cap, embed_mode=text)  # fmt: skip
         summary = None
-        mode = f"pipeline ({embedder}"
         if llm is not None:
             st = Store(cache or Path(tmp) / "judge-cache.sqlite3")
             n = settings.ranking.judge_top_n if top_n is None else top_n
             summary = judge_top(db, st, llm, top_n=n, budget=settings.llm)
             mode += f" + judge top {n}"
-        result = score_items(snap, labels, final_scores(db, by_url), bar, mode + ")", summary)
+        mode += f", bar {bar})"
+        result = score_items(snap, labels, final_scores(db, by_url), bar, mode, summary)
         db.close()
     return result
 
 
 def describe(r: RankEvalResult) -> str:
     lines = [
-        f"mode            {r.mode}",
+        f"mode            {r.mode}; fit bar {r.bar}",
         f"labels          {r.labels} ({r.yes} yes, {r.unsure} unsure; labelled by Claude)",
         f"p_at_20         {r.p_at_20:.3f}  ({r.unsure_in_top20} of the top 20 are unsure labels)",
         f"p_at_50         {r.p_at_50:.3f}",
@@ -307,6 +340,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--judge", choices=("none", "live"), default="none")
     ap.add_argument("--cache", type=Path, help="judge cache DB, kept between runs")
     ap.add_argument("--top-n", type=int)
+    ap.add_argument("--backlog", choices=("none", "served"), default="none")
+    ap.add_argument("--bar", type=int, help="fit bar, 0-100 (default ranking.fit_score)")
+    ap.add_argument("--embed-text", choices=("head", "title_requirements"),
+                    help="override ranking.embed_text from config.yaml")  # fmt: skip
     args = ap.parse_args(argv)
     llm = None
     if args.judge == "live":
@@ -315,7 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         llm = GeminiLLM.from_settings(load_settings().llm, 0.0)
     stem = args.pool.expanduser()
     result = run(stem, scores=args.scores, embedder=args.embedder, llm=llm,
-                 cache=args.cache, top_n=args.top_n)  # fmt: skip
+                 cache=args.cache, top_n=args.top_n, backlog=args.backlog,
+                 embed_mode=args.embed_text, bar=args.bar)  # fmt: skip
     print(describe(result))
     return 0
 

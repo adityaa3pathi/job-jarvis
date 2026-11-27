@@ -30,6 +30,10 @@ def test_filter_keeps_tech_hiring_and_drops_scams_self_promo_and_non_tech() -> N
         "scam_pattern"
     )
     assert drop_reason("Registration fee ₹999. Hiring Python developers") == "scam_pattern"
+    # A WhatsApp contact alone is fine (owner, 27 Nov 2026).
+    assert drop_reason("Hiring Python developers in Pune. WhatsApp to contact: 98xxxxxx12") != (
+        "scam_pattern"
+    )
     assert drop_reason("[For Hire] Full stack developer, 5 years, DM me") == "for_hire"
     assert drop_reason("If you're looking for a developer to build your app, DM me") == ("for_hire")
     assert drop_reason("We're hiring a barista for our cafe") == "not_tech"

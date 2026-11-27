@@ -217,11 +217,42 @@ PROFILE_CHARS = 3000  # profile text the embedder and the judge see
 EMBED_CHUNK = 500
 
 
+EmbedText = Literal["head", "title_requirements"]
+# Where the part about the job itself starts, after the company blurb.
+_JOB_PART = re.compile(
+    r"(?im)^\W*(?:key |core |minimum |basic |preferred )?(?:requirements|qualifications"
+    r"|what you(?:'|’)?ll (?:bring|need|do)|what we(?:'|’)?re looking for"
+    r"|what you will (?:bring|do)|must[- ]haves?|skills(?: required| and experience)?"
+    r"|responsibilities|about the role|the role|your role|role overview|job description"
+    r"|who you are|you will|you have|tech stack)\b"
+)
+JOB_PART_CHARS = 600
+
+
+def job_part(description: str) -> str:
+    """The posting from its first requirements-like heading on, or all of it."""
+    m = _JOB_PART.search(description)
+    return description[m.start() :] if m else description
+
+
+def embed_text(row: Mapping[str, Any], mode: EmbedText = "head") -> str:
+    """The posting text the match model embeds (a `rank_rows` row). On the 27 Nov label
+    pool the title says more than the blurb at the top, so "title_requirements" weights it
+    twice (sim AUC 0.54 for "head")."""
+    if mode == "title_requirements":
+        part = job_part(row["description"])[:JOB_PART_CHARS]
+        return f"{row['title']}\n{row['title']}\n{part}"
+    return f"{row['title']}\n{row['head']}"
+
+
 def stack_terms(text: str) -> set[str]:
     lowered = text.lower()
     tokens = {t.strip(".-") for t in _TOKEN.findall(lowered)}
     found = (tokens | {f".{t}" for t in tokens if t == "net"}) & STACK_TERMS
     return found | {p for p in _PHRASES if p in lowered}
+
+
+OFF_TARGET_CEILING = 2  # a posting asking owner_years + 2 (4) or more years scores at most 40
 
 
 def profile_ceiling(
@@ -239,7 +270,8 @@ def profile_ceiling(
         have = len(named & mine)
         base, reasons = share_base(have / len(named)), [f"stack {have} of {len(named)} tools"]
     if owner_years is not None and min_years is not None and min_years >= owner_years + 2:
-        base -= 2 if min_years >= owner_years + 3 else 1
+        # The owner's rule: a minimum of owner_years + 1 (3) or less fits, more is off-target.
+        base = min(base, OFF_TARGET_CEILING)
         reasons.append(f"asks {min_years}+ years, you have about {owner_years}")
     return max(1, min(5, base)), reasons
 
@@ -288,12 +320,28 @@ class Preferences:
         return 1 / (1 + math.exp(-logit)), why if abs(top) >= 0.3 else ""
 
 
+# Scaled profile similarity a job without a vector gets when no job in the run has one
+# (no model installed). With vectors, the run's median is used instead. 0.2 is about the
+# median for bge-small on the 27 Nov 2026 label pool.
+NO_VECTOR_SIM = 0.2
+
+
 def cheap_score(ceiling: int, sim: float | None, pref: float) -> int:
-    """0-100 from the rule ceiling, profile similarity (0-1, None without a model) and the
-    preference term; never above the ceiling's share of 100."""
+    """0-100 from the rule ceiling, profile similarity (0-1) and the preference term; never
+    above the ceiling's share of 100. One formula for every job: a job with no vector
+    (None) gets `NO_VECTOR_SIM`, so it can't outrank embedded jobs on the formula alone."""
     rule = ceiling / 5
-    raw = 0.75 * rule + 0.25 * pref if sim is None else 0.45 * rule + 0.35 * sim + 0.2 * pref
-    return round(100 * min(raw, rule))
+    sim = NO_VECTOR_SIM if sim is None else sim
+    return round(100 * min(0.45 * rule + 0.35 * sim + 0.2 * pref, rule))
+
+
+def median_sim(scaled: Sequence[float | None]) -> float | None:
+    """The middle scaled similarity of the jobs that have a vector, or None if none do."""
+    known = sorted(s for s in scaled if s is not None)
+    if not known:
+        return None
+    mid = len(known) // 2
+    return known[mid] if len(known) % 2 else (known[mid - 1] + known[mid]) / 2
 
 
 def _scaled(embedder: Embedder, sim: float) -> float:
@@ -317,6 +365,8 @@ class RankSummary:
     left_to_embed: int = 0  # found jobs still waiting for a vector (filled on later runs)
     spread: tuple[int, int, int] | None = None  # lowest, median and highest score this run
     has_profile: bool = True
+    embed_error: str = ""  # set when the match model or its store failed this run
+    kept: int = 0  # jobs whose previous score was kept because embedding failed
 
     def describe(self) -> str:
         """Run-note text that shows when scores cannot tell jobs apart."""
@@ -337,14 +387,15 @@ def score_found(
     *,
     owner_years: int | None = None,
     max_new_embeddings: int | None = None,
+    embed_mode: EmbedText = "head",
 ) -> RankSummary:
     """Tier 2: a cheap score for every found job; writes only rows whose score moved."""
     rows, profile = db.rank_rows(), db.profile_text()
     prefs = Preferences.fit(db.labels())
     sims: list[float | None] = [None] * len(rows)
-    left = 0
+    left, error = 0, ""
     if embedder is not None and profile and rows:
-        heads = [f"{r['title']}\n{r['head']}" for r in rows]
+        heads = [embed_text(r, embed_mode) for r in rows]
         budget = max_new_embeddings
         try:
             [me] = embed_cached(embedder, [profile[:PROFILE_CHARS]], db)
@@ -364,20 +415,30 @@ def score_found(
                     budget = max(0, budget - done[0])
                 sims += [cosine(me, v) if v is not None else None for v in part]
             left = sum(1 for s in sims if s is None)
-        except Exception as exc:  # a model failure must not stop the run
-            log.warning("embedding failed, ranking on rules only: %s", type(exc).__name__)
+        except Exception as exc:  # a model or store failure must not stop the run
+            error = type(exc).__name__
+            log.warning("embedding failed, keeping the previous scores: %s", error)
             sims = [None] * len(rows)
     mine = frozenset(stack_terms(profile)) if profile else ""
     changed: list[tuple[int | None, str, int]] = []
     final: list[int] = []
-    for row, sim in zip(rows, sims, strict=True):
-        text = f"{row['title']}\n{row['head']}\n{' '.join(json.loads(row['stack_words']))}"
+    scaled_all = [
+        _scaled(embedder, s) if s is not None and embedder is not None else None for s in sims
+    ]
+    fill = median_sim(scaled_all)  # a job still waiting for a vector counts as typical
+    kept = 0
+    for row, scaled in zip(rows, scaled_all, strict=True):
+        if error and row["score"] is not None:  # don't swap a good score for a rules guess
+            final.append(row["score"])
+            kept += 1
+            continue
+        text = f"{row['title']}\n{row['description']}\n{' '.join(json.loads(row['stack_words']))}"
         ceiling, why = profile_ceiling(mine, text, row["min_years"], owner_years)
         pref, liked = prefs.predict(row)
-        scaled = None
-        if sim is not None and embedder is not None:
-            scaled = _scaled(embedder, sim)
+        if scaled is not None:
             why.append(f"profile match {round(100 * scaled)}%")
+        else:
+            scaled = fill
         # A verdict on other posting text or another profile no longer counts.
         current = row["judge_key"] == judge_key(row["desc_hash"], profile)
         score, reason = with_judge(
@@ -392,8 +453,9 @@ def score_found(
     final.sort()
     spread = (final[0], final[len(final) // 2], final[-1]) if final else None
     return RankSummary(
-        len(rows), len(changed), any(s is not None for s in sims), left, spread, bool(profile)
-    )
+        len(rows), len(changed), any(s is not None for s in sims), left, spread, bool(profile),
+        error, kept,
+    )  # fmt: skip
 
 
 class JudgeStore(LLMCache, Protocol):
@@ -472,8 +534,11 @@ def rank_jobs(
     cheap = score_found(
         db, embedder, owner_years=settings.ranking.owner_years,
         max_new_embeddings=settings.ranking.embed_new_per_run,
+        embed_mode=settings.ranking.embed_text,
     )  # fmt: skip
     note = f"ranked {cheap.scored} found jobs" + ("" if cheap.embedded else " (rules only)")
+    if cheap.embed_error:
+        note += f"; match model failed ({cheap.embed_error}), kept {cheap.kept} previous scores"
     note += cheap.describe()
     if cheap.left_to_embed:
         note += f"; {cheap.left_to_embed} wait for the match model on later runs"

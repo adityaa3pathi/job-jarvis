@@ -10,8 +10,16 @@ from jobagent.config import LLMSettings, Settings
 from jobagent.db import Database, today_ist
 from jobagent.index import HashingEmbedder
 from jobagent.llm import FailingLLM, StubLLM
-from jobagent.models import Posting
-from jobagent.rank import Preferences, cheap_score, judge_top, profile_ceiling, score_found
+from jobagent.models import JobFilters, Posting
+from jobagent.rank import (
+    NO_VECTOR_SIM,
+    Preferences,
+    cheap_score,
+    judge_top,
+    median_sim,
+    profile_ceiling,
+    score_found,
+)
 from jobagent.web.store import Store
 
 PROFILE = "AI engineer. I build LangGraph agents, RAG with pgvector, FastAPI and Python APIs."
@@ -60,6 +68,25 @@ def test_profile_ceiling_follows_stack_overlap() -> None:
     assert high > low and "of" in why[0]
     capped, why = profile_ceiling(PROFILE, GOOD, 6, 2)
     assert capped < high and "years" in why[-1]
+    # Owner's rule: a minimum of 3 fits, 4 or more is off-target (at most 2 of 5).
+    assert profile_ceiling(PROFILE, GOOD, 3, 2)[0] == high
+    assert profile_ceiling(PROFILE, GOOD, 4, 2)[0] == profile_ceiling(PROFILE, GOOD, 5, 2)[0] == 2
+
+
+def test_jobs_without_a_vector_share_the_embedded_scale() -> None:
+    # Before: no vector meant 0.75 x rule + 0.25 x pref = 88, above any embedded job.
+    assert cheap_score(5, None, 0.5) == cheap_score(5, NO_VECTOR_SIM, 0.5) < 80
+    assert median_sim([None, 0.1, 0.9, 0.3]) == 0.3 and median_sim([0.2, 0.4]) == pytest.approx(0.3)
+    assert median_sim([None, None]) is None
+
+
+def test_a_job_waiting_for_a_vector_gets_the_runs_median_match(settings: Settings) -> None:
+    db = db_with(settings, [job(i, GOOD) for i in range(3)])
+    score_found(db, FixedEmbedder(), max_new_embeddings=2)  # type: ignore[arg-type]
+    got = sorted(scores(db).values(), key=lambda s: "profile match" in s[1])
+    waiting, embedded = got[0], got[1:]
+    assert "profile match" not in waiting[1]
+    assert {s for s, _ in embedded} == {waiting[0]}  # the median of 20% and 20%
 
 
 def test_cheap_score_never_passes_the_rule_ceiling() -> None:
@@ -324,3 +351,85 @@ def test_run_note_shows_the_score_spread_and_why_scores_are_flat(settings: Setti
     assert summary.describe().startswith("; scores ")
     flat = score_found(db_with(settings, [job(3, GOOD), job(4, BAD)], profile=""), None)
     assert "no career summary" in flat.describe()
+
+
+def test_a_flaky_vector_store_is_retried(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.index._sleep", lambda _s: None)
+    db = db_with(settings, [job(1, GOOD)])
+    fails = {"vectors": 2, "save_vectors": 2}
+    for name in fails:
+        real = getattr(db, name)
+
+        def flaky(*a: Any, _name: str = name, _real: Any = real) -> Any:
+            if fails[_name]:
+                fails[_name] -= 1
+                raise ValueError("Hrana: stream error")
+            return _real(*a)
+
+        monkeypatch.setattr(db, name, flaky)
+    summary = score_found(db, CountingEmbedder())
+    assert (
+        summary.embedded and not summary.embed_error and fails == {"vectors": 0, "save_vectors": 0}
+    )
+
+
+def test_a_turso_failure_keeps_the_previous_scores(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("jobagent.index._sleep", lambda _s: None)
+    db = db_with(settings, [job(1, GOOD), job(2, BAD)])
+    score_found(db, CountingEmbedder())
+    before = scores(db)
+    db.upsert_many([job(3, GOOD)])  # new today: it still needs a score
+
+    def down(*_a: Any) -> Any:
+        raise ValueError("Hrana: stream error")
+
+    monkeypatch.setattr(db, "vectors", down)
+    summary = score_found(db, CountingEmbedder())
+    after = scores(db)
+    assert summary.embed_error == "ValueError" and summary.kept == 2
+    assert {i: after[i] for i in before} == before
+    assert after[3][0] is not None
+
+
+def test_the_judge_takes_jobs_in_the_webs_order(settings: Settings) -> None:
+    from datetime import date
+
+    db = db_with(settings, [job(1, GOOD, posted_date=date(2026, 11, 1)),
+                            job(2, GOOD, posted_date=date(2026, 11, 20)),
+                            job(3, GOOD, posted_date=date(2026, 11, 20)),
+                            job(4, BAD, posted_date=date(2026, 11, 25))])  # fmt: skip
+    with db.conn:
+        db.conn.executemany("UPDATE jobs SET score=? WHERE id=?", [(70, 1), (70, 2), (70, 3),
+                                                                   (60, 4)])  # fmt: skip
+    shown, _ = db.query_jobs(JobFilters(sort="best"), limit=10, offset=0)
+    picked = [r["id"] for r in db.judge_candidates(4, PROFILE)]
+    assert picked == [3, 2, 1, 4]  # same score: newest day first, then the higher id
+    assert [r["id"] for r in shown] == picked
+
+
+def test_skill_words_past_the_embedded_head_still_count(settings: Settings) -> None:
+    blurb = "We are a friendly company with great culture and benefits. " * 40  # > 1,500 chars
+    db = db_with(settings, [job(1, f"{blurb} Build LangGraph agents with RAG, pgvector, FastAPI.")])
+    score_found(db, None)
+    assert "stack 0 of 0" not in scores(db)[1][1] and "no stack words" not in scores(db)[1][1]
+    [row] = db.rank_rows()
+    assert len(row["head"]) == 1500 and "LangGraph" in row["description"]
+
+
+def test_the_planned_embedding_text_skips_the_company_blurb() -> None:
+    from jobagent.rank import embed_text
+
+    blurb = "Acme is a leader in widgets with offices in 12 countries.\n" * 5
+    row = {"title": "AI Engineer", "head": blurb[:1500],
+           "description": f"{blurb}Requirements\nPython, LangGraph and RAG."}  # fmt: skip
+    assert embed_text(row) == f"AI Engineer\n{blurb[:1500]}"  # the stored vectors' text
+    planned = embed_text(row, "title_requirements")
+    assert planned.startswith("AI Engineer\nAI Engineer\nRequirements") and "Acme" not in planned
+
+
+def test_score_found_defaults_to_the_stored_vector_text(settings: Settings) -> None:
+    assert settings.ranking.embed_text == "head"  # switching re-keys every vector

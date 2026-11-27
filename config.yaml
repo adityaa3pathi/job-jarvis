@@ -16,7 +16,8 @@ llm:
   # bedrock_model: global.amazon.nova-2-lite-v1:0
   # bedrock_region: ap-south-1
 ranking:
-  owner_years: 2  # DocNow since 06-2024; jobs asking 4+ years rank lower, 6+ are dropped
+  fit_score: 62  # 0-100 score at which a found job counts as a fit (web shows it green)
+  owner_years: 2  # DocNow since 06-2024; jobs asking 4+ years score 40 at most, 6+ are dropped
 outreach:
   jobs_per_day: 10
   first_emails_per_day: 20
