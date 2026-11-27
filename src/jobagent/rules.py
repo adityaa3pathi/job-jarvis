@@ -6,7 +6,8 @@ import re
 
 from jobagent.models import DropReason, Posting
 
-RULES_VERSION = 4  # bump when a rule change could undrop or drop stored rows
+RULES_VERSION = 5  # bump when a rule change could undrop or drop stored rows
+# v5 (27 Nov 2026, owner): a WhatsApp contact no longer drops a job.
 
 INDIA_MARKERS = (
     "india", "bengaluru", "bangalore", "mumbai", "pune", "hyderabad", "chennai", "delhi",
@@ -38,14 +39,6 @@ UNPAID_PATTERNS = (
     r"(?<!leave )without (?:any )?(?:pay|stipend)",
     r"\bvolunteer (?:role|position|basis|opportunity|job)\b",
 )
-_CONTACT_VERBS = re.compile(
-    r"\b(?:contact|message|msg|text|send|share|apply|resume|cv|call|ping|dm|reach)\b", re.I
-)
-# A real scam asks you to reach a number; a WhatsApp product JD names no contact.
-_CONTACT_OBJECT = re.compile(
-    r"\+\d{2}|\bwa\.me\b|\b\d{2}[\dx*]{6,}\b|\b\d{5}[\s-]\d{5}\b", re.IGNORECASE
-)
-_WHATSAPP = re.compile(r"whats\s?app", re.IGNORECASE)
 _YEARS = re.compile(
     r"(\d{1,2})\s*(?:\+|[-–—]\s*(\d{1,2})|to\s*(\d{1,2}))?\s*\+?\s*(?:years?|yrs?)\b", re.I
 )
@@ -166,16 +159,6 @@ def years_asked(posting: Posting, words: bool = True) -> tuple[int, int | None] 
     )
 
 
-def has_whatsapp_contact(text: str) -> bool:
-    if re.search(r"\bwa\.me/", text, re.IGNORECASE):
-        return True
-    for m in _WHATSAPP.finditer(text):
-        window = text[max(0, m.start() - 60) : m.end() + 60]
-        if _CONTACT_VERBS.search(window) and _CONTACT_OBJECT.search(window):
-            return True
-    return False
-
-
 def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(re.search(rf"(?<![a-z]){re.escape(m)}(?![a-z])", lowered) for m in markers)
@@ -209,8 +192,6 @@ def check_hard_rules(posting: Posting, max_years_asked: int = 6) -> DropReason |
     text = f"{posting.title}\n{posting.description}"
     if posting.closed:
         return "closed"
-    if has_whatsapp_contact(text):
-        return "whatsapp_contact"
     if any(re.search(p, text, re.IGNORECASE) for p in SPAM_PATTERNS):
         return "spam"
     if any(re.search(p, text, re.IGNORECASE) for p in UNPAID_PATTERNS):

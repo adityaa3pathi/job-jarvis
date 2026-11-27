@@ -11,7 +11,7 @@ Track = Literal["ai", "full_stack"]
 DropReason = Literal[
     "outside_india",
     "too_senior",
-    "whatsapp_contact",
+    "whatsapp_contact",  # no longer set (rules v5); older rows may still carry it
     "closed",
     "spam",
     "unpaid",

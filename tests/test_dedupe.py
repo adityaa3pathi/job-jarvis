@@ -72,13 +72,20 @@ def test_repost_updates_existing_row(db: Database) -> None:
     assert db.conn.execute("SELECT count(*) FROM jobs").fetchone()[0] == 1
 
 
-def test_whatsapp_contact_dropped_with_reason(db: Database) -> None:
+def test_whatsapp_contact_is_kept(db: Database) -> None:
+    # Owner, 27 Nov 2026: applying over WhatsApp is fine (rules v5).
     res = db.upsert_posting(
         posting(description="Interested? WhatsApp your resume to +91 98xxxxxx now.")
     )
-    assert res.status == "dropped"
-    assert res.drop_reason == "whatsapp_contact"
-    assert db.get_job(res.job_id)["drop_reason"] == "whatsapp_contact"
+    assert (res.status, res.drop_reason) == ("found", None)
+
+
+def test_an_old_whatsapp_drop_comes_back_when_seen_again(db: Database) -> None:
+    job = posting(description="Apply on WhatsApp at +91 98765 43210.")
+    saved = db.upsert_posting(job)
+    drop(db, saved.job_id, "whatsapp_contact", 4)
+    again = db.upsert_posting(job)
+    assert (again.status, again.drop_reason) == ("found", None)
 
 
 def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
@@ -97,9 +104,6 @@ def test_whatsapp_integration_in_stack_is_not_dropped() -> None:
         ({"description": "This is a volunteer role for a student club."}, "unpaid"),
         ({"description": "Pay a registration fee to apply"}, "spam"),
         ({"closed": True}, "closed"),
-        ({"description": "Send your CV on WhatsApp 98xxxxxxxx"}, "whatsapp_contact"),
-        ({"description": "Apply on WhatsApp at +91 98765 43210."}, "whatsapp_contact"),
-        ({"description": "Message us: wa.me/919876543210"}, "whatsapp_contact"),
         ({"description": "Pay a registration fee of Rs 500"}, "spam"),
         ({"description": "Earn 2000 per day from home."}, "spam"),
         ({"experience_text": "6–9 years"}, "too_senior"),
@@ -162,6 +166,8 @@ def test_hard_rules(kw: dict[str, object], reason: str) -> None:
         {"location": "Bengaluru, IN"},
         {"location": "Bangalore Urban"},
         {"location": "Chennai, TN"},
+        {"description": "Send your CV on WhatsApp 98xxxxxxxx"},
+        {"description": "Message us: wa.me/919876543210"},
     ],
 )
 def test_hard_rules_keep(kw: dict[str, object]) -> None:
@@ -212,7 +218,7 @@ def test_hard_rules_still_read_years_the_old_way() -> None:
 
 
 def test_rules_version() -> None:
-    assert RULES_VERSION == 4
+    assert RULES_VERSION == 5
 
 
 def test_normalisers() -> None:
