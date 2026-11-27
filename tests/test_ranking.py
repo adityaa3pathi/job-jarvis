@@ -68,6 +68,9 @@ def test_profile_ceiling_follows_stack_overlap() -> None:
     assert high > low and "of" in why[0]
     capped, why = profile_ceiling(PROFILE, GOOD, 6, 2)
     assert capped < high and "years" in why[-1]
+    # Owner's rule: a minimum of 3 fits, 4 or more is off-target (at most 2 of 5).
+    assert profile_ceiling(PROFILE, GOOD, 3, 2)[0] == high
+    assert profile_ceiling(PROFILE, GOOD, 4, 2)[0] == profile_ceiling(PROFILE, GOOD, 5, 2)[0] == 2
 
 
 def test_jobs_without_a_vector_share_the_embedded_scale() -> None:

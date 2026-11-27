@@ -229,6 +229,9 @@ def stack_terms(text: str) -> set[str]:
     return found | {p for p in _PHRASES if p in lowered}
 
 
+OFF_TARGET_CEILING = 2  # a posting asking owner_years + 2 (4) or more years scores at most 40
+
+
 def profile_ceiling(
     profile: str | frozenset[str], posting: str, min_years: int | None, owner_years: int | None
 ) -> tuple[int, list[str]]:
@@ -244,7 +247,8 @@ def profile_ceiling(
         have = len(named & mine)
         base, reasons = share_base(have / len(named)), [f"stack {have} of {len(named)} tools"]
     if owner_years is not None and min_years is not None and min_years >= owner_years + 2:
-        base -= 2 if min_years >= owner_years + 3 else 1
+        # The owner's rule: a minimum of owner_years + 1 (3) or less fits, more is off-target.
+        base = min(base, OFF_TARGET_CEILING)
         reasons.append(f"asks {min_years}+ years, you have about {owner_years}")
     return max(1, min(5, base)), reasons
 
