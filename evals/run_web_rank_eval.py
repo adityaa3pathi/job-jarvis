@@ -10,7 +10,7 @@ hard rules and derived fields (years, role, work mode) come from the current cod
 the hard rules drop counts as not recommended. Nothing is read from or written to Turso:
 the run refuses to start while TURSO_DATABASE_URL is set.
 
-Metrics (fit bar = `fit_bar` x 20 = 80 on the web's 0-100 scale, the judge's cap scale):
+Metrics (fit bar = `ranking.fit_score`, 62 since 27 Nov 2026; it was fit_bar x 20 = 80):
   p_at_20, p_at_50  share of yes among the pool's top k by final score. Ties are counted
                     fairly: a tie group cut by k adds its own yes rate for the slots left.
                     Pooled: only the 100 labelled jobs are ranked, not all found jobs.
@@ -280,11 +280,11 @@ def run(
     if os.environ.get("TURSO_DATABASE_URL"):
         raise SystemExit("TURSO_DATABASE_URL is set: this eval must never touch Turso")
     settings = load_settings()
-    bar = settings.fit_bar * 20 if bar is None else bar
+    bar = settings.ranking.fit_score if bar is None else bar
     snap, labels = load_pool(stem)
     if scores == "served":
         served = {j["id"]: int(j["score"]) for j in snap["jobs"]}
-        return score_items(snap, labels, served, bar, "served at export")
+        return score_items(snap, labels, served, bar, f"served at export, bar {bar}")
     with tempfile.TemporaryDirectory() as tmp:
         db, by_url = build_db(Path(tmp) / "eval.sqlite3", snap, settings.max_years_asked)
         model = load_embedder(embedder)
@@ -302,7 +302,8 @@ def run(
             n = settings.ranking.judge_top_n if top_n is None else top_n
             summary = judge_top(db, st, llm, top_n=n, budget=settings.llm)
             mode += f" + judge top {n}"
-        result = score_items(snap, labels, final_scores(db, by_url), bar, mode + ")", summary)
+        mode += f", bar {bar})"
+        result = score_items(snap, labels, final_scores(db, by_url), bar, mode, summary)
         db.close()
     return result
 
@@ -340,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, help="judge cache DB, kept between runs")
     ap.add_argument("--top-n", type=int)
     ap.add_argument("--backlog", choices=("none", "served"), default="none")
-    ap.add_argument("--bar", type=int, help="fit bar on the 0-100 scale (default fit_bar x 20)")
+    ap.add_argument("--bar", type=int, help="fit bar, 0-100 (default ranking.fit_score)")
     ap.add_argument("--embed-text", choices=("head", "title_requirements"),
                     help="override ranking.embed_text from config.yaml")  # fmt: skip
     args = ap.parse_args(argv)

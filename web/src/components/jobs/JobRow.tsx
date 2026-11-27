@@ -14,9 +14,12 @@ export const isNew = (j: Job) => j.seen_date?.slice(0, 10) === TODAY;
 export const coachHref = (j: Job) =>
   `/coach?url=${encodeURIComponent(j.url ?? "")}&title=${encodeURIComponent(j.title)}&company=${encodeURIComponent(j.company)}`;
 
+// A fit from this score up: keep in step with ranking.fit_score in config.yaml.
+export const FIT_SCORE = 62;
+
 export function scoreTone(score: number | null) {
   if (score === null) return "text-ink-3";
-  return score >= 70 ? "text-up" : score >= 40 ? "text-ink" : "text-ink-3";
+  return score >= FIT_SCORE ? "text-up" : score >= 40 ? "text-ink" : "text-ink-3";
 }
 
 function Score({ score, big = false }: { score: number | null; big?: boolean }) {
