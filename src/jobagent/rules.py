@@ -116,13 +116,15 @@ def _asked_for(sentence: str, m: re.Match[str]) -> bool:
     return plus and bool(_ASKED_FOR.match(sentence[m.end(1) if not m.group(2) else m.end(2) :]))
 
 
-def _years_in(sentence: str, words: bool = False) -> list[tuple[int, int | None, bool]]:
+def _years_in(sentence: str, words: bool = False) -> list[tuple[int, int | None, int]]:
+    """(low, high, link) per years phrase. link 2: 'experience' is near; 1: worded as a
+    requirement ('5+ years with X', only with `words`); 0: neither."""
     found = []
     for m in _YEARS.finditer(sentence):
         high = m.group(2) or m.group(3)
         near = sentence[max(0, m.start() - 25) : m.end() + 25]
-        linked = bool(_EXPERIENCE.search(near)) or (words and _asked_for(sentence, m))
-        found.append((int(m.group(1)), int(high) if high else None, linked))
+        link = 2 if _EXPERIENCE.search(near) else 1 if words and _asked_for(sentence, m) else 0
+        found.append((int(m.group(1)), int(high) if high else None, link))
     return found
 
 
@@ -145,7 +147,9 @@ def parse_years(
         if need_experience and not _EXPERIENCE.search(sentence):
             hits = [h for h in hits if h[2]] if words else []
         found += hits
-    linked = [f for f in found if f[2]] or found
+    # "5+ years of experience ... with 2+ years in closing": the experience number wins.
+    best = max((f[2] for f in found), default=0)
+    linked = [f for f in found if f[2] == best]
     if not linked:
         return None
     low, high, _ = min(linked, key=lambda f: f[0])

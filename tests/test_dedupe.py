@@ -196,6 +196,7 @@ def test_years_parse() -> None:
         ("We have served customers for 20 years", None),
         ("after 5 years with us you get a sabbatical", None),
         ("10+ years in business", None),
+        ("5+ years of experience in sales roles with 2+ years in a closing role", (5, None)),
     ],
 )
 def test_years_from_words_and_years_with(text: str, want: tuple[int, int | None] | None) -> None:
