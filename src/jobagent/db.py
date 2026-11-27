@@ -1074,13 +1074,13 @@ class Database:
 
     def judge_candidates(self, limit: int, profile: str) -> list[dict[str, Any]]:
         """Found jobs the AI judge never saw, or saw with other posting text or another
-        profile, best cheap score first."""
+        profile, in the web's "best" order, so it judges the jobs the owner sees first."""
         rows = self.conn.execute(
-            "SELECT id, title, location, desc_hash, score, rank_reason,"
-            f" substr(description, 1, {JUDGE_TEXT_CHARS}) AS head FROM jobs"
-            " WHERE status='found' AND score IS NOT NULL AND (judged_on IS NULL"
-            " OR judge_key IS NOT coalesce(desc_hash, '') || ':' || ?)"
-            " ORDER BY score DESC, id LIMIT ?",
+            "SELECT j.id, j.title, j.location, j.desc_hash, j.score, j.rank_reason,"
+            f" substr(j.description, 1, {JUDGE_TEXT_CHARS}) AS head FROM jobs j"
+            " WHERE j.status='found' AND j.score IS NOT NULL AND (j.judged_on IS NULL"
+            " OR j.judge_key IS NOT coalesce(j.desc_hash, '') || ':' || ?)"
+            f" ORDER BY {ORDERS['best']} LIMIT ?",
             (text_hash(profile), limit),
         ).fetchall()
         return [dict(r) for r in rows]

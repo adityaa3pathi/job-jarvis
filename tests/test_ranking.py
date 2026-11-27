@@ -10,7 +10,7 @@ from jobagent.config import LLMSettings, Settings
 from jobagent.db import Database, today_ist
 from jobagent.index import HashingEmbedder
 from jobagent.llm import FailingLLM, StubLLM
-from jobagent.models import Posting
+from jobagent.models import JobFilters, Posting
 from jobagent.rank import (
     NO_VECTOR_SIM,
     Preferences,
@@ -390,3 +390,19 @@ def test_a_turso_failure_keeps_the_previous_scores(
     assert summary.embed_error == "ValueError" and summary.kept == 2
     assert {i: after[i] for i in before} == before
     assert after[3][0] is not None
+
+
+def test_the_judge_takes_jobs_in_the_webs_order(settings: Settings) -> None:
+    from datetime import date
+
+    db = db_with(settings, [job(1, GOOD, posted_date=date(2026, 11, 1)),
+                            job(2, GOOD, posted_date=date(2026, 11, 20)),
+                            job(3, GOOD, posted_date=date(2026, 11, 20)),
+                            job(4, BAD, posted_date=date(2026, 11, 25))])  # fmt: skip
+    with db.conn:
+        db.conn.executemany("UPDATE jobs SET score=? WHERE id=?", [(70, 1), (70, 2), (70, 3),
+                                                                   (60, 4)])  # fmt: skip
+    shown, _ = db.query_jobs(JobFilters(sort="best"), limit=10, offset=0)
+    picked = [r["id"] for r in db.judge_candidates(4, PROFILE)]
+    assert picked == [3, 2, 1, 4]  # same score: newest day first, then the higher id
+    assert [r["id"] for r in shown] == picked
