@@ -115,6 +115,27 @@ def test_choices_and_yes_no_from_the_profile_are_checked_not_filled() -> None:
     assert got.status == "saved"
 
 
+@pytest.mark.parametrize(
+    ("label", "value", "status"),
+    [
+        ("How many years of experience do you have with Python or Java?", "2", "check"),
+        ("Years in React", "2", "check"),
+        ("How many years of experience do you have in overall?", "2", "fact"),
+        ("Total years of experience", "2", "fact"),
+        ("What should we know about you?", "I built 176 REST APIs.", "check"),
+        ("Tell us about yourself", "I built 176 REST APIs.", "check"),
+        ("Tell us about your APIs", "I built 176 REST APIs.", "fact"),
+    ],
+)
+def test_years_per_skill_and_open_questions_are_checked(
+    label: str, value: str, status: str
+) -> None:
+    summary = f"{SUMMARY}\nWorked 2 years at DocNow."
+    f = FormField(id="q", label=label, kind="text")
+    llm = replying({"id": "q", "value": value, "source": "profile", "lines": [1, 4]})
+    assert suggest(page(f), summary, [], llm)[0].status == status
+
+
 def test_hispanic_or_latino_is_a_personal_question() -> None:
     f = FormField(id="h", label="Are you Hispanic/Latino?", kind="text")
     assert one(f, {"value": "No", "source": "profile", "lines": [1]}).status == "you"

@@ -110,6 +110,19 @@ _YES = re.compile(r"^(?:yes|true|i do|i have|y)\b", re.IGNORECASE)
 # A yes/no reply, in any kind of box: Greenhouse's dropdowns reach us as text boxes.
 _YES_NO = re.compile(r"^(?:yes|no|true|false|y|n|i do|i don'?t|i have|i haven'?t)\b", re.I)
 CHOICE_NOTE = "A choice the profile only suggests: check it before you submit."
+# Years with one skill: the profile gives job dates, not years per tool.
+_SKILL_YEARS = re.compile(
+    r"\byears?\b.*\b(?:with|in|using|on)\b"
+    r"(?!\s*(?:overall|total|the industry|industry|professional|work)\b)",
+    re.I,
+)
+SKILL_YEARS_NOTE = "Years with one skill: your profile gives job dates, not years per tool."
+# An open question about the candidate: true from the profile, but what to stress is theirs.
+_OPEN_ABOUT = re.compile(
+    r"about (?:you\b|yourself)|should we know|anything else|introduce yourself|cover letter",
+    re.I,
+)
+OPEN_NOTE = "An open question about you: the wording is a draft for you to edit."
 
 SYSTEM = (
     "You fill in job-application and profile form fields for the candidate, in the first "
@@ -271,6 +284,10 @@ def _fact(field: FormField, value: str) -> Suggestion:
     shown for checking, never filled by Fill all. Saved answers still fill as before."""
     if field.kind in (*CHOICE_KINDS, "checkbox") or _YES_NO.match(value):
         return Suggestion(field.id, value, "check", CHOICE_NOTE)
+    if _SKILL_YEARS.search(field.label):
+        return Suggestion(field.id, value, "check", SKILL_YEARS_NOTE)
+    if _OPEN_ABOUT.search(field.label):
+        return Suggestion(field.id, value, "check", OPEN_NOTE)
     return Suggestion(field.id, value, "fact")
 
 
