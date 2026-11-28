@@ -979,13 +979,27 @@ def create_app(cfg: WebConfig) -> FastAPI:
         if not summary.strip():
             raise HTTPException(400, "add your career summary on the Profile page first")
         _ai_budget(st)
-        with usage_sink(st.add_usage):
-            try:
+        started, model_ms, outcome = time.monotonic(), [0], "error"
+
+        def record(usage: Usage) -> None:
+            model_ms[0] += usage.ms
+            st.add_usage(usage)
+
+        try:
+            with usage_sink(record):
                 found = suggest(
                     body, summary, st.confirmed_facts(), cfg.writer(), cfg.settings.forms
                 )
-            except LLMError as exc:
-                raise HTTPException(502, f"could not draft answers: {short_cause(exc)}") from exc
+            outcome = "ok"
+        except LLMError as exc:
+            raise HTTPException(502, f"could not draft answers: {short_cause(exc)}") from exc
+        finally:
+            # Speed per site from the host logs; no field text, values or profile text.
+            log.info(
+                "form fill: host=%s fields=%d model_ms=%d total_ms=%d outcome=%s",
+                (urlsplit(body.url).hostname or "-")[:80], len(body.fields), model_ms[0],
+                int((time.monotonic() - started) * 1000), outcome,
+            )  # fmt: skip
         return {"items": [asdict(s) for s in found]}
 
     @app.post("/api/coach", dependencies=[Owner])

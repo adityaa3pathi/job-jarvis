@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 import pytest
@@ -158,13 +160,36 @@ def test_form_route_needs_the_extension_token_and_a_summary(settings: Settings) 
     ]
 
 
-def test_form_route_reports_a_model_failure(settings: Settings) -> None:
+def test_form_route_reports_a_model_failure(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
     c = client_for(settings, llm=FailingLLM())
     c.post("/api/login", json={"password": PASSWORD})
     c.put("/api/profile/summary", json={"summary": "I build APIs in Python."})
     h = {"Authorization": f"Bearer {c.post('/api/extension/token').json()['token']}"}
     body = {"fields": [{"id": "q1", "label": "Your stack"}]}
-    assert c.post("/api/ext/form", json=body, headers=h).status_code == 502
+    with caplog.at_level(logging.INFO, logger="jobagent.web.app"):
+        assert c.post("/api/ext/form", json=body, headers=h).status_code == 502
+    assert "form fill: host=- fields=1 model_ms=0" in caplog.text
+    assert "outcome=error" in caplog.text
+
+
+def test_form_route_logs_its_time_without_field_text(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    c = client_for(settings, llm=replying({"id": "q1", "value": "Python", "source": "profile"}))
+    c.post("/api/login", json={"password": PASSWORD})
+    c.put("/api/profile/summary", json={"summary": "I build APIs in Python."})
+    h = {"Authorization": f"Bearer {c.post('/api/extension/token').json()['token']}"}
+    body = {"url": "https://jobs.lever.co/acme/1/apply?ref=me", "context": "Secret page text",
+            "fields": [{"id": "q1", "label": "Your stack"}]}  # fmt: skip
+    with caplog.at_level(logging.INFO, logger="jobagent.web.app"):
+        assert c.post("/api/ext/form", json=body, headers=h).status_code == 200
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("form fill"))
+    assert re.fullmatch(
+        r"form fill: host=jobs\.lever\.co fields=1 model_ms=\d+ total_ms=\d+ outcome=ok", line
+    )
+    assert "Your stack" not in caplog.text and "Python" not in line and "acme" not in line
 
 
 def test_a_vague_label_with_personal_choices_is_still_personal() -> None:
