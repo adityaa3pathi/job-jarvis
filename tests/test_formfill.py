@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from jobagent.config import Settings
-from jobagent.formfill import FormField, FormPage, suggest
+from jobagent.config import FormSettings, Settings
+from jobagent.formfill import FormField, FormPage, _option, suggest
 from jobagent.llm import FailingLLM, StubLLM
 from tests.test_web import PASSWORD, client_for
 
@@ -202,3 +202,82 @@ def test_personal_saved_answers_never_reach_the_model() -> None:
     assert (got.status, got.value) == ("saved", "Bangalore")
     assert "Current city: Bangalore" in sent
     assert "Male" not in sent and "400999" not in sent and "18 or older" not in sent
+
+
+def test_loose_options_are_off_unless_set() -> None:
+    f = FormField(
+        id="a", label="Authorised to work in India?", kind="radio", options=["Yes, I am", "No"]
+    )
+    item = {"id": "a", "value": "Yes", "source": "prefs"}
+    saved = {"Work authorization": "Yes"}
+    off = suggest(page(f, prefs=saved), SUMMARY, [], replying(item))[0]
+    on = suggest(
+        page(f, prefs=saved), SUMMARY, [], replying(item), FormSettings(loose_options=True)
+    )[0]
+    assert (off.status, off.value) == ("none", "")
+    assert on.value == "Yes, I am"
+
+
+@pytest.mark.parametrize(
+    ("options", "value", "picked"),
+    [
+        (["Yes, I am", "No, I am not"], "Yes", "Yes, I am"),
+        (["Yes, I am", "Yes, with a visa", "No"], "Yes", None),  # two candidates: no pick
+        (["Yes", "No", "Not Applicable"], "No", "No"),
+        (["B.Tech", "M.Tech"], "b. tech", "B.Tech"),
+        (["90 days or less", "30 days or less"], "30 days", "30 days or less"),
+        (["Yes", "No"], "Yes, I am authorised", "Yes"),
+        (["Man", "Woman"], "Male", None),
+    ],
+)
+def test_loose_option_matching(options: list[str], value: str, picked: str | None) -> None:
+    assert _option(options, value, loose=True) == picked
+
+
+def test_personal_questions_from_saved_answers_only_when_set() -> None:
+    fields = [
+        FormField(
+            id="g",
+            label="Gender",
+            kind="select",
+            options=["Male", "Female", "Prefer not to disclose"],
+        ),
+        FormField(
+            id="d",
+            label="Diversity survey",
+            kind="radio",
+            options=["Man", "Woman", "I prefer not to answer"],
+        ),
+        FormField(
+            id="e",
+            label="Ethnicity",
+            kind="select",
+            options=["White", "Asian (Not Hispanic or Latino)"],
+        ),
+        FormField(id="h", label="Are you Hispanic/Latino?", kind="text"),
+        FormField(id="a", label="Address Line 1", kind="text"),
+        FormField(id="z", label="Postal Code", kind="text"),
+        FormField(id="v", label="Veteran Status", kind="text"),
+    ]
+    saved = {"Gender": "Male", "Ethnicity": "Indian", "Hispanic/Latino": "No",
+             "Address": "221B Test Road, Springfield", "Postal code": "400999"}  # fmt: skip
+    llm = replying()
+    on = suggest(
+        FormPage(fields=fields, prefs=saved),
+        SUMMARY,
+        [],
+        llm,
+        FormSettings(personal_from_saved=True),
+    )
+    assert [(s.id, s.value, s.status) for s in on] == [
+        ("g", "Male", "check"),
+        ("d", "Man", "check"),
+        ("e", "Asian (Not Hispanic or Latino)", "check"),
+        ("h", "No", "check"),
+        ("a", "221B Test Road, Springfield", "check"),
+        ("z", "400999", "check"),
+        ("v", "", "you"),  # nothing saved for it
+    ]
+    assert llm.calls == []  # every field here is personal: no model call at all
+    off = suggest(FormPage(fields=fields, prefs=saved), SUMMARY, [], replying())
+    assert {s.status for s in off if s.id in "gdehv"} == {"you"}
