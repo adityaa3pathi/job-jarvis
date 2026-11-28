@@ -164,3 +164,19 @@ def test_tag_boxes_keep_only_tags_the_profile_names() -> None:
         one(lang, {"value": "English, Hindi", "source": "prefs"}, saved).value == "English, Hindi"
     )
     assert one(lang, {"value": "French", "source": "guess"}).status == "none"
+
+
+def test_personal_saved_answers_never_reach_the_model() -> None:
+    llm = replying({"id": "q1", "value": "Bangalore", "source": "prefs"})
+    f = FormField(id="q1", label="Current city")
+    prefs = {
+        "Current city": "Bangalore",
+        "Gender": "Male",
+        "Postal code": "400999",
+        "18 or older": "Yes",
+    }
+    got = suggest(page(f, prefs=prefs), SUMMARY, [], llm)[0]
+    sent = llm.calls[0][1]
+    assert (got.status, got.value) == ("saved", "Bangalore")
+    assert "Current city: Bangalore" in sent
+    assert "Male" not in sent and "400999" not in sent and "18 or older" not in sent

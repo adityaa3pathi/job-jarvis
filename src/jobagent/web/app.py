@@ -981,7 +981,9 @@ def create_app(cfg: WebConfig) -> FastAPI:
         _ai_budget(st)
         with usage_sink(st.add_usage):
             try:
-                found = suggest(body, summary, st.confirmed_facts(), cfg.writer())
+                found = suggest(
+                    body, summary, st.confirmed_facts(), cfg.writer(), cfg.settings.forms
+                )
             except LLMError as exc:
                 raise HTTPException(502, f"could not draft answers: {short_cause(exc)}") from exc
         return {"items": [asdict(s) for s in found]}

@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from jobagent.answers import scrub
+from jobagent.config import FormSettings
 from jobagent.llm import LLM, ask, data_block
 from jobagent.resume.evidence import cards_from_profile
 from jobagent.resume.ontology import mention
@@ -54,6 +55,16 @@ _PREFERENCE = re.compile(
     r"why .*(?:join|leave|switch)",
     re.IGNORECASE,
 )
+# Saved answers about the person (gender, address...): used in plain code, never sent to the model.
+_PRIVATE_PREF = re.compile(
+    rf"{_PERSONAL.pattern}|hispanic|latino|address|postal|pin ?code|\bzip\b|\b18\b", re.IGNORECASE
+)
+
+
+def model_prefs(prefs: dict[str, str]) -> dict[str, str]:
+    return {k: v for k, v in prefs.items() if not _PRIVATE_PREF.search(k)}
+
+
 _YES = re.compile(r"^(?:yes|true|i do|i have|y)\b", re.IGNORECASE)
 
 SYSTEM = (
@@ -123,14 +134,18 @@ def profile_lines(summary: str, facts: list[str]) -> list[str]:
     return [scrub(ln) for ln in lines[:MAX_LINES]]
 
 
-def suggest(page: FormPage, summary: str, facts: list[str], llm: LLM) -> list[Suggestion]:
+def suggest(
+    page: FormPage, summary: str, facts: list[str], llm: LLM, forms: FormSettings | None = None
+) -> list[Suggestion]:
     """One model call for the page; every value then passes plain-code checks."""
+    forms = forms or FormSettings()
     lines = profile_lines(summary, facts)
+    shared = model_prefs(page.prefs)
     personal = {f.id for f in page.fields if is_personal(f)}
     asked = [f for f in page.fields if f.id not in personal]
     by_id: dict[str, _Item] = {}
     if asked:
-        prefs = "\n".join(f"{k}: {v}" for k, v in page.prefs.items())
+        prefs = "\n".join(f"{k}: {v}" for k, v in shared.items())
         fields = json.dumps([f.model_dump(exclude_none=True) for f in asked], ensure_ascii=False)
         user = "\n".join([
             data_block("page", scrub(f"{page.title}\n{page.url}\n\n{page.context}")),
@@ -147,7 +162,7 @@ def suggest(page: FormPage, summary: str, facts: list[str], llm: LLM) -> list[Su
             out.append(Suggestion(f.id, "", "you", "Personal question: answer it yourself."))
             continue
         item = by_id.get(f.id) or _Item(id=f.id)
-        out.append(check(f, item, lines, page.prefs, allowed))
+        out.append(check(f, item, lines, shared, allowed))
     return out
 
 

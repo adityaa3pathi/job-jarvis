@@ -61,6 +61,13 @@ class OutreachSettings(BaseModel):
     follow_up_days: list[int] = Field(default_factory=lambda: [4, 10])  # after the first email
 
 
+class FormSettings(BaseModel):
+    """Form helper rules that change live answers: each stays off until the owner approves it."""
+
+    loose_options: bool = False  # "Yes" picks "Yes, I am": normalised text and prefixes
+    personal_from_saved: bool = False  # personal questions answered from saved answers, as check
+
+
 class Settings(BaseModel):
     daily_cap: int = 5
     per_portal_limit: int = 3
@@ -75,6 +82,7 @@ class Settings(BaseModel):
     llm: LLMSettings = LLMSettings()
     ranking: RankingSettings = RankingSettings()
     outreach: OutreachSettings = OutreachSettings()
+    forms: FormSettings = FormSettings()
     repo_root: Path = REPO_ROOT
     config_dir: Path = Path.home() / ".config" / "jobagent"
     data_dir: Path = REPO_ROOT / "data"
