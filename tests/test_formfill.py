@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from jobagent.config import Settings
-from jobagent.formfill import FormField, FormPage, suggest
+from jobagent.config import FormSettings, Settings
+from jobagent.formfill import FormField, FormPage, _option, suggest
 from jobagent.llm import FailingLLM, StubLLM
 from tests.test_web import PASSWORD, client_for
 
@@ -92,8 +94,51 @@ def test_choices_must_be_one_of_the_options() -> None:
 def test_yes_to_a_tool_needs_a_line_that_names_it() -> None:
     py = FormField(id="py", label="Do you know Python?", kind="radio", options=["Yes", "No"])
     kafka = FormField(id="k", label="Do you know Kafka?", kind="radio", options=["Yes", "No"])
-    assert one(py, {"value": "Yes", "source": "profile", "lines": [2]}).status == "fact"
+    assert one(py, {"value": "Yes", "source": "profile", "lines": [2]}).status == "check"
     assert one(kafka, {"value": "Yes", "source": "profile", "lines": [2]}).status == "none"
+
+
+def test_choices_and_yes_no_from_the_profile_are_checked_not_filled() -> None:
+    deg = FormField(id="deg", label="Highest degree", kind="select", options=["B.Tech", "M.Tech"])
+    moved = FormField(id="m", label="Have you worked at Acme before?", kind="text")
+    went = FormField(id="w", label="Where did you study?", kind="text")
+    saved = FormField(id="s", label="Willing to relocate", kind="radio", options=["Yes", "No"])
+    assert one(deg, {"value": "B.Tech", "source": "profile", "lines": [3]}).status == "check"
+    assert one(moved, {"value": "No", "source": "profile", "lines": [1]}).status == "check"
+    assert (
+        one(
+            went, {"value": "B.Tech in Electrical Engineering", "source": "profile", "lines": [3]}
+        ).status
+        == "fact"
+    )
+    got = one(saved, {"value": "Yes", "source": "prefs"}, {"Willing to relocate": "Yes"})
+    assert got.status == "saved"
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "status"),
+    [
+        ("How many years of experience do you have with Python or Java?", "2", "check"),
+        ("Years in React", "2", "check"),
+        ("How many years of experience do you have in overall?", "2", "fact"),
+        ("Total years of experience", "2", "fact"),
+        ("What should we know about you?", "I built 176 REST APIs.", "check"),
+        ("Tell us about yourself", "I built 176 REST APIs.", "check"),
+        ("Tell us about your APIs", "I built 176 REST APIs.", "fact"),
+    ],
+)
+def test_years_per_skill_and_open_questions_are_checked(
+    label: str, value: str, status: str
+) -> None:
+    summary = f"{SUMMARY}\nWorked 2 years at DocNow."
+    f = FormField(id="q", label=label, kind="text")
+    llm = replying({"id": "q", "value": value, "source": "profile", "lines": [1, 4]})
+    assert suggest(page(f), summary, [], llm)[0].status == status
+
+
+def test_hispanic_or_latino_is_a_personal_question() -> None:
+    f = FormField(id="h", label="Are you Hispanic/Latino?", kind="text")
+    assert one(f, {"value": "No", "source": "profile", "lines": [1]}).status == "you"
 
 
 def test_saved_answers_and_guesses() -> None:
@@ -136,13 +181,36 @@ def test_form_route_needs_the_extension_token_and_a_summary(settings: Settings) 
     ]
 
 
-def test_form_route_reports_a_model_failure(settings: Settings) -> None:
+def test_form_route_reports_a_model_failure(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
     c = client_for(settings, llm=FailingLLM())
     c.post("/api/login", json={"password": PASSWORD})
     c.put("/api/profile/summary", json={"summary": "I build APIs in Python."})
     h = {"Authorization": f"Bearer {c.post('/api/extension/token').json()['token']}"}
     body = {"fields": [{"id": "q1", "label": "Your stack"}]}
-    assert c.post("/api/ext/form", json=body, headers=h).status_code == 502
+    with caplog.at_level(logging.INFO, logger="jobagent.web.app"):
+        assert c.post("/api/ext/form", json=body, headers=h).status_code == 502
+    assert "form fill: host=- fields=1 model_ms=0" in caplog.text
+    assert "outcome=error" in caplog.text
+
+
+def test_form_route_logs_its_time_without_field_text(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    c = client_for(settings, llm=replying({"id": "q1", "value": "Python", "source": "profile"}))
+    c.post("/api/login", json={"password": PASSWORD})
+    c.put("/api/profile/summary", json={"summary": "I build APIs in Python."})
+    h = {"Authorization": f"Bearer {c.post('/api/extension/token').json()['token']}"}
+    body = {"url": "https://jobs.lever.co/acme/1/apply?ref=me", "context": "Secret page text",
+            "fields": [{"id": "q1", "label": "Your stack"}]}  # fmt: skip
+    with caplog.at_level(logging.INFO, logger="jobagent.web.app"):
+        assert c.post("/api/ext/form", json=body, headers=h).status_code == 200
+    line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("form fill"))
+    assert re.fullmatch(
+        r"form fill: host=jobs\.lever\.co fields=1 model_ms=\d+ total_ms=\d+ outcome=ok", line
+    )
+    assert "Your stack" not in caplog.text and "Python" not in line and "acme" not in line
 
 
 def test_a_vague_label_with_personal_choices_is_still_personal() -> None:
@@ -164,3 +232,98 @@ def test_tag_boxes_keep_only_tags_the_profile_names() -> None:
         one(lang, {"value": "English, Hindi", "source": "prefs"}, saved).value == "English, Hindi"
     )
     assert one(lang, {"value": "French", "source": "guess"}).status == "none"
+
+
+def test_personal_saved_answers_never_reach_the_model() -> None:
+    llm = replying({"id": "q1", "value": "Bangalore", "source": "prefs"})
+    f = FormField(id="q1", label="Current city")
+    prefs = {
+        "Current city": "Bangalore",
+        "Gender": "Male",
+        "Postal code": "400999",
+        "18 or older": "Yes",
+    }
+    got = suggest(page(f, prefs=prefs), SUMMARY, [], llm)[0]
+    sent = llm.calls[0][1]
+    assert (got.status, got.value) == ("saved", "Bangalore")
+    assert "Current city: Bangalore" in sent
+    assert "Male" not in sent and "400999" not in sent and "18 or older" not in sent
+
+
+def test_loose_options_are_off_unless_set() -> None:
+    f = FormField(
+        id="a", label="Authorised to work in India?", kind="radio", options=["Yes, I am", "No"]
+    )
+    item = {"id": "a", "value": "Yes", "source": "prefs"}
+    saved = {"Work authorization": "Yes"}
+    off = suggest(page(f, prefs=saved), SUMMARY, [], replying(item))[0]
+    on = suggest(
+        page(f, prefs=saved), SUMMARY, [], replying(item), FormSettings(loose_options=True)
+    )[0]
+    assert (off.status, off.value) == ("none", "")
+    assert on.value == "Yes, I am"
+
+
+@pytest.mark.parametrize(
+    ("options", "value", "picked"),
+    [
+        (["Yes, I am", "No, I am not"], "Yes", "Yes, I am"),
+        (["Yes, I am", "Yes, with a visa", "No"], "Yes", None),  # two candidates: no pick
+        (["Yes", "No", "Not Applicable"], "No", "No"),
+        (["B.Tech", "M.Tech"], "b. tech", "B.Tech"),
+        (["90 days or less", "30 days or less"], "30 days", "30 days or less"),
+        (["Yes", "No"], "Yes, I am authorised", "Yes"),
+        (["Man", "Woman"], "Male", None),
+    ],
+)
+def test_loose_option_matching(options: list[str], value: str, picked: str | None) -> None:
+    assert _option(options, value, loose=True) == picked
+
+
+def test_personal_questions_from_saved_answers_only_when_set() -> None:
+    fields = [
+        FormField(
+            id="g",
+            label="Gender",
+            kind="select",
+            options=["Male", "Female", "Prefer not to disclose"],
+        ),
+        FormField(
+            id="d",
+            label="Diversity survey",
+            kind="radio",
+            options=["Man", "Woman", "I prefer not to answer"],
+        ),
+        FormField(
+            id="e",
+            label="Ethnicity",
+            kind="select",
+            options=["White", "Asian (Not Hispanic or Latino)"],
+        ),
+        FormField(id="h", label="Are you Hispanic/Latino?", kind="text"),
+        FormField(id="a", label="Address Line 1", kind="text"),
+        FormField(id="z", label="Postal Code", kind="text"),
+        FormField(id="v", label="Veteran Status", kind="text"),
+    ]
+    saved = {"Gender": "Male", "Ethnicity": "Indian", "Hispanic/Latino": "No",
+             "Address": "221B Test Road, Springfield", "Postal code": "400999"}  # fmt: skip
+    llm = replying()
+    on = suggest(
+        FormPage(fields=fields, prefs=saved),
+        SUMMARY,
+        [],
+        llm,
+        FormSettings(personal_from_saved=True),
+    )
+    assert [(s.id, s.value, s.status) for s in on] == [
+        ("g", "Male", "check"),
+        ("d", "Man", "check"),
+        ("e", "Asian (Not Hispanic or Latino)", "check"),
+        ("h", "No", "check"),
+        ("a", "221B Test Road, Springfield", "check"),
+        ("z", "400999", "check"),
+        ("v", "", "you"),  # nothing saved for it
+    ]
+    assert llm.calls == []  # every field here is personal: no model call at all
+    off = suggest(FormPage(fields=fields, prefs=saved), SUMMARY, [], replying())
+    assert {s.status for s in off if s.id in "gdehv"} == {"you"}
