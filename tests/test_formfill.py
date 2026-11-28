@@ -92,8 +92,30 @@ def test_choices_must_be_one_of_the_options() -> None:
 def test_yes_to_a_tool_needs_a_line_that_names_it() -> None:
     py = FormField(id="py", label="Do you know Python?", kind="radio", options=["Yes", "No"])
     kafka = FormField(id="k", label="Do you know Kafka?", kind="radio", options=["Yes", "No"])
-    assert one(py, {"value": "Yes", "source": "profile", "lines": [2]}).status == "fact"
+    assert one(py, {"value": "Yes", "source": "profile", "lines": [2]}).status == "check"
     assert one(kafka, {"value": "Yes", "source": "profile", "lines": [2]}).status == "none"
+
+
+def test_choices_and_yes_no_from_the_profile_are_checked_not_filled() -> None:
+    deg = FormField(id="deg", label="Highest degree", kind="select", options=["B.Tech", "M.Tech"])
+    moved = FormField(id="m", label="Have you worked at Acme before?", kind="text")
+    went = FormField(id="w", label="Where did you study?", kind="text")
+    saved = FormField(id="s", label="Willing to relocate", kind="radio", options=["Yes", "No"])
+    assert one(deg, {"value": "B.Tech", "source": "profile", "lines": [3]}).status == "check"
+    assert one(moved, {"value": "No", "source": "profile", "lines": [1]}).status == "check"
+    assert (
+        one(
+            went, {"value": "B.Tech in Electrical Engineering", "source": "profile", "lines": [3]}
+        ).status
+        == "fact"
+    )
+    got = one(saved, {"value": "Yes", "source": "prefs"}, {"Willing to relocate": "Yes"})
+    assert got.status == "saved"
+
+
+def test_hispanic_or_latino_is_a_personal_question() -> None:
+    f = FormField(id="h", label="Are you Hispanic/Latino?", kind="text")
+    assert one(f, {"value": "No", "source": "profile", "lines": [1]}).status == "you"
 
 
 def test_saved_answers_and_guesses() -> None:

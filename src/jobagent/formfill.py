@@ -32,7 +32,7 @@ GUESS_NOTE = "AI suggestion: check it before you submit."
 _PERSONAL = re.compile(
     r"gender|\bsex\b|pronoun|\bcaste\b|reservation|\b(?:sc|st|obc)\b|religio|ethnic|\brace\b|"
     r"disab|veteran|marital|married|date of birth|\bdob\b|\bage\b|lgbt|single parent|"
-    r"father|mother|spouse",
+    r"father|mother|spouse|hispanic|latin[ao]",
     re.IGNORECASE,
 )
 _PERSONAL_CHOICE = re.compile(
@@ -66,6 +66,9 @@ def model_prefs(prefs: dict[str, str]) -> dict[str, str]:
 
 
 _YES = re.compile(r"^(?:yes|true|i do|i have|y)\b", re.IGNORECASE)
+# A yes/no reply, in any kind of box: Greenhouse's dropdowns reach us as text boxes.
+_YES_NO = re.compile(r"^(?:yes|no|true|false|y|n|i do|i don'?t|i have|i haven'?t)\b", re.I)
+CHOICE_NOTE = "A choice the profile only suggests: check it before you submit."
 
 SYSTEM = (
     "You fill in job-application and profile form fields for the candidate, in the first "
@@ -193,7 +196,7 @@ def check(
         tools = new_tools(everything, field.label, allowed)
         if tools:
             return Suggestion(field.id, "", "none", f"Your profile doesn't mention {tools[0]}.")
-        return Suggestion(field.id, value, "fact")
+        return _fact(field, value)
     reason = unsupported(source, value, allowed)
     if reason and reason.startswith("new tool"):
         tools = new_tools(everything, value, allowed)
@@ -204,6 +207,14 @@ def check(
         return Suggestion(field.id, value, "check", "Has a number your profile doesn't state.")
     if reason:
         return Suggestion(field.id, "", "none", f"Blocked: {reason} not in your profile.")
+    return _fact(field, value)
+
+
+def _fact(field: FormField, value: str) -> Suggestion:
+    """A pick from choices or a yes/no is the model's reading of the profile, not a quote:
+    shown for checking, never filled by Fill all. Saved answers still fill as before."""
+    if field.kind in (*CHOICE_KINDS, "checkbox") or _YES_NO.match(value):
+        return Suggestion(field.id, value, "check", CHOICE_NOTE)
     return Suggestion(field.id, value, "fact")
 
 
